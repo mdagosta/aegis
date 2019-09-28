@@ -1,0 +1,11 @@
+*\.py[co]
+*~
+*\.swp
+*\.swo
+build/*
+dist/*
+*.egg-info
+*.egg
+*/#*#
+*/.#*
+virtualenv

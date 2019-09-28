@@ -1,29 +1,19 @@
 # README #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+This code is your shield, your [Aegis](https://en.wikipedia.org/wiki/Aegis), to carry with you into battle on the brave new web.
 
-### What is this repository for? ###
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+### Use the command line tools ###
 
-### How do I get set up? ###
+* Use as a cloned repository: `virtualenv --python=``which python3`` virtualenv`
+* `./virtualenv/bin/activate`
+* `aegis debug`
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
 
-### Contribution guidelines ###
+### Use in aegis application ###
 
-* Writing tests
-* Code review
-* Other guidelines
+* `aegis create app_name`
+* How to do something with your aegis app
+* Updating
+* Debugging
 
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact

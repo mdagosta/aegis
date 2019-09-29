@@ -17,12 +17,10 @@ setuptools.setup (
     author = "Michael D'Agosta",
     author_email = 'mdagosta@codebug.com',
     url = 'https://bitbucket.org/mdagosta/aegis',
-    packages = setuptools.find_packages(),
-    #entry_points={
-    #    'console_scripts': [
-    #        'rst2pdf = project_a.tools.pdfgen [PDF]',
-    #        'rst2html = project_a.tools.htmlgen',
-    #        # more script entry points ...
-    #    ],
-    #}
+    packages = ['aegis'],
+    entry_points={
+        'console_scripts': [
+            "aegis = aegis.aegis:main",
+        ],
+    }
 )

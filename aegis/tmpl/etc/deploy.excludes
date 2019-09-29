@@ -1,0 +1,9 @@
+# Production data to exclude from rsyncing with repository  -mdagosta
+.git/
+.gitignore
+README.md
+ssl/
+virtualenv
+__pycache__
+.python-egg
+.cache

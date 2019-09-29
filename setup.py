@@ -12,7 +12,7 @@ import setuptools
 
 setuptools.setup (
     name = 'aegis',
-    version = '0.0',
+    version = '0.0.1',
     description = 'Aegis is a set of battle-tested tools and tricks to help everyone make better software',
     author = "Michael D'Agosta",
     author_email = 'mdagosta@codebug.com',

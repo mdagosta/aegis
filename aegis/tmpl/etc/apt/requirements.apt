@@ -1,0 +1,12 @@
+nginx
+virtualenv
+python3-pip
+emacs24-nox
+tig
+ack-grep
+pwgen
+whois
+postgresql-client
+supervisor
+swatch
+tmux

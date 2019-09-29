@@ -1,0 +1,3 @@
+# Generate passwords with:   openssl passwd -apr1        OpenSSL> passwd -apr1
+{{app_name}}:$apr1$/dpxQpTL$YAjS13VlmXIyNx5XaGaDn1
+# Athena_Shield

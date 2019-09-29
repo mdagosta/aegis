@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#
+# Uses tmux and swatch to display key system log files, for debugging and monitoring
+#
+# !!! Make you sure ctrl-c all processes before closing windows. Tmux doesn't kill swatch !!!
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd $DIR
+tmux new-session -d -s debuglog
+tmux new-window -t debuglog:1 -n 'weblog' 'swatch -c ./etc/swatch/weblog.conf --tail-args "-F -n 15" -t "/var/log/nginx/{{app_name}}*access*.log"'
+tmux new-window -t debuglog:2 -n 'weberr' 'swatch -c ./etc/swatch/weberr.conf --tail-args "-F -n 15" -t "/var/log/nginx/{{app_name}}*error*.log"'
+tmux new-window -t debuglog:3 -n '{{app_name}}'  'swatch -c ./etc/swatch/supervisor.conf  --tail-args "-F -n 15" -t "/var/log/supervisor/{{app_name}}-prod.log"'
+tmux select-window -t debuglog:1
+tmux -2 attach-session -t debuglog

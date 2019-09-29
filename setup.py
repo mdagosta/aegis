@@ -17,7 +17,7 @@ setuptools.setup (
     author = "Michael D'Agosta",
     author_email = 'mdagosta@codebug.com',
     url = 'https://bitbucket.org/mdagosta/aegis',
-    packages = ['aegis'],
+    packages = setuptools.find_packages(),
     #entry_points={
     #    'console_scripts': [
     #        'rst2pdf = project_a.tools.pdfgen [PDF]',

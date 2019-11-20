@@ -13,7 +13,7 @@ from tornado.options import options
 import psycopg2
 
 # Project Imports
-import stdlib
+import aegis.stdlib
 
 
 # These are here for mapping errors from psycopg2 into application namespace
@@ -108,7 +108,7 @@ class Connection(object):
             cls = kwargs.get('cls')
             if cls:
                 rows = [cls(list(zip(column_names, row))) for row in cursor]
-                #stdlib.logw(rows, "DATA")
+                #aegis.stdlib.logw(rows, "DATA")
                 return rows
             else:
                 return [Row(zip(column_names, row)) for row in cursor]
@@ -138,7 +138,7 @@ class Connection(object):
             self._execute(cursor, query, parameters)
             if cursor.rowcount > 0:
                 last_row_id = cursor.fetchone()[0]
-                #stdlib.logw(last_row_id, "LAST ROW ID")
+                #aegis.stdlib.logw(last_row_id, "LAST ROW ID")
                 return last_row_id
         finally:
             cursor.close()
@@ -267,8 +267,8 @@ class Row(dict):
         keys, values, args = cls.kva_split(columns)
         sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
-        #stdlib.logw(sql, "SQL")
-        #stdlib.logw(args, "ARGS")
+        #aegis.stdlib.logw(sql, "SQL")
+        #aegis.stdlib.logw(args, "ARGS")
         return db().execute(sql, *args)
 
     @classmethod

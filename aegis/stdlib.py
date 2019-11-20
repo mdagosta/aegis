@@ -3,9 +3,11 @@
 
 # Python Imports
 import decimal
+import functools
 import hashlib
-import ipaddress
 import inspect
+import ipaddress
+import json
 import logging
 import os
 import pprint
@@ -64,6 +66,20 @@ def map_items(items, key):
     return dict([(item[key], item) for item in items])
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        elif isinstance(obj, datetime.date):
+            return obj.isoformat()
+        elif isinstance(obj, datetime.timedelta):
+            return (datetime.datetime.min + obj).time().isoformat()
+        elif isinstance(obj, decimal.Decimal):
+            return float(obj)
+        else:
+            return super(DateTimeEncoder, self).default(obj)
+
+
 # Make it easier to use ansi escape sequences for terminal colors
 colors = {'black' : 30, 'red' : 31, 'green' : 32, 'yellow' : 33, 'blue' : 34,
           'magenta' : 35, 'cyan' : 36, 'white' : 37, 'reset': 39, }
@@ -99,10 +115,34 @@ def cdiff(line):
 def cstr(data, color):
     return ansi_esc(color) + data + ansi_esc('reset')
 
+def nl2br(value):
+    return value.replace('\n', '<br />')
 
-def magic_key(length=8):
-    return reduce(lambda x, y: x + random.choice(string.ascii_letters + string.digits), range(length), '').lower()
+def format_integer(number):
+    return "{:,}".format(number)
 
+def format_money(amount, rjust=None):
+    amt = "%.2f" % amount
+    profile = re.compile(r"(\d)(\d\d\d[.,])")
+    while 1:
+        amt, count = re.subn(profile, r"\1,\2", amt)
+        if not count:
+            break
+    if rjust:
+        return amt.rjust(rjust)
+    return amt
+
+
+# >>> "%4.2f Trillion Should Be Enough" % (float(pow(36, 8)) / float(pow(1024, 4)))
+# '2.57 Trillion Should Be Enough'
+# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities
+token_length = 8
+token_chars = string.ascii_letters + string.digits
+def magic_token(length=token_length):
+    return functools.reduce(lambda x, y: x + random.choice(token_chars), range(length), '').lower()
+
+def validate_token(row_id, token):
+    return validate_int(row_id) and len([ch for ch in token if ch in token_chars]) == token_length
 
 def validate_int(value):
     # int() can't take a None so we have to check that first
@@ -113,7 +153,7 @@ def validate_int(value):
         value = value.replace(',', '')
     try:
         return int(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
 def validate_date(value):
@@ -123,11 +163,11 @@ def validate_date(value):
         return value
     try:
         return dateutil.parser.parse(value)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
 def validate_bool(value):
-    if valid is None:
+    if value is None:
         return None
     if type(value) is bool:
         return value
@@ -136,20 +176,13 @@ def validate_bool(value):
 def validate_decimal(value):
     if value is None:
         return None
+    if type(value) in (float, int):
+        return decimal.Decimal(value)
     try:
         value = decimal.Decimal(re.sub(r'[^\d.]', '', value))
     except decimal.InvalidOperation:
         return None
     return value
-
-def validate_email(value):
-    try:
-        logging.error("IT IS TIME. Port the Django from below")
-        cleaned_email = django.forms.EmailField(required=True).clean(value)
-        return cleaned_email
-    except django.forms.ValidationError:
-        logging.warning("Invalid email: %s", value)
-        return None
 
 def validate_ip_address(value):
     try:
@@ -159,74 +192,67 @@ def validate_ip_address(value):
         return None
 
 
+email_validator = None
+def validate_email(value):
+    email_validator = EmailValidator()
+    if value is None:
+        return None
+    if type(value) is not str:
+        return None
+    try:
+        email_validator.validate(value)
+        return value.lower()
+    except ValueError:
+        logging.warning("Invalid email: %s", value)
+        return None
 
-### From Django: https://github.com/django/django/blob/11b8c30b9e02ef6ecb996ad3280979dfeab700fa/django/core/validators.py
+### Adapted from Django: https://github.com/django/django/blob/11b8c30b9e02ef6ecb996ad3280979dfeab700fa/django/core/validators.py
+class EmailValidator:
+    user_regex = re.compile(
+        r"(^[-!#$%&'*+/=?^_`{}|~0-9A-Z]+(\.[-!#$%&'*+/=?^_`{}|~0-9A-Z]+)*\Z"  # dot-atom
+        r'|^"([\001-\010\013\014\016-\037!#-\[\]-\177]|\\[\001-\011\013\014\016-\177])*"\Z)',  # quoted-string
+        re.IGNORECASE)
+    domain_regex = re.compile(
+        # max length for domain name labels is 63 characters per RFC 1034
+        r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+)(?:[A-Z0-9-]{2,63}(?<!-))\Z',
+        re.IGNORECASE)
+    literal_regex = re.compile(
+        # literal form, ipv4 or ipv6 address (SMTP 4.1.3)
+        r'\[([A-f0-9:\.]+)\]\Z',
+        re.IGNORECASE)
+    domain_whitelist = ['localhost']
 
-#@deconstructible
-#class EmailValidator:
-#    message = _('Enter a valid email address.')
-#    code = 'invalid'
-#    user_regex = _lazy_re_compile(
-#        r"(^[-!#$%&'*+/=?^_`{}|~0-9A-Z]+(\.[-!#$%&'*+/=?^_`{}|~0-9A-Z]+)*\Z"  # dot-atom
-#        r'|^"([\001-\010\013\014\016-\037!#-\[\]-\177]|\\[\001-\011\013\014\016-\177])*"\Z)',  # quoted-string
-#        re.IGNORECASE)
-#    domain_regex = _lazy_re_compile(
-#        # max length for domain name labels is 63 characters per RFC 1034
-#        r'((?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+)(?:[A-Z0-9-]{2,63}(?<!-))\Z',
-#        re.IGNORECASE)
-#    literal_regex = _lazy_re_compile(
-#        # literal form, ipv4 or ipv6 address (SMTP 4.1.3)
-#        r'\[([A-f0-9:\.]+)\]\Z',
-#        re.IGNORECASE)
-#    domain_whitelist = ['localhost']
-#
-#    def __init__(self, message=None, code=None, whitelist=None):
-#        if message is not None:
-#            self.message = message
-#        if code is not None:
-#            self.code = code
-#        if whitelist is not None:
-#            self.domain_whitelist = whitelist
-#
-#    def __call__(self, value):
-#        if not value or '@' not in value:
-#            raise ValidationError(self.message, code=self.code)
-#
-#        user_part, domain_part = value.rsplit('@', 1)
-#
-#        if not self.user_regex.match(user_part):
-#            raise ValidationError(self.message, code=self.code)
-#
-#        if (domain_part not in self.domain_whitelist and
-#                not self.validate_domain_part(domain_part)):
-#            # Try for possible IDN domain-part
-#            try:
-#                domain_part = domain_part.encode('idna').decode('ascii')
-#            except UnicodeError:
-#                pass
-#            else:
-#                if self.validate_domain_part(domain_part):
-#                    return
-#            raise ValidationError(self.message, code=self.code)
-#
-#    def validate_domain_part(self, domain_part):
-#        if self.domain_regex.match(domain_part):
-#            return True
-#
-#        literal_match = self.literal_regex.match(domain_part)
-#        if literal_match:
-#            ip_address = literal_match.group(1)
-#            try:
-#                validate_ipv46_address(ip_address)
-#                return True
-#            except ValidationError:
-#                pass
-#        return False
-#
-#    def __eq__(self, other):
-#        return (
-#            isinstance(other, EmailValidator) and
-#            (self.domain_whitelist == other.domain_whitelist) and
-#            (self.message == other.message) and
-#            (self.code == other.code)
-#        )
+    def __init__(self, whitelist=None):
+        if whitelist is not None:
+            self.domain_whitelist = whitelist
+
+    def validate(self, value):
+        if not value or '@' not in value:
+            raise ValueError("Email must have @ sign")
+        user_part, domain_part = value.rsplit('@', 1)
+        if not self.user_regex.match(user_part):
+            raise ValueError("Invalid user part")
+        if (domain_part not in self.domain_whitelist and not self.validate_domain_part(domain_part)):
+            # Try for possible IDN domain-part
+            try:
+                domain_part = domain_part.encode('idna').decode('ascii')
+            except UnicodeError:
+                pass
+            else:
+                if self.validate_domain_part(domain_part):
+                    return True
+            raise ValueError("Invalid domain part")
+        return True
+
+    def validate_domain_part(self, domain_part):
+        if self.domain_regex.match(domain_part):
+            return True
+        literal_match = self.literal_regex.match(domain_part)
+        if literal_match:
+            ip_address = literal_match.group(1)
+            try:
+                validate_ipv46_address(ip_address)
+                return True
+            except ValueError:
+                pass
+        return False

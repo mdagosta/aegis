@@ -3,11 +3,15 @@
 #
 # Aegis is your shield to protect you on the Brave New Web
 
+# Python Imports
 import argparse
 import logging
 import os
-import stdlib
 import sys
+
+# Project Imports
+import aegis.stdlib
+
 
 parser = argparse.ArgumentParser(description='Create your shield.')
 parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create]')
@@ -17,13 +21,16 @@ parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='Dom
 #values = args.values
 args = parser.parse_args()
 cmd = args.cmd[0]
-if args.cmd == 'create' and not args.appname or not args.domain:
+if cmd == 'create' and (not args.appname or not args.domain):
     logging.error("aegis create requires --appname and --domain")
+    sys.exit()
+else:
+    logging.error("NOT IMPLEMENTED... YET")
     sys.exit()
 
 app_name = args.appname[0]
 domain = args.domain[0]
-stdlib.logw("AEGIS  %s  %s  %s" % (cmd, app_name, domain))
+aegis.stdlib.logw("AEGIS  %s  %s  %s" % (cmd, app_name, domain))
 aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
 src_dir = os.path.dirname(aegis_dir)
 
@@ -31,7 +38,7 @@ src_dir = os.path.dirname(aegis_dir)
 def create(cmd, app_name, domain):
     template_vars = {'app_name': app_name, 'aegis_domain': domain}
     create_dir = os.path.join(src_dir, app_name)
-    #stdlib.logw(create_dir, "CREATE DIR")
+    #aegis.stdlib.logw(create_dir, "CREATE DIR")
     #if os.path.exists(create_dir):
     #    logging.error("AEGIS     Sorry that directory exists already. Exiting.")
     #    sys.exit(1)
@@ -71,7 +78,7 @@ def create(cmd, app_name, domain):
     print ("GREAT SUCCESS!!")
     # git create and push
     # virtualenv and setup.py
-    # epl/epl.py
+    # <appname>/<appname>.py
 
 if __name__ == "__main__":
     if cmd == 'create':

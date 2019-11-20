@@ -38,13 +38,13 @@ server {
     auth_basic_user_file /etc/nginx/http_basic_auth;
 
     # Sink annoying probing requests to HTTP 410 Gone without logging
-    include {{src_dir}}/etc/nginx/sink_gone.conf;
+    include {{src_dir}}/{{app_name}}/etc/nginx/sink_gone.conf;
 
     # Use standardized error pages to send a decent error mode to the client
-    include {{src_dir}}/etc/nginx/error_pages.conf;
+    include {{src_dir}}/{{app_name}}/etc/nginx/error_pages.conf;
 
     # Configure real_ip_header from Cloudflare
-    include {{src_dir}}/etc/nginx/cloudflare.conf;
+    include {{src_dir}}/{{app_name}}/etc/nginx/cloudflare.conf;
 
     # Application
     location /favicon.ico { root $app_root/sites/$host; }

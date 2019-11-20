@@ -10,3 +10,4 @@ postgresql-client
 supervisor
 swatch
 tmux
+ssl-cert

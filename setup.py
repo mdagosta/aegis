@@ -35,5 +35,10 @@ setuptools.setup (
         'console_scripts': [
             "aegis = aegis.aegis:main",
         ],
-    }
+    },
+    install_requires = [
+        'py-dateutil',
+        'requests',
+        'tornado == 4.5.2',
+    ]
 )

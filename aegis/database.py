@@ -26,7 +26,8 @@ try:
     pgsql_OperationalError = psycopg2.OperationalError
     pgsql_DatabaseError = psycopg2.Error
 except Exception as ex:
-    logging.error("Couldn't import psycopg2 - maybe that's ok for now.")
+    #logging.error("Couldn't import psycopg2 - maybe that's ok for now.")
+    pass
 
 mysql_available = False
 mysql_IntegrityError = None
@@ -43,7 +44,8 @@ try:
     mysql_OperationalError = mysqldb_OperationalError
     mysql_DataError = mysqldb_DataError
 except Exception as ex:
-    logging.error("Couldn't import MySQLdb - maybe that's ok for now.")
+    #logging.error("Couldn't import MySQLdb - maybe that's ok for now.")
+    pass
 
 
 # Thread-safe persistent database connection

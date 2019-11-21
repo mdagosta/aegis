@@ -2,6 +2,8 @@
 
 
 # Python Imports
+import datetime
+import dateutil
 import decimal
 import functools
 import hashlib
@@ -250,9 +252,5 @@ class EmailValidator:
         literal_match = self.literal_regex.match(domain_part)
         if literal_match:
             ip_address = literal_match.group(1)
-            try:
-                validate_ipv46_address(ip_address)
-                return True
-            except ValueError:
-                pass
+            return validate_ip_address(ip_address)
         return False

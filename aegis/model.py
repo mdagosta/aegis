@@ -129,7 +129,10 @@ class Member(aegis.database.Row):
         member = cls.get_id(member_id)
         if not member:
             return None
-        # If member has email then return the email info
+        if member['email_id']:
+            email = Email.get_id(member['email_id'])
+            if email:
+                member['email'] = email
         return member
 
     def set_vat(self, vat):

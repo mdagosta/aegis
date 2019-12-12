@@ -339,7 +339,10 @@ class AegisApplication():
         member_id = None
         if hasattr(handler, 'tmpl'):
             user_id = handler.tmpl.get('user', {}).get('user_id')
-            extra_debug = '| uid: %s' % (user_id or '-')
+            member_id = None
+            if handler.tmpl.get('member'):
+                member_id = handler.tmpl['member'].get('member_id')
+            extra_debug = '| uid: %s | mid: %s' % (user_id or '-', member_id or '-')
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 

@@ -498,9 +498,14 @@ class Row(dict):
     @classmethod
     def insert_columns(cls, sql_txt='INSERT INTO %(db_table)s (%(keys)s) VALUES (%(values)s)', **columns):
         db_table = cls.table_name
+        # Filter out anything that's not in optional, pre-specified list of data columns
+        data_columns = hasattr(cls, 'data_columns') and cls.data_columns
+        if data_columns:
+            columns = dict( [ (key,val) for key, val in columns.items() if key in data_columns] )
+        #aegis.stdlib.logw(columns, "COLUMNS")
         keys, values, args = cls.kva_split(columns)
         use_db = db()
-        aegis.stdlib.logw(use_db, "USE DB")
+        #aegis.stdlib.logw(use_db, "USE DB")
         if type(use_db) is PostgresConnection:
             sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
@@ -512,6 +517,10 @@ class Row(dict):
             logging.debug('Nothing to update. Skipping query')
             return
         db_table = cls.table_name
+        # Filter out anything that's not in optional, pre-specified list of data columns
+        data_columns = hasattr(cls, 'data_columns') and cls.data_columns
+        if data_columns:
+            columns = dict( [ (key,val) for key, val in columns.items() if key in data_columns] )
         # SET clause
         keys, values, args = cls.kva_split(columns)
         set_clause = ', '.join(['%s=%s' % (key, value) for key, value in zip(keys, values)])

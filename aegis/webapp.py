@@ -17,6 +17,7 @@ from tornado.options import options
 import tornado.web
 import aegis.stdlib
 import aegis.model
+import aegis.config
 
 # Project Imports
 import config
@@ -98,17 +99,20 @@ class AegisHandler(tornado.web.RequestHandler):
         return options.template_path
 
     def _handle_request_exception(self, ex):
-        self.logw(ex, "EX")
-        logging.exception(ex)
+        #self.logw(ex, "EX")
+        #logging.exception(ex)
         if self.request.headers.get('Cookie'):
             del self.request.headers['Cookie']    # Remove to anonymize and make message shorter and more useful. Almost never used.
         header = "`[%s ENV   %s   %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'])
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}}
-        rendered = self.render_string("error_message.txt", **template_opts).decode('utf-8')
+        error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
             logging.debug("Prevent too-annoying errors from POSTing to Slack")
-        else:
-            requests.post(options.slack_error_hook, json={"text": rendered})
+        hooks = ['alerts_chat_hook', 'debug_chat_hook', 'slack_error_hook']
+        for hook in hooks:
+            hook_url = aegis.config.get(hook)
+            if hook_url:
+                requests.post(hook_url, json={"text": error_message})
         super(AegisHandler, self)._handle_request_exception(ex)
 
     def get_next_url(self, default_url='/'):

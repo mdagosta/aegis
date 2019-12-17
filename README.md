@@ -21,9 +21,12 @@ This code is your shield, your [Aegis](https://en.wikipedia.org/wiki/Aegis), to 
 ### Create new Pypi release ###
 
 * Follow along here: https://packaging.python.org/tutorials/packaging-projects/
+* Being in virtualenv is not required
 * Update version in setup.py 0.0.X
 * git tag 0.0.X
 * python3 -m pip install --user --upgrade setuptools wheel
 * python3 setup.py sdist bdist_wheel
 * python3 -m pip install --user --upgrade twine
 * python3 -m twine upload dist/*
+
+* Keyring error needs: pip3 install --upgrade keyrings.alt --user

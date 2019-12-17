@@ -107,7 +107,9 @@ class AegisHandler(tornado.web.RequestHandler):
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}}
         error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
-            logging.debug("Prevent too-annoying errors from POSTing to Slack")
+            logging.warning("Prevent too-annoying errors from POSTing to Slack")
+            super(AegisHandler, self)._handle_request_exception(ex)
+            return
         hooks = ['alerts_chat_hook', 'debug_chat_hook', 'slack_error_hook']
         for hook in hooks:
             hook_url = aegis.config.get(hook)

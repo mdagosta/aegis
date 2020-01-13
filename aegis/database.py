@@ -70,6 +70,11 @@ def db(use_schema=None):
 def dbnow(use_schema=None):
     return db(use_schema).get("SELECT NOW()")
 
+def sql_in_format(lst, cast):
+    lst = [cast(lst_item) for lst_item in lst]
+    format_strings = ','.join(['%s'] * len(lst))
+    return lst, format_strings
+
 
 class PostgresConnection(object):
     threads = {}

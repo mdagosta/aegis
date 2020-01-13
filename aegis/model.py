@@ -105,15 +105,15 @@ class Member(aegis.database.Row):
     id_column = 'member_id'
 
     @staticmethod
-    def insert(email_id, full_name, country_cd, pricing_strategy):
-        sql = "INSERT INTO member (email_id, full_name, country_cd, pricing_strategy) VALUES (%s, %s, %s, %s) RETURNING member_id"
-        return db().execute(sql, email_id, full_name, country_cd, pricing_strategy)
+    def insert(email_id):
+        sql = "INSERT INTO member (email_id) VALUES (%s) RETURNING member_id"
+        return db().execute(sql, email_id)
 
     @classmethod
-    def set_member(cls, email_id, full_name, country_cd, pricing_strategy):
+    def set_member(cls, email_id):
         member = cls.get_email_id(email_id)
         if not member:
-            member_id = cls.insert(email_id, full_name, country_cd, pricing_strategy)
+            member_id = cls.insert(email_id)
             member = cls.get_id(member_id)
         return member
 

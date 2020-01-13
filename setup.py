@@ -37,7 +37,7 @@ setuptools.setup (
         ],
     },
     install_requires = [
-        'py-dateutil',
+        'python-dateutil',
         'requests',
         'tornado == 4.5.2',
     ]

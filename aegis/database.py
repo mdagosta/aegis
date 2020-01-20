@@ -447,12 +447,23 @@ class Row(dict):
             raise AttributeError(name)
 
     @classmethod
+    def _table_name(cls):
+        # Choose table name based on model table_names attribute
+        #aegis.stdlib.logw(cls.table_name, "TABLE NAME")
+        if hasattr(cls, 'table_names'):
+            if aegis.config.get('pg_database'):
+                cls.table_name = cls.table_names['pgsql']
+            elif aegis.config.get('mysql_database'):
+                cls.table_name = cls.table_names['mysql']
+        return cls.table_name
+
+    @classmethod
     def logw(cls, msg, value, row_id):
         logging.warning("%s: %s %s", msg, value, row_id)
 
     @classmethod
     def scan_id(cls, column, row_id):
-        sql = 'SELECT * FROM %s WHERE %s=%%s' % (cls.table_name, column)
+        sql = 'SELECT * FROM %s WHERE %s=%%s' % (cls._table_name(), column)
         return db().query(sql, row_id, cls=cls)
 
     @classmethod
@@ -479,7 +490,7 @@ class Row(dict):
         if member_id:
             sql = sql + ' AND member_id=%%s'
             args.append(int(member_id))
-        sql = sql % (cls.table_name, cls.id_column)
+        sql = sql % (cls._table_name(), cls.id_column)
         val = db().get(sql, *args, cls=cls)
         return val
 
@@ -502,7 +513,7 @@ class Row(dict):
 
     @classmethod
     def insert_columns(cls, sql_txt='INSERT INTO %(db_table)s (%(keys)s) VALUES (%(values)s)', **columns):
-        db_table = cls.table_name
+        db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
@@ -521,7 +532,7 @@ class Row(dict):
         if not columns:
             logging.debug('Nothing to update. Skipping query')
             return
-        db_table = cls.table_name
+        db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:

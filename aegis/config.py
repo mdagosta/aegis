@@ -5,11 +5,10 @@
 
 # Python Imports
 import logging
-import os
 
 # Extern Imports
 import tornado.options
-from tornado.options import define, options
+from tornado.options import options
 
 
 def get(config_name):

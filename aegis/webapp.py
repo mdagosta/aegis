@@ -102,7 +102,8 @@ class AegisHandler(tornado.web.RequestHandler):
         #self.logw(ex, "EX")
         #logging.exception(ex)
         if self.request.headers.get('Cookie'):
-            del self.request.headers['Cookie']    # Remove to anonymize and make message shorter and more useful. Almost never used.
+            # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.
+            del self.request.headers['Cookie']
         header = "`[%s ENV   %s   %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'])
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}}
         error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')

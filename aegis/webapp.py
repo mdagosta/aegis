@@ -50,7 +50,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['request_name'] = self.page_name = '%s.%s' % (self.__class__.__name__, self.request.method)
         self.tmpl['next_url'] = self.get_next_url()
         self.request.args = dict([(key, self.get_argument(key)) for key, val in self.request.arguments.items()])
-        if options.pg_database:
+        if aegis.config.get('pg_database') or aegis.config.get('mysql_database'):
             self.setup_user()
         super(AegisHandler, self).prepare()
 
@@ -67,6 +67,9 @@ class AegisHandler(tornado.web.RequestHandler):
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
         user_agent = aegis.model.UserAgent.set_user_agent(self.tmpl['user_agent'])
+
+
+
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
         if user_agent['robot_ind']:
@@ -223,8 +226,8 @@ class JsonRestApi(AegisHandler):
 
     def prepare(self):
         super(JsonRestApi, self).prepare()
-        api_token = self.request.headers.get(options.api_token)
-        if not api_token or api_token != options.api_key:
+        api_token_value = self.request.headers.get(options.api_token_header)
+        if not api_token_value or api_token_value != options.api_token_value:
             raise tornado.web.HTTPError(401, 'Wrong API Token')
         self.json_req = self.json_unpack()
         self.json_resp = {}

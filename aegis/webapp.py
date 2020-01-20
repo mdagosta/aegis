@@ -28,7 +28,8 @@ class AegisHandler(tornado.web.RequestHandler):
         super(AegisHandler, self).__init__(*args, **kwargs)
         self.logw = aegis.stdlib.logw
         self.tmpl = {}
-        self.tmpl['host'] = self.request.host
+        hostname = self.request.host.split(':')[0]
+        self.tmpl['host'] = hostname
         config.apply_hostname(self.tmpl['host'])
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
@@ -42,9 +43,11 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['xsrf_token'] = self.xsrf_token
         self.tmpl['nl2br'] = aegis.stdlib.nl2br
         self.tmpl['format_integer'] = aegis.stdlib.format_integer
+        self.tmpl['get_user_id'] = self.get_user_id
+        self.tmpl['get_member_id'] = self.get_member_id
 
     def prepare(self):
-        self.set_header('Cache-Control', 'no-cache')
+        self.set_header('Cache-Control', 'no-cache, no-store')
         self.set_header('Pragma', 'no-cache')
         self.set_header('Expires', 'Fri, 21 Dec 2012 03:08:13 GMT')
         self.tmpl['request_name'] = self.page_name = '%s.%s' % (self.__class__.__name__, self.request.method)
@@ -56,9 +59,11 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def finish(self, chunk=None):
         auth_ck = self.cookie_get('auth')
-        logged_out = self.tmpl.get('logged_out') == True
+        logged_out = (self.tmpl.get('logged_out') == True)
         if auth_ck and not logged_out:
             self.cookie_set('auth', auth_ck)
+        if self.tmpl.get('session_ck'):
+            self.cookie_set('session', self.tmpl['session_ck'])
         super(AegisHandler, self).finish(chunk)
 
     def setup_user(self):
@@ -107,17 +112,19 @@ class AegisHandler(tornado.web.RequestHandler):
         if self.request.headers.get('Cookie'):
             # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.
             del self.request.headers['Cookie']
-        header = "`[%s ENV   %s   %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'])
-        template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}}
-        error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
+        # Don't post boring pseudo-errors to channels
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
-            logging.warning("Prevent too-annoying errors from POSTing to Slack")
+            logging.warning("Prevent too-annoying errors from POSTing to Chat")
             super(AegisHandler, self)._handle_request_exception(ex)
             return
-        hooks = ['alerts_chat_hook', 'debug_chat_hook', 'slack_error_hook']
+        # Send errors to chat hooks, based on them being configured for the environment
+        header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
+        template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}
+        hooks = ['alerts_chat_hook', 'debug_chat_hook']
         for hook in hooks:
             hook_url = aegis.config.get(hook)
             if hook_url:
+                error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
                 requests.post(hook_url, json={"text": error_message})
         super(AegisHandler, self)._handle_request_exception(ex)
 
@@ -148,20 +155,30 @@ class AegisHandler(tornado.web.RequestHandler):
         return name
 
     def cookie_set(self, name, value):
-        """ Session cookie is set to None duration to implement a browser session cookie """
-        cookie_duration = {'user': 3650, 'session': None, 'auth': 14}[name]
-        self.set_secure_cookie(self.cookie_name(name), self.cookie_encode(value), expires_days=cookie_duration, domain=options.hostname)
+        # Session cookie is set to None duration to implement a browser session cookie
+        #cookie_duration = {'user': 3650, 'session': None, 'auth': 14}[name]
+        cookie_duration = options.cookie_durations[name]
+        cookie_flags = {'httponly': True, 'secure': True}
+        cookie_val = self.cookie_encode(value)
+        self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
     def cookie_get(self, name):
-        """ Session cookie is set to 31 since browser should expire session cookie """
-        cookie_duration = {'user': 3650, 'session': 30, 'auth': 14}[name]
-        return self.cookie_decode(self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration))
+        # Session cookie is set to 30 since browser should expire session cookie not time-limit
+        #cookie_duration = {'user': 3650, 'session': 30, 'auth': 14}[name]
+        cookie_duration = options.cookie_durations[name]
+        cookie_val = self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration)
+        cookie_val = tornado.escape.to_basestring(cookie_val)
+        cookie_val = self.cookie_decode(cookie_val)
+        return cookie_val
 
     def cookie_clear(self, name):
         self.clear_cookie(self.cookie_name(name), domain=options.hostname)
 
 
     # Authentication
+    def get_user_id(self):
+        return self.tmpl.get('user', {}).get('user_id')
+
     def set_current_user(self, member_id):
         self.cookie_set('auth', int(member_id))
         self.tmpl['member'] = aegis.model.Member.get_auth(member_id)
@@ -184,9 +201,9 @@ class AegisHandler(tornado.web.RequestHandler):
                 logging.warning("Test Mode | MemberId Override: %s", test_member_id)
                 return test_member_id
 
-
     def get_current_user(self):
-        if options.pg_database:
+        # Maybe use the database.pgsql_available and .mysql_available
+        if options.get('pg_database') or options.get('mysql_database'):
             self.tmpl['member'] = aegis.model.Member.get_auth(self.get_member_id())
             return self.tmpl['member']
 

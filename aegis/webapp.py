@@ -15,11 +15,12 @@ import urllib
 import requests
 from tornado.options import options
 import tornado.web
+import user_agents
+
+# Project Imports
 import aegis.stdlib
 import aegis.model
 import aegis.config
-
-# Project Imports
 import config
 
 
@@ -90,6 +91,13 @@ class AegisHandler(tornado.web.RequestHandler):
                     user_ck = {'user_id': user_id}
                 self.cookie_set('user', user_ck)
         self.tmpl['user']['user_id'] = user['user_id']
+        # XXX TODO This should be better integrated into the database user_agent table
+        self.tmpl['user_agent'] = user_agents.parse(self.tmpl['user_agent'])
+        #self.logw(self.tmpl['user_agent'], "UA")
+        #self.logw(self.tmpl['user_agent'].is_mobile, "MOBILE")
+        #self.logw(self.tmpl['user_agent'].is_tablet, "TABLET")
+        #self.logw(self.tmpl['user_agent'].is_bot, "BOT")
+        #self.logw(self.tmpl['user_agent'].is_pc, "PC")
 
     def render(self, template_name, **kwargs):
         template_path = os.path.join(options.template_path, template_name)

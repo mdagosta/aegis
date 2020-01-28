@@ -11,6 +11,7 @@ import uuid
 # Project Imports
 import aegis.stdlib
 import aegis.database
+import aegis.config
 
 db = aegis.database.db
 
@@ -55,7 +56,8 @@ class UserAgent(aegis.database.Row):
 
 
 class User(aegis.database.Row):
-    table_name = 'user_'
+    table_name = 'user_' if aegis.config.get('pg_database') else 'user'
+    table_names = {'pgsql': 'user_', 'mysql': 'user'}
     id_column = 'user_id'
 
     @staticmethod
@@ -135,11 +137,7 @@ class Member(aegis.database.Row):
                 member['email'] = email
         return member
 
-    def set_vat(self, vat):
-        sql = "UPDATE member SET vat=%s WHERE member_id=%s"
-        return db().execute(sql, vat, self['member_id'])
 
-    
 class EmailType(aegis.database.Row):
     table_name = 'email_type'
     id_column = 'email_type_id'
@@ -210,4 +208,3 @@ class Pageview(aegis.database.Row):
     def insert(cls, user_id, member_id, url_path, url_query, url_tx, request_name):
       sql = "INSERT INTO pageview (user_id, member_id, url_path, url_query, url_tx, request_name) VALUES (%s, %s, %s, %s, %s, %s) RETURNING pageview_id"
       return db().execute(sql, user_id, member_id, url_path, url_query, url_tx, request_name)
-    

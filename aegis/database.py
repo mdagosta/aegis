@@ -15,24 +15,24 @@ import aegis.stdlib
 
 # Import drivers as needed and set up error classes
 pgsql_available = False
-pgsql_IntegrityError = None
-pgsql_OperationalError = None
-pgsql_DatabaseError = None
+PgsqlIntegrityError = None
+PgsqlOperationalError = None
+PgsqlDatabaseError = None
 try:
     import psycopg2
     pgsql_available = True
     # These are here for mapping errors from psycopg2 into application namespace
-    pgsql_IntegrityError = psycopg2.IntegrityError
-    pgsql_OperationalError = psycopg2.OperationalError
-    pgsql_DatabaseError = psycopg2.Error
+    PgsqlIntegrityError = psycopg2.IntegrityError
+    PgsqlOperationalError = psycopg2.OperationalError
+    PgsqlDatabaseError = psycopg2.Error
 except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now.")
     pass
 
 mysql_available = False
-mysql_IntegrityError = None
-mysql_OperationalError = None
-mysql_DataError = None
+MysqlIntegrityError = None
+MysqlOperationalError = None
+MysqlDataError = None
 try:
     import MySQLdb
     mysql_available = True
@@ -40,9 +40,9 @@ try:
     from MySQLdb._exceptions import IntegrityError as mysqldb_IntegrityError
     from MySQLdb._exceptions import OperationalError as mysqldb_OperationalError
     from MySQLdb._exceptions import DataError as mysqldb_DataError
-    mysql_IntegrityError = mysqldb_IntegrityError
-    mysql_OperationalError = mysqldb_OperationalError
-    mysql_DataError = mysqldb_DataError
+    MysqlIntegrityError = mysqldb_IntegrityError
+    MysqlOperationalError = mysqldb_OperationalError
+    MysqlDataError = mysqldb_DataError
 except Exception as ex:
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now.")
     pass
@@ -226,11 +226,11 @@ class PostgresConnection(object):
             # return cursor.execute(query, parameters)
             cursor.execute(query, parameters)
             return self._db.commit()
-        except pgsql_OperationalError:
+        except PgsqlOperationalError:
             logging.error("Error connecting to PostgreSQL")
             self.close()
             raise
-        except pgsql_DatabaseError:
+        except PgsqlDatabaseError:
             logging.error("General Error at PostgreSQL - rollback transaction and carry on!")
             self.rollback()
             raise
@@ -427,7 +427,7 @@ class MysqlConnection(object):
     def _execute(self, cursor, query, parameters):
         try:
             return cursor.execute(query, parameters)
-        except mysql_OperationalError:
+        except MysqlOperationalError:
             logging.error("Error connecting to MySQL on %s", self.host)
             self.close()
             raise
@@ -447,12 +447,23 @@ class Row(dict):
             raise AttributeError(name)
 
     @classmethod
+    def _table_name(cls):
+        # Choose table name based on model table_names attribute
+        #aegis.stdlib.logw(cls.table_name, "TABLE NAME")
+        if hasattr(cls, 'table_names'):
+            if aegis.config.get('pg_database'):
+                cls.table_name = cls.table_names['pgsql']
+            elif aegis.config.get('mysql_database'):
+                cls.table_name = cls.table_names['mysql']
+        return cls.table_name
+
+    @classmethod
     def logw(cls, msg, value, row_id):
         logging.warning("%s: %s %s", msg, value, row_id)
 
     @classmethod
     def scan_id(cls, column, row_id):
-        sql = 'SELECT * FROM %s WHERE %s=%%s' % (cls.table_name, column)
+        sql = 'SELECT * FROM %s WHERE %s=%%s' % (cls._table_name(), column)
         return db().query(sql, row_id, cls=cls)
 
     @classmethod
@@ -479,7 +490,7 @@ class Row(dict):
         if member_id:
             sql = sql + ' AND member_id=%%s'
             args.append(int(member_id))
-        sql = sql % (cls.table_name, cls.id_column)
+        sql = sql % (cls._table_name(), cls.id_column)
         val = db().get(sql, *args, cls=cls)
         return val
 
@@ -502,7 +513,7 @@ class Row(dict):
 
     @classmethod
     def insert_columns(cls, sql_txt='INSERT INTO %(db_table)s (%(keys)s) VALUES (%(values)s)', **columns):
-        db_table = cls.table_name
+        db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
@@ -521,7 +532,7 @@ class Row(dict):
         if not columns:
             logging.debug('Nothing to update. Skipping query')
             return
-        db_table = cls.table_name
+        db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:

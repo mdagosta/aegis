@@ -211,7 +211,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def get_current_user(self):
         # Maybe use the database.pgsql_available and .mysql_available
-        if options.get('pg_database') or options.get('mysql_database'):
+        if aegis.database.pgsql_available  or aegis.database.mysql_available:
             self.tmpl['member'] = aegis.model.Member.get_auth(self.get_member_id())
             return self.tmpl['member']
 

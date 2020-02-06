@@ -18,7 +18,7 @@ import setuptools
 
 setuptools.setup (
     name = 'aegis-tools',
-    version = '0.0.7',
+    version = '0.0.9',
     description = 'Aegis is a set of battle-tested tools and tricks to help everyone make better software',
     long_description = 'A combination of tools and framework, Aegis has multiple different uses. You can import it and use the thoroughly made and tested functions. You can use it as a natural extension for the tornado web framework. And you can use it to quickly create a new web application with the structure already built-in, and follow along.',
     author = "Michael D'Agosta",
@@ -40,5 +40,6 @@ setuptools.setup (
         'python-dateutil',
         'requests',
         'tornado == 4.5.2',
+        'user_agents',
     ]
 )

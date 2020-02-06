@@ -47,9 +47,9 @@ class UserAgent(aegis.database.Row):
 
     @staticmethod
     def set_robot_ind(user_agent_id, robot_ind):
-        user_agent_id = long(user_agent_id)
-        robot_ind = long(robot_ind)
-        if robot_ind not in [-1, 0, 1]:
+        user_agent_id = int(user_agent_id)
+        robot_ind = bool(robot_ind)
+        if robot_ind not in [True, False]:
             return False
         sql = 'UPDATE user_agent SET robot_ind=%s WHERE user_agent_id=%s'
         return db().execute(sql, robot_ind, user_agent_id)

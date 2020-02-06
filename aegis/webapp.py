@@ -15,11 +15,12 @@ import urllib
 import requests
 from tornado.options import options
 import tornado.web
+import user_agents
+
+# Project Imports
 import aegis.stdlib
 import aegis.model
 import aegis.config
-
-# Project Imports
 import config
 
 
@@ -72,9 +73,10 @@ class AegisHandler(tornado.web.RequestHandler):
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
         user_agent = aegis.model.UserAgent.set_user_agent(self.tmpl['user_agent'])
-
-
-
+        self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
+        if self.tmpl['user_agent_obj'].is_bot:
+            aegis.model.UserAgent.set_robot_ind(user_agent['user_agent_id'], True)
+            user_agent = aegis.model.UserAgent.get_id(user_agent['user_agent_id'])
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
         if user_agent['robot_ind']:
@@ -203,7 +205,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def get_current_user(self):
         # Maybe use the database.pgsql_available and .mysql_available
-        if options.get('pg_database') or options.get('mysql_database'):
+        if aegis.database.pgsql_available  or aegis.database.mysql_available:
             self.tmpl['member'] = aegis.model.Member.get_auth(self.get_member_id())
             return self.tmpl['member']
 
@@ -371,6 +373,8 @@ class AegisApplication():
                 member_id = handler.tmpl['member'].get('member_id')
             extra_debug = '| uid: %s | mid: %s' % (user_id or '-', member_id or '-')
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
+            if handler.tmpl.get('user_agent_obj').is_bot:
+                extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 

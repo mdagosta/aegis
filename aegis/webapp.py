@@ -154,18 +154,18 @@ class AegisHandler(tornado.web.RequestHandler):
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
 
-    def cookie_set(self, name, value):
+    def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
         #cookie_duration = {'user': 3650, 'session': None, 'auth': 14}[name]
-        cookie_duration = options.cookie_durations[name]
+        cookie_duration = cookie_duration or options.cookie_durations[name]
         cookie_flags = {'httponly': True, 'secure': True}
         cookie_val = self.cookie_encode(value)
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
-    def cookie_get(self, name):
+    def cookie_get(self, name, cookie_duration=None):
         # Session cookie is set to 30 since browser should expire session cookie not time-limit
         #cookie_duration = {'user': 3650, 'session': 30, 'auth': 14}[name]
-        cookie_duration = options.cookie_durations[name]
+        cookie_duration = cookie_duration or options.cookie_durations[name]
         cookie_val = self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration)
         cookie_val = tornado.escape.to_basestring(cookie_val)
         cookie_val = self.cookie_decode(cookie_val)

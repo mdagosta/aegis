@@ -74,7 +74,11 @@ class AegisHandler(tornado.web.RequestHandler):
             self.tmpl['user_agent'] = 'NULL USER AGENT'
         user_agent = aegis.model.UserAgent.set_user_agent(self.tmpl['user_agent'])
         self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
-        if self.tmpl['user_agent_obj'].is_bot:
+        user_agents_bot = self.tmpl['user_agent_obj'].is_bot
+        aegis_bot = aegis.stdlib.is_robot(self.tmpl["user_agent"])
+        if user_agents_bot or aegis_bot:
+            if user_agents_bot and aegis_bot:
+                logging.warning("Duplicate robot: %s", self.tmpl['user_agent'])
             aegis.model.UserAgent.set_robot_ind(user_agent['user_agent_id'], True)
             user_agent = aegis.model.UserAgent.get_id(user_agent['user_agent_id'])
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.

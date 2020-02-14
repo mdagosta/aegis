@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {% block title %}<title>Aegis {{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</title>{% end %}
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+        {% block head %}{% end %}
+    </head>
+
+    <body class="w3-light-gray w3-large">
+        {# Header #}
+        <div class="w3-top w3-gray w3-large">
+            <div class="w3-bar">
+                <a href="/aegis" class="w3-bar-item w3-padding-medium" style="text-decoration: none;">Aegis Admin</a>
+                <div class="w3-right w3-bar-item w3-padding-medium">{{get_member_email()}}</div>
+            </div>
+        </div>
+
+        {# Page content #}
+        <div class="w3-content w3-padding w3-light-grey" style="margin-top: 50px; max-width: initial;">
+            {% block body %} {% end %}
+        </div>
+
+        {# Footer #}
+        <footer class="w3-center w3-gray w3-padding-16">
+            Part of <a href="https://pypi.org/project/aegis-tools/" target="_blank">Aegis Tools</a>
+        </footer>
+
+    </body>
+</html>

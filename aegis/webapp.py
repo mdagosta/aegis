@@ -46,6 +46,10 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['format_integer'] = aegis.stdlib.format_integer
         self.tmpl['get_user_id'] = self.get_user_id
         self.tmpl['get_member_id'] = self.get_member_id
+        self.tmpl['get_member_email'] = self.get_member_email
+        self.models = {}
+        self.models['UserAgent'] = aegis.model.UserAgent
+        self.models['User'] = aegis.model.User
 
     def prepare(self):
         self.set_header('Cache-Control', 'no-cache, no-store')
@@ -72,32 +76,32 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['user'] = {}
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
-        user_agent = aegis.model.UserAgent.set_user_agent(self.tmpl['user_agent'])
         self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
+        user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
         user_agents_bot = self.tmpl['user_agent_obj'].is_bot
         aegis_bot = aegis.stdlib.is_robot(self.tmpl["user_agent"])
         if user_agents_bot or aegis_bot:
             if user_agents_bot and aegis_bot:
                 logging.warning("Duplicate robot: %s", self.tmpl['user_agent'])
-            aegis.model.UserAgent.set_robot_ind(user_agent['user_agent_id'], True)
-            user_agent = aegis.model.UserAgent.get_id(user_agent['user_agent_id'])
+            self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True)
+            user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
         if user_agent['robot_ind']:
             if not user_agent['robot_user_id']:
-                user_id = aegis.model.User.insert(user_agent['user_agent_id'])
-                aegis.model.UserAgent.set_robot_user_id(user_agent['user_agent_id'], user_id)
-                user_agent = aegis.model.UserAgent.get_id(user_agent['user_agent_id'])
-            user = aegis.model.User.get_id(user_agent['robot_user_id'])
+                user_id = self.models['User'].insert(user_agent['user_agent_id'])
+                self.models['UserAgent'].set_robot_user_id(user_agent['user_agent_id'], user_id)
+                user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
+            user = self.models['User'].get_id(user_agent['robot_user_id'])
             user_ck = {}
         else:
             user_ck = self.cookie_get('user')
             if user_ck and user_ck.get('user_id'):
-                user = aegis.model.User.get_id(user_ck['user_id'])
+                user = self.models['User'].get_id(user_ck['user_id'])
                 self.cookie_set('user', user_ck)
             else:
-                user_id = aegis.model.User.insert(user_agent['user_agent_id'])
-                user = aegis.model.User.get_id(user_id)
+                user_id = self.models['User'].insert(user_agent['user_agent_id'])
+                user = self.models['User'].get_id(user_id)
                 if user_ck:
                     user_ck['user_id'] = user_id
                 else:
@@ -107,6 +111,10 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def render(self, template_name, **kwargs):
         template_path = os.path.join(options.template_path, template_name)
+        return super(AegisHandler, self).render(template_path, **kwargs)
+
+    def render_path(self, template_name, **kwargs):
+        template_path = os.path.join(self.get_template_path(), template_name)
         return super(AegisHandler, self).render(template_path, **kwargs)
 
     def get_template_path(self):
@@ -208,10 +216,18 @@ class AegisHandler(tornado.web.RequestHandler):
                 return test_member_id
 
     def get_current_user(self):
-        # Maybe use the database.pgsql_available and .mysql_available
-        if aegis.database.pgsql_available  or aegis.database.mysql_available:
-            self.tmpl['member'] = aegis.model.Member.get_auth(self.get_member_id())
-            return self.tmpl['member']
+        if not aegis.database.pgsql_available and not aegis.database.mysql_available:
+            return None
+        self.tmpl['member'] = aegis.model.Member.get_auth(self.get_member_id())
+        return self.tmpl['member']
+
+    def get_member_email(self):
+        if not aegis.database.pgsql_available and not aegis.database.mysql_available:
+            return None
+        if 'member' not in self.tmpl:
+            self.get_current_user()
+        if self.tmpl['member']:
+            return self.tmpl['member']['email']['email']
 
     def del_current_user(self):
         self.cookie_clear('auth')
@@ -239,6 +255,12 @@ class AegisHandler(tornado.web.RequestHandler):
         if time_diff.seconds > 15*60:
             return {'error_message': "Magic Link Expired"}
         return email_link
+
+    def is_super_admin(self):
+        if not self.get_current_user():
+            return False
+        if self.get_member_email() in aegis.config.get('super_admins'):
+            return True
 
 
 class JsonRestApi(AegisHandler):
@@ -398,3 +420,35 @@ class WebApplication(AegisApplication, tornado.web.Application):
         else:
             http_server.listen(port)  # bind all (0.0.0.0:*)
         tornado.ioloop.IOLoop.instance().start()
+
+
+### Aegis Web Admin
+
+class AegisWeb(AegisHandler):
+    def prepare(self):
+        super(AegisWeb, self).prepare()
+        if not self.is_super_admin():
+            raise tornado.web.HTTPError(403)
+        self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
+
+    def get_template_path(self):
+        return os.path.join(os.path.dirname(__file__), 'templates')
+
+class AegisHydra(AegisWeb):
+    def get(self, *args):
+        return self.render_path("hydra.html", **self.tmpl)
+
+class AegisReports(AegisWeb):
+    def get(self, *args):
+        return self.render_path("reports.html", **self.tmpl)
+
+class AegisHome(AegisWeb):
+    def get(self, *args):
+        return self.render_path("index.html", **self.tmpl)
+
+
+handler_urls = [
+    (r'^/aegis/hydra\W*$', AegisHydra),
+    (r'^/aegis/reports\W*$', AegisReports),
+    (r'^/aegis\W*$', AegisHome),
+]

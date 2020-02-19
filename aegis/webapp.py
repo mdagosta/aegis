@@ -28,8 +28,8 @@ import config
 class AegisHandler(tornado.web.RequestHandler):
     def __init__(self, *args, **kwargs):
         super(AegisHandler, self).__init__(*args, **kwargs)
-        self.logw = aegis.stdlib.logw
         self.tmpl = {}
+        self.tmpl['logw'] = self.logw = aegis.stdlib.logw
         hostname = self.request.host.split(':')[0]
         self.tmpl['host'] = hostname
         # Don't allow direct IP address in the Host header

@@ -21,6 +21,7 @@ import user_agents
 import aegis.stdlib
 import aegis.model
 import aegis.config
+import aegis.database
 import config
 
 
@@ -31,6 +32,19 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl = {}
         hostname = self.request.host.split(':')[0]
         self.tmpl['host'] = hostname
+        # Don't allow direct IP address in the Host header
+        if aegis.stdlib.validate_ip_address(self.tmpl['host']):
+            logging.warning("Disallow IP Address in Host Header: %s", self.tmpl['host'])
+            raise tornado.web.HTTPError(400)
+        # Implement *.domain.com to still work on domain.com
+        host_split = hostname.split('.')
+        valid_subdomains = aegis.config.get('valid_subdomains')
+        if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
+            self.tmpl['host'] = '.'.join(host_split[1:])
+        # Ignore crazy hostnames. Only use the ones we have specified.
+        if self.tmpl['host'] not in config.hostnames.keys():
+            logging.warning("Ignore crazy hostname: %s", self.tmpl['host'])
+            raise tornado.web.HTTPError(404)
         config.apply_hostname(self.tmpl['host'])
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
@@ -170,16 +184,22 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
-        #cookie_duration = {'user': 3650, 'session': None, 'auth': 14}[name]
-        cookie_duration = cookie_duration or options.cookie_durations[name]
+        if not cookie_duration:
+            cookie_durations = aegis.config.get('cookie_durations')
+            if not cookie_durations:
+                cookie_durations = {'user': 3650, 'session': None, 'auth': 14}
+            cookie_duration = cookie_durations[name]
         cookie_flags = {'httponly': True, 'secure': True}
         cookie_val = self.cookie_encode(value)
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
     def cookie_get(self, name, cookie_duration=None):
         # Session cookie is set to 30 since browser should expire session cookie not time-limit
-        #cookie_duration = {'user': 3650, 'session': 30, 'auth': 14}[name]
-        cookie_duration = cookie_duration or options.cookie_durations[name]
+        if not cookie_duration:
+            cookie_durations = aegis.config.get('cookie_durations')
+            if not cookie_durations:
+                cookie_durations = {'user': 3650, 'session': 30, 'auth': 14}
+            cookie_duration = cookie_durations[name]
         cookie_val = self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration)
         cookie_val = tornado.escape.to_basestring(cookie_val)
         cookie_val = self.cookie_decode(cookie_val)

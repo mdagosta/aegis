@@ -304,6 +304,7 @@ class RobotValidator:
         '^crawl',
         '^Crowsnest',
         '^curl/',
+        'Daum/',
         '^Docunator',
         '^DomainCrawler',
         '^Domnutch-Bot',

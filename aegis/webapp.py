@@ -450,9 +450,11 @@ class AegisWeb(AegisHandler):
         if not self.is_super_admin():
             raise tornado.web.HTTPError(403)
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
+        self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
+        self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
 
     def get_template_path(self):
-        return os.path.join(os.path.dirname(__file__), 'templates')
+        return self.tmpl.get('template_dir')
 
 class AegisHydra(AegisWeb):
     def get(self, *args):

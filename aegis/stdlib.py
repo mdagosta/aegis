@@ -289,6 +289,7 @@ class RobotValidator:
         '^binlar_',
         '^bitlybot',
         '^Browserlet',
+        '^BublupBot',
         '^Bufferbot',
         '^CatchBot',
         '^CCBot',

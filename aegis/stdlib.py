@@ -37,7 +37,7 @@ def logw(var, msg=''):
 
 def logline(*args):
     caller = get_caller()
-    msg = '%s %s' % (cstr(caller, 'yellow').ljust(20), args[0])
+    msg = '%s %s' % (cstr(caller, 'yellow'), args[0])
     logging.warning(msg, *args[1:])
 
 def force_int(string):

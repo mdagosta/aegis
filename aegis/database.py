@@ -494,6 +494,11 @@ class Row(dict):
         val = db().get(sql, *args, cls=cls)
         return val
 
+    @classmethod
+    def scan(cls):
+        sql = 'SELECT * FROM %s' % cls.table_name
+        return db().query(sql, cls=cls)
+
     # kva_split(), insert(), update() together are a mini-ORM in processing arbitrary column-value combinations on a row.
     # define table_name and data_columns to know which are allowed to be set along with user action
     # columns and where are simple dictionaries: {'full_name': "FULL NAME", 'email': 'email@example.com'}
@@ -518,10 +523,8 @@ class Row(dict):
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
             columns = dict( [ (key,val) for key, val in columns.items() if key in data_columns] )
-        #aegis.stdlib.logw(columns, "COLUMNS")
         keys, values, args = cls.kva_split(columns)
         use_db = db()
-        #aegis.stdlib.logw(use_db, "USE DB")
         if type(use_db) is PostgresConnection:
             sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
@@ -547,41 +550,3 @@ class Row(dict):
         # SQL statement
         sql = 'UPDATE %s SET %s WHERE %s' % (db_table, set_clause, where_clause)
         return db().execute_rowcount(sql, *args)
-
-
-class SqlDiff(Row):
-    table_name = 'sql_diff'
-    id_column = 'sql_diff_id'
-
-    @staticmethod
-    def create_table():
-        sql_diff_table = """
-            CREATE TABLE IF NOT EXISTS
-            sql_diff (
-              sql_diff_id SERIAL NOT NULL,
-              sql_diff_name VARCHAR(80) NOT NULL,
-              create_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              applied_dttm TIMESTAMP DEFAULT NULL,
-              PRIMARY KEY (sql_diff_name)
-            )"""
-        return db().execute(sql_diff_table)
-
-    @staticmethod
-    def insert(sql_diff_name):
-        sql = 'INSERT INTO sql_diff (sql_diff_name) VALUES (%s) RETURNING sql_diff_id'
-        return db().execute(sql, sql_diff_name)
-
-    @classmethod
-    def scan(cls):
-        sql = 'SELECT * FROM sql_diff'
-        return db().query(sql, cls=cls)
-
-    @staticmethod
-    def mark_applied(sql_diff_name):
-        sql = 'UPDATE sql_diff SET applied_dttm=NOW() WHERE sql_diff_name=%s'
-        return db().execute(sql, sql_diff_name)
-
-    @classmethod
-    def scan_unapplied(cls):
-        sql = """SELECT * FROM sql_diff WHERE applied_dttm IS NULL ORDER BY SUBSTRING(sql_diff_name from 5 for 3) ASC"""
-        return db().query(sql, cls=cls)

@@ -456,9 +456,70 @@ class AegisWeb(AegisHandler):
     def get_template_path(self):
         return self.tmpl.get('template_dir')
 
+class AegisHydraForm(AegisWeb):
+    def get(self, hydra_type_id=None, *args):
+        self.tmpl['errors'] = {}
+        hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
+        if hydra_type_id:
+            self.tmpl['hydra_type'] = aegis.model.HydraType.get_id(hydra_type_id)
+        else:
+            self.tmpl['hydra_type'] = {}
+        return self.render_path("hydra_form.html", **self.tmpl)
+
+    def post(self, hydra_type_id=None, *args):
+        self.logw(self.request.args, "ARGS")
+        # Validate Input
+        self.tmpl['errors'] = {}
+        hydra_type = {}
+        hydra_type['hydra_type_name'] = self.request.args.get('hydra_type_name')
+        hydra_type['hydra_type_desc'] = self.request.args.get('hydra_type_desc')
+        hydra_type['priority_ndx'] = aegis.stdlib.validate_int(self.request.args.get('priority_ndx'))
+        hydra_type['next_run_sql'] = self.request.args.get('next_run_sql')
+        if not hydra_type['priority_ndx']:
+            self.tmpl['errors']['priority_ndx'] = 'Must be an integer'
+        if self.tmpl['errors']:
+            return self.render_path("hydra_form.html", **self.tmpl)
+        # Run against database and send back to Hydra main
+        hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
+        if hydra_type_id:
+            where = {'hydra_type_id': hydra_type_id}
+            aegis.model.HydraType.update_columns(hydra_type, where)
+        else:
+            aegis.model.HydraType.insert_columns(**hydra_type)
+        return self.redirect('/aegis/hydra')
+
 class AegisHydra(AegisWeb):
     def get(self, *args):
+        self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
         return self.render_path("hydra.html", **self.tmpl)
+
+    def post(self, *args):
+        self.logw(self.request.args, "ARGS")
+        pause_ids = [aegis.stdlib.validate_int(k.replace('pause_', '')) for k in self.request.args.keys() if k.startswith('pause_')]
+        unpause_ids = [aegis.stdlib.validate_int(k.replace('unpause_', '')) for k in self.request.args.keys() if k.startswith('unpause_')]
+        run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
+        self.logw(pause_ids, "PAUSE IDS")
+        self.logw(run_ids, "RUN IDS")
+
+        # Do Pause
+        if pause_ids:
+            hydra_type = aegis.model.HydraType.get_id(pause_ids[0])
+            self.logw(hydra_type, "HYDRA TYPE")
+            hydra_type.set_status('paused')
+
+        # Do Unpause
+        if unpause_ids:
+            hydra_type = aegis.model.HydraType.get_id(unpause_ids[0])
+            self.logw(hydra_type, "HYDRA TYPE")
+            hydra_type.set_status('live')
+
+        # Do Run --- hooks over to batch!
+        if run_ids:
+            hydra_type = aegis.model.HydraType.get_id(run_ids[0])
+            self.logw(hydra_type, "HYDRA TYPE")
+            hydra_type.run_now()
+
+        return self.redirect(self.request.uri)
 
 class AegisReports(AegisWeb):
     def get(self, *args):

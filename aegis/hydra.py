@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 #-*- coding: utf-8 -*-
 #
-# Hydra - the water monster of legend with multiple serpent heads on one body. This is the batch system for downtime processing.
+# Hydra - The water monster of legend with multiple serpent heads on one body. This is the batch and worker system for downtime/background processing.
+#         Main Thread is the "batch" checking what should run, worker threads operate the work queue.
 
 # Python Imports
 import datetime
@@ -22,7 +23,16 @@ import requests
 import slugify
 
 # Project Imports
-import stdlib
+import aegis.stdlib
+import aegis.model
+
+import bday
+bday_path = bday.__path__[0]
+sys.path.insert(0, bday_path)
+
+#aegis.stdlib.logw(sys.path, "SYS.PATH")
+import bday.config
+bday.config.initialize()
 
 define('sleep', default=5, type=int)
 define('hydra_id', default=0, type=int)
@@ -46,6 +56,7 @@ def stop(signal, frm):
     logging.warning('SIGINT or SIGTERM received (%s). Shut down in progress...', signal)
     global quitting, daemon
     quitting = daemon.quit = True
+
 signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGUSR1, debug)
@@ -73,25 +84,75 @@ class Hydra(HydraThread):
         self.last_id = 0
         self.processed_cnt = 0
         self.iter_cnt = 0
-        self.logw = stdlib.logw
+        self.logw = aegis.stdlib.logw
         self.thread_name = threadname or 'Hydra-%02d' % options.hydra_id
         HydraThread.__init__(self, name=self.thread_name)
+
+
+    # Must be a clever way to use the claim mechanism. Maybe SIGHUP resets claims?
+    def is_lead_process(self):
+        if options.batch_id != 0:
+            return False
+        if self.tmpl['env'] != 'prod':
+            return True
+        if self.tmpl['env'] == 'prod' and socket.gethostname() in ('bday01', 'bday01.zuno.com'):
+            return True
 
 
     def process(self):
         global quitting
         logging.info("%s running background processing", self.name)
         try:
+            #if self.is_lead_process():
+            #    log.info("Lead Process %s clearing claimed/stuck items for retry...", self.name)
+            #    # Fetch all class names
+            #    for batch_task in model.BatchTask.get_all():
+            #        model.BatchTask.reset(batch_task['class_name'])
+            #        model.BatchTask.schedule_next(batch_task['class_name'], batch_task['next_run_tx'])
+
             while(not quitting):
                 self.iter_cnt += 1
                 try:
-                    
-                    stdlib.logline("Batch Loop")
-                    
+                    # Batch Loop: scan hydra_type for runnable batches
+                    for hydra_type in aegis.model.HydraType.scan():
+                        if quitting: break
+                        # Check if the task is runnable
+                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
+                        if runnable:
+
+                            # Put a hydra_queue
+                            # Reset
+
+
+                            #hydra_queue = aegis.model.HydraQueue.scan_work_type_unfinished(hydra_type['hydra_type_id'])
+                            #if hydra_queue:
+                            #    log.warning("HydraQueue item %s already exists. Skipping...", hydra_type['hydra_type_name'])
+                            #    continue
+                            ## Modify start to return a value to do the 'claim' mechanism
+                            #started = model.BatchTask.start(batch_task['class_name'])
+                            #if not started:
+                            #    log.warning("Got a runnable task %s that was already started. Skipping...", batch_task['class_name'])
+                            #    continue
+                            #log.info('Put work_queue item for %s', batch_task['class_name'])
+                            #model.WorkQueue.insert(work_type['work_type_id'], datetime.datetime.utcnow(), work_type['priority_ind'])
+
+                            hydra_type.schedule_next()
+                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
+                            aegis.stdlib.logline("Run Hydra Type: %s   Next Run: %s" % (_hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
+
+                            #hydra_queue = {}
+                            #hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
+                            #hydra_queue['priority_ndx'] = hydra_type['priority_ndx']
+
+                            #'work_data',
+                            #'start_dttm',
+
+
+
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")
                 # Iterate!
-                stdlib.logline("Hydra Sleep")
+                #aegis.stdlib.logline("The Hydra Sleeps")
                 time.sleep(options.sleep)
 
         except Exception as ex:
@@ -133,11 +194,11 @@ def thread_wait(daemon):
             if thr != threading.current_thread():
                 thr.join(1.0)
         else:
-            time.sleep(5)   # Main thread doesn't do much, sleep is interrupted by signal
+            time.sleep(options.sleep)   # Main thread doesn't do much, sleep is interrupted by signal
 
 
 if __name__ == "__main__":
-    tornado.options.parse_command_line()
+    #tornado.options.parse_command_line()
     global daemon
     daemon = Hydra()
     daemon.start()

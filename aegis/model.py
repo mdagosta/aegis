@@ -16,6 +16,44 @@ import aegis.config
 db = aegis.database.db
 
 
+class SqlDiff(aegis.database.Row):
+    table_name = 'sql_diff'
+    id_column = 'sql_diff_id'
+
+    @staticmethod
+    def create_table():
+        sql_diff_table = """
+            CREATE TABLE IF NOT EXISTS
+            sql_diff (
+              sql_diff_id SERIAL NOT NULL,
+              sql_diff_name VARCHAR(80) NOT NULL,
+              create_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              applied_dttm TIMESTAMP DEFAULT NULL,
+              PRIMARY KEY (sql_diff_name)
+            )"""
+        return db().execute(sql_diff_table)
+
+    @staticmethod
+    def insert(sql_diff_name):
+        sql = 'INSERT INTO sql_diff (sql_diff_name) VALUES (%s) RETURNING sql_diff_id'
+        return db().execute(sql, sql_diff_name)
+
+    @classmethod
+    def scan(cls):
+        sql = 'SELECT * FROM sql_diff'
+        return db().query(sql, cls=cls)
+
+    @staticmethod
+    def mark_applied(sql_diff_name):
+        sql = 'UPDATE sql_diff SET applied_dttm=NOW() WHERE sql_diff_name=%s'
+        return db().execute(sql, sql_diff_name)
+
+    @classmethod
+    def scan_unapplied(cls):
+        sql = """SELECT * FROM sql_diff WHERE applied_dttm IS NULL ORDER BY SUBSTRING(sql_diff_name from 5 for 3) ASC"""
+        return db().query(sql, cls=cls)
+
+
 class UserAgent(aegis.database.Row):
     table_name = 'user_agent'
     id_column = 'user_agent_id'
@@ -208,3 +246,36 @@ class Pageview(aegis.database.Row):
     def insert(cls, user_id, member_id, url_path, url_query, url_tx, request_name):
       sql = "INSERT INTO pageview (user_id, member_id, url_path, url_query, url_tx, request_name) VALUES (%s, %s, %s, %s, %s, %s) RETURNING pageview_id"
       return db().execute(sql, user_id, member_id, url_path, url_query, url_tx, request_name)
+
+
+class HydraType(aegis.database.Row):
+    table_name = 'hydra_type'
+    id_column = 'hydra_type_id'
+    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql')
+
+    def run_now(self):
+        sql = "UPDATE hydra_type SET next_run_dttm=NOW() WHERE hydra_type_id=%s"
+        return db().execute(sql, self['hydra_type_id'])
+
+    def set_status(self, status):
+        sql = "UPDATE hydra_type SET status=%s WHERE hydra_type_id=%s"
+        return db().execute(sql, status, self['hydra_type_id'])
+
+    @classmethod
+    def get_runnable(cls, hydra_type_id):
+        sql = """SELECT hydra_type_id, hydra_type_name, next_run_sql
+                   FROM hydra_type
+                  WHERE next_run_dttm <= NOW()
+                    AND status='live'
+                    AND hydra_type_id=%s"""
+        return db().get(sql, hydra_type_id, cls=cls)
+
+    def schedule_next(self):
+        sql = "UPDATE hydra_type SET next_run_dttm="+self['next_run_sql']+" WHERE hydra_type_id=%s AND status = 'live'"
+        return db().execute(sql, self['hydra_type_id'])
+
+
+class HydraQueue(aegis.database.Row):
+    table_name = 'hydra_queue'
+    id_column = 'hydra_queue_id'
+    data_columns = ('hydra_type_id', 'priority_ndx', 'work_data', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')

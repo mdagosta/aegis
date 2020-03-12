@@ -1,0 +1,40 @@
+{% extends frame.html %}
+
+{% block body %}
+<div class="w3-container w3-blue" style="margin-top: 32px;">
+  <h3>{% if hydra_type %}Edit{% else %}New{% end %} Work Type</h3>
+</div>
+
+<form id="hydra_add" class="w3-card w3-padding" action="{{request.path}}" method="POST">
+  {% raw xsrf_form_html() %}
+  {% if hydra_type %}
+  <input type="hidden" name="hydra_type_id" value="{{hydra_type['hydra_type_id']}}"/>
+  {% end %}
+  
+  <p>
+    <label><b>Work Type Name</b></label>
+    <input class="w3-input" type="text" name="hydra_type_name" value="{{hydra_type.get('hydra_type_name', '')}}" placeholder="ie 'housekeeping'" />
+  </p>
+
+  <p>
+    <label><b>Work Description</b></label>
+    <input class="w3-input" type="text" name="hydra_type_desc" value="{{hydra_type.get('hydra_type_desc', '')}}" placeholder="ie 'tidying and rotating data'" />
+  </p>
+
+  <p>
+    <label><b>Priority</b>: {% if errors.get('priority_ndx') %}<span class="w3-text-red">{{errors['priority_ndx']}}</span>{% end %}</label>
+    <input class="w3-input {% if errors.get('priority_ndx') %}w3-border w3-border-red{% end %}" type="text" name="priority_ndx" value="{{hydra_type.get('priority_ndx', '')}}" placeholder="Lower number is higher priority" />
+  </p>
+
+  <p>
+    <label><b>Next Run SQL</b></label>
+    <input class="w3-input" type="text" name="next_run_sql" value="{{hydra_type.get('next_run_sql', '')}}" placeholder="SQL to set scheduled_dttm, ie DATE(DATE_ADD(scheduled_dttm, INTERVAL 1 DAY)) for tomorrow start of day" />
+  </p>
+
+  <div class="w3-center w3-padding">
+    <a class="w3-left w3-text-blue" href="/aegis/hydra">Cancel</a>
+    <input type="submit" class="w3-button w3-blue w3-center" value="{% if hydra_type %}Update{% else %}Add{% end %} Work Type"/>
+  </div>
+</form>
+
+{% end %}

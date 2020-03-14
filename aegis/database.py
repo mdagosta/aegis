@@ -298,6 +298,8 @@ class MysqlConnection(object):
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
             conn.schema = schema
             cls.threads[ident][target] = conn
+        #conn_debug = "%s %s %s" % (ident, target, connections)
+        #aegis.stdlib.logw(conn_debug, "CONN DEBUG")
         return connections[target]
 
     def __del__(self):
@@ -528,6 +530,7 @@ class Row(dict):
         if type(use_db) is PostgresConnection:
             sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
+        #aegis.stdlib.logw(sql, "SQL")
         return use_db.execute(sql, *args)
 
     @classmethod
@@ -549,4 +552,5 @@ class Row(dict):
         where_clause = ' AND '.join(['%s=%s' % (key, value) for key, value in zip(keys, values)])
         # SQL statement
         sql = 'UPDATE %s SET %s WHERE %s' % (db_table, set_clause, where_clause)
+        #aegis.stdlib.logw(sql, "SQL")
         return db().execute_rowcount(sql, *args)

@@ -601,3 +601,19 @@ def is_robot(user_agent):
     if not RobotValidator.robot_re:
         RobotValidator.robot_re = re.compile(RobotValidator.robot_str)
     return bool(RobotValidator.robot_re.search(user_agent) is not None)
+
+
+
+
+
+
+# XXX How does this fit in here?
+def rate_limit(self, key, hostname, delta_sec):
+    """ Return True if should be rate-limited """
+    attr_name = '%s-%s' % (key, hostname)
+    if hasattr(self, attr_name):
+        attr = getattr(self, attr_name)
+        if attr + datetime.timedelta(seconds=delta_sec) > datetime.datetime.now():
+            return True
+    setattr(self, attr_name, datetime.datetime.now())
+    return False

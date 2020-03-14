@@ -104,19 +104,6 @@ class HydraThread(threading.Thread):
         aegis.model.HydraQueue.clear_claims()
 
 
-
-    # XXX Is this needed here?
-    def rate_limit(self, key, hostname, delta_sec):
-        """ Return True if should be rate-limited """
-        attr_name = '%s-%s' % (key, hostname)
-        if hasattr(self, attr_name):
-            attr = getattr(self, attr_name)
-            if attr + datetime.timedelta(seconds=delta_sec) > datetime.datetime.now():
-                return True
-        setattr(self, attr_name, datetime.datetime.now())
-        return False
-
-
 class HydraHead(HydraThread):
 
     def __init__(self, hydra_head_id, *args, **kwargs):

@@ -2,14 +2,12 @@
 #-*- coding: utf-8 -*-
 #
 # Hydra - The water monster of legend with multiple serpent heads on one body. This is the batch and worker system for downtime/background processing.
-#         Main Thread is the "batch" checking what should run, worker threads operate the work queue.
+#         Main Thread is just a control. Hydra is the "batch" which checks what should run. HydraHeads are worker threads operating the hydra_queue.
 
 # Python Imports
 import datetime
 import logging
-import os.path
 import random
-import shutil
 import signal
 import sys
 import threading
@@ -19,52 +17,31 @@ import traceback
 # Extern Imports
 import tornado.options
 from tornado.options import define, options
-import requests
-import slugify
 
 # Project Imports
 import aegis.stdlib
 import aegis.model
 
-import bday
-bday_path = bday.__path__[0]
-sys.path.insert(0, bday_path)
 
-#aegis.stdlib.logw(sys.path, "SYS.PATH")
-import bday.config
-bday.config.initialize()
-
-define('sleep', default=5, type=int)
 define('hydra_id', default=0, type=int)
-
-
-# Graceful shutdown with debug
-def debug(sig, frame):
-    """Interrupt running process, and provide a python prompt for interactive debugging."""
-    id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
-    code = []
-    for threadId, stack in sys._current_frames().items():
-        code.append("\n# Thread: %s(%d)" % (id2name.get(threadId,""), threadId))
-        for filename, lineno, name, line in traceback.extract_stack(stack):
-            code.append('File: "%s", line %d, in %s' % (filename, lineno, name))
-            if line:
-                code.append("  %s" % (line.strip()))
-    logging.warning("\n".join(code))
-
-quitting = False
-def stop(signal, frm):
-    logging.warning('SIGINT or SIGTERM received (%s). Shut down in progress...', signal)
-    global quitting, daemon
-    quitting = daemon.quit = True
-
-signal.signal(signal.SIGINT, stop)
-signal.signal(signal.SIGTERM, stop)
-signal.signal(signal.SIGUSR1, debug)
+define('hydra_sleep', default=1, type=int)
 
 
 class HydraThread(threading.Thread):
+
+    # quitting is at the class level to synchronize the threads in the process
+    quitting = False
+    filename = __file__
+
+
     def __init__(self, *args, **kwargs):
         threading.Thread.__init__(self, *args, **kwargs)
+        self.logw = aegis.stdlib.logw
+        self.start_t = time.time()
+        self.processed_cnt = 0
+        self.iter_cnt = 0
+        self.last_id = 0
+
 
     def run(self):
         try:
@@ -74,96 +51,61 @@ class HydraThread(threading.Thread):
             # XXX TODO chat_hook debug_hook
 
 
-class Hydra(HydraThread):
-    filename = __file__
-    thread_name = 'Hydra-%s' % options.hydra_id     # Just a default, commandline options are used below
-
-    def __init__(self, threadname=None):
-        # Batch stuff
-        self.start_t = time.time()
-        self.last_id = 0
-        self.processed_cnt = 0
-        self.iter_cnt = 0
-        self.logw = aegis.stdlib.logw
-        self.thread_name = threadname or 'Hydra-%02d' % options.hydra_id
-        HydraThread.__init__(self, name=self.thread_name)
+    def finish(self):
+        end_t = time.time()
+        exec_t = end_t - self.start_t
+        recs_s = max(float(self.processed_cnt), 1.0) / exec_t
+        recs_h = max(float(self.processed_cnt), 1.0) / exec_t * 3600
+        logging.info("%s ending.  Records: %d   Seconds: %4.3f   Records/sec: %4.3f   Records/hr: %4.3f   Iterations: %s  Last Id: %s", self.name, self.processed_cnt, exec_t, recs_s, recs_h, self.iter_cnt, self.last_id)
 
 
-    # Must be a clever way to use the claim mechanism. Maybe SIGHUP resets claims?
-    def is_lead_process(self):
-        if options.batch_id != 0:
-            return False
-        if self.tmpl['env'] != 'prod':
-            return True
-        if self.tmpl['env'] == 'prod' and socket.gethostname() in ('bday01', 'bday01.zuno.com'):
-            return True
+    def main_thread(self):
+        # Handling signals only works in the main thread
+        signal.signal(signal.SIGINT, self.signal_stop)
+        signal.signal(signal.SIGTERM, self.signal_stop)
+        signal.signal(signal.SIGUSR1, self.signal_debug)
+        signal.signal(signal.SIGHUP, self.signal_reset)
+        # Main thread is used only as a control thread... monitors quitting variable, and sleep gets interrupted by signal. And that's it!
+        while threading.active_count() > 1:
+            if HydraThread.quitting:
+                logging.warning("%s waiting %ss for threads to finish... %s active" % (self.filename, options.hydra_sleep, threading.active_count()))
+                threads = threading.enumerate()
+                thr = random.choice(threads[1:])
+                if thr != threading.current_thread():
+                    thr.join(1.0)
+            else:
+                time.sleep(options.hydra_sleep)
 
 
-    def process(self):
-        global quitting
-        logging.info("%s running background processing", self.name)
-        try:
-            #if self.is_lead_process():
-            #    log.info("Lead Process %s clearing claimed/stuck items for retry...", self.name)
-            #    # Fetch all class names
-            #    for batch_task in model.BatchTask.get_all():
-            #        model.BatchTask.reset(batch_task['class_name'])
-            #        model.BatchTask.schedule_next(batch_task['class_name'], batch_task['next_run_tx'])
-
-            while(not quitting):
-                self.iter_cnt += 1
-                try:
-                    # Batch Loop: scan hydra_type for runnable batches
-                    for hydra_type in aegis.model.HydraType.scan():
-                        if quitting: break
-                        # Check if the task is runnable
-                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
-                        if runnable:
-
-                            # Put a hydra_queue
-                            # Reset
+    # Graceful shutdown with debug
+    @staticmethod
+    def signal_debug(sig, frame):
+        """Interrupt running process, and provide a python prompt for interactive debugging."""
+        id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
+        code = ["Received SIGUSR1 - Dumping Debug Output"]
+        for threadId, stack in sys._current_frames().items():
+            code.append("\n# Thread: %s(%d)" % (id2name.get(threadId,""), threadId))
+            for filename, lineno, name, line in traceback.extract_stack(stack):
+                code.append('File: "%s", line %d, in %s' % (filename, lineno, name))
+                if line:
+                    code.append("  %s" % (line.strip()))
+        logging.warning("\n".join(code))
 
 
-                            #hydra_queue = aegis.model.HydraQueue.scan_work_type_unfinished(hydra_type['hydra_type_id'])
-                            #if hydra_queue:
-                            #    log.warning("HydraQueue item %s already exists. Skipping...", hydra_type['hydra_type_name'])
-                            #    continue
-                            ## Modify start to return a value to do the 'claim' mechanism
-                            #started = model.BatchTask.start(batch_task['class_name'])
-                            #if not started:
-                            #    log.warning("Got a runnable task %s that was already started. Skipping...", batch_task['class_name'])
-                            #    continue
-                            #log.info('Put work_queue item for %s', batch_task['class_name'])
-                            #model.WorkQueue.insert(work_type['work_type_id'], datetime.datetime.utcnow(), work_type['priority_ind'])
+    @staticmethod
+    def signal_stop(signal, frm):
+        logging.warning('SIGINT or SIGTERM received (%s). Quitting now...', signal)
+        HydraThread.quitting = True
 
-                            hydra_type.schedule_next()
-                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
-                            aegis.stdlib.logline("Run Hydra Type: %s   Next Run: %s" % (_hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
 
-                            #hydra_queue = {}
-                            #hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
-                            #hydra_queue['priority_ndx'] = hydra_type['priority_ndx']
-
-                            #'work_data',
-                            #'start_dttm',
+    @staticmethod
+    def signal_reset(signal, frm):
+        logging.warning("SIGNUP received... clearing stale claims")
+        aegis.model.HydraQueue.clear_claims()
 
 
 
-                except Exception as ex:
-                    logging.exception("Batch had an inner loop failure.")
-                # Iterate!
-                #aegis.stdlib.logline("The Hydra Sleeps")
-                time.sleep(options.sleep)
-
-        except Exception as ex:
-            logging.exception(ex)
-            traceback.print_exc()
-            # Alert and debug hooks
-        finally:
-            self.finish()
-            logging.info("%s ending." % self.name)
-
-
+    # XXX Is this needed here?
     def rate_limit(self, key, hostname, delta_sec):
         """ Return True if should be rate-limited """
         attr_name = '%s-%s' % (key, hostname)
@@ -175,32 +117,134 @@ class Hydra(HydraThread):
         return False
 
 
-    def finish(self):
-        end_t = time.time()
-        exec_t = end_t - self.start_t
-        recs_s = max(float(self.processed_cnt), 1.0) / exec_t
-        recs_h = max(float(self.processed_cnt), 1.0) / exec_t * 3600
-        logging.info("Exec_sec: %4.3f   Records/sec: %4.3f   Records/hr: %4.3f   Iterations: %s", exec_t, recs_s, recs_h, self.iter_cnt)
-        logging.info("Records: %d   Last Id: %s   ", self.processed_cnt, self.last_id)
+class HydraHead(HydraThread):
+
+    def __init__(self, hydra_head_id, *args, **kwargs):
+        self.hydra_head_id = hydra_head_id
+        self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
+        HydraThread.__init__(self, name=self.thread_name)
 
 
-def thread_wait(daemon):
-    global quitting
-    while threading.active_count() > 1:
-        if quitting:
-            logging.warning("%s waiting %ss for threads to finish... %s active" % (daemon.filename, options.sleep, threading.active_count()))
-            threads = threading.enumerate()
-            thr = random.choice(threads[1:])
-            if thr != threading.current_thread():
-                thr.join(1.0)
-        else:
-            time.sleep(options.sleep)   # Main thread doesn't do much, sleep is interrupted by signal
+    def process(self):
+        logging.info("Spawning %s", self.name)
+        try:
+            while(not HydraThread.quitting):
+                if self.hydra_head_id == 0:
+                    queue_items = aegis.model.HydraQueue.scan_work_priority()
+                else:
+                    queue_items = aegis.model.HydraQueue.scan_work()
+                for hydra_queue in queue_items:
+                    if HydraThread.quitting: break
+                    try:
+                        # Fetch rows from database queue and claim items before processing
+                        if not hydra_queue: time.sleep(options.hydra_sleep); continue
+                        claimed = hydra_queue.claim()
+                        if not claimed: continue
+                        hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
+                        # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
+                        if not hydra_type:
+                            logging.error("Missing hydra type for hydra_type_id: %s", hydra_type)
+                            continue
+                        if not hasattr(self, hydra_type['hydra_type_name']):
+                            logging.error("Missing hydra function for hydra type: %s", hydra_type)
+                            continue
+                        self.iter_cnt += 1
+                        work_fn = getattr(self, hydra_type['hydra_type_name'])
+                        # Do the work
+                        hydra_queue.incr_try_cnt()
+                        hydra_queue.start()
+                        result, work_cnt = work_fn(hydra_queue)
+                        if result:
+                            hydra_queue.complete()
+                        else:
+                            logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
+                            continue
+                        # Worker accounting
+                        self.processed_cnt += work_cnt
+                        logging.warning("%s completed %s" % (self.name, hydra_type['hydra_type_name']))
+                    except Exception as ex:
+                        logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
+                        logging.exception(ex)
+                        hydra_queue.unclaim()
+                # Iterate!
+                time.sleep(options.hydra_sleep)
+        except Exception as ex:
+            logging.exception(ex)
+        finally:
+            self.finish()
+
+
+class Hydra(HydraThread):
+
+    def __init__(self):
+        self.hydra_id = options.hydra_id
+        self.thread_name = 'Hydra-%02d' % options.hydra_id
+        HydraThread.__init__(self, name=self.thread_name)
+        self.num_heads = 3
+        self.hydra_head_cls = HydraHead
+
+
+    def spawn_heads(self):
+        for ndx in range(0, self.num_heads):
+            time.sleep(1)
+            head = self.hydra_head_cls(ndx)
+            head.start()
+
+
+    def process(self):
+        logging.info("Spawning %s" % self.name)
+        # When starting up, hydra_id 0 clears claims before spawning heads.
+        if self.hydra_id == 0:
+            logging.warning("%s clearing stale claims" % self.name)
+            aegis.model.HydraQueue.clear_claims()
+        try:
+            self.spawn_heads()
+            while(not HydraThread.quitting):
+                self.iter_cnt += 1
+                try:
+                    # Batch Loop: scan hydra_type for runnable batches
+                    for hydra_type in aegis.model.HydraType.scan():
+                        if HydraThread.quitting: break
+                        # Check if the task is runnable
+                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
+                        if runnable:
+                            # Set up a hydra_queue row to represent the work and re-schedule the batch's next run
+                            hydra_queue = {}
+                            hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
+                            hydra_queue['priority_ndx'] = hydra_type['priority_ndx']
+                            hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
+                            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+                            hydra_type.schedule_next()
+                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
+                            logging.warning("%s queueing %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
+                            # Clean out queue then sleep depending on how much work there is to do
+                            purged_completed = aegis.model.HydraQueue.purge_completed()
+                            if purged_completed:
+                                logging.warning("%s purged %s completed rows" % (self.thread_name, purged_completed))
+                            # Log if there are expired queue items in the past...
+                            past_cnt = aegis.model.HydraQueue.past_cnt()
+                            if past_cnt and past_cnt['past_cnt']:
+                                logging.error("HydraQueue has %s stuck items", past_cnt['past_cnt'])
+
+        # XXX will it ever have an outer failure?
+                except Exception as ex:
+                    logging.exception("Batch had an inner loop failure.")
+                    # Chat Hooks?
+                # Iterate!
+                time.sleep(options.hydra_sleep)
+        except Exception as ex:
+            logging.exception(ex)
+            traceback.print_exc()
+            # Alert and debug hooks
+
+
+        finally:
+            self.finish()
 
 
 if __name__ == "__main__":
-    #tornado.options.parse_command_line()
-    global daemon
-    daemon = Hydra()
-    daemon.start()
-    thread_wait(daemon)
+    tornado.options.parse_command_line()
+    hydra = Hydra()
+    hydra.start()
+    hydra.main_thread()
     sys.exit(0)

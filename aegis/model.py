@@ -278,4 +278,50 @@ class HydraType(aegis.database.Row):
 class HydraQueue(aegis.database.Row):
     table_name = 'hydra_queue'
     id_column = 'hydra_queue_id'
-    data_columns = ('hydra_type_id', 'priority_ndx', 'work_data', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')
+    data_columns = ('hydra_type_id', 'priority_ndx', 'work_data', 'work_dttm', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')
+
+    @classmethod
+    def scan_work_priority(cls, limit=10):
+        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY priority_ndx ASC LIMIT %s"
+        return db().query(sql, limit, cls=cls)
+
+    @classmethod
+    def scan_work(cls, limit=10):
+        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY work_dttm ASC LIMIT %s"
+        return db().query(sql, limit, cls=cls)
+
+    def claim(self):
+        sql = 'UPDATE hydra_queue SET claimed_dttm=NOW() WHERE hydra_queue_id=%s AND claimed_dttm IS NULL'
+        return db().execute_rowcount(sql, self['hydra_queue_id'])
+
+    def unclaim(self):
+        sql = 'UPDATE hydra_queue SET claimed_dttm=NULL WHERE hydra_queue_id=%s AND claimed_dttm IS NOT NULL'
+        return db().execute_rowcount(sql, self['hydra_queue_id'])
+
+    def incr_try_cnt(self):
+        self['try_cnt'] += 1
+        sql = 'UPDATE hydra_queue SET try_cnt=try_cnt+1 WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    def start(self):
+        sql = 'UPDATE hydra_queue SET start_dttm=NOW() WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    def complete(self):
+        sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    @staticmethod
+    def purge_completed():
+        sql = "DELETE FROM hydra_queue WHERE finish_dttm IS NOT NULL AND finish_dttm < NOW()"
+        return db().execute_rowcount(sql)
+
+    @staticmethod
+    def clear_claims():
+        sql = 'UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 15 MINUTE AND finish_dttm IS NULL'
+        return db().execute_rowcount(sql)
+
+    @classmethod
+    def past_cnt(cls):
+        sql = "SELECT COUNT(*) AS past_cnt FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 1 MINUTE"
+        return db().get(sql, cls=cls)

@@ -568,9 +568,6 @@ class AegisReportForm(AegisWeb):
         return self.redirect('/aegis/report')
 
 
-
-
-
 class AegisReport(AegisWeb):
     def get(self, report_type_id=None, *args):
         self.tmpl['errors'] = {}

@@ -279,7 +279,8 @@ class AegisHandler(tornado.web.RequestHandler):
     def is_super_admin(self):
         if not self.get_current_user():
             return False
-        if self.get_member_email() in aegis.config.get('super_admins'):
+        super_admins = aegis.config.get('super_admins')
+        if super_admins and self.get_member_email() in super_admins:
             return True
 
 
@@ -488,6 +489,7 @@ class AegisHydraForm(AegisWeb):
             aegis.model.HydraType.insert_columns(**hydra_type)
         return self.redirect('/aegis/hydra')
 
+
 class AegisHydra(AegisWeb):
     def get(self, *args):
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
@@ -521,9 +523,72 @@ class AegisHydra(AegisWeb):
 
         return self.redirect(self.request.uri)
 
-class AegisReports(AegisWeb):
-    def get(self, *args):
-        return self.render_path("reports.html", **self.tmpl)
+
+class AegisReportForm(AegisWeb):
+
+    def validate_report_type(self, report_type_id):
+        report_type_id = aegis.stdlib.validate_int(report_type_id)
+        if report_type_id:
+            self.tmpl['report_type'] = aegis.model.ReportType.get_id(report_type_id)
+        else:
+            self.tmpl['report_type'] = {}
+
+    def validate_input(self):
+        self.tmpl['errors'] = {}
+        self.columns = {}
+        self.columns['report_type_name'] = self.request.args.get('report_type_name')
+        if not self.columns['report_type_name']:
+            self.tmpl['errors']['report_type_name'] = 'Report Name Required'
+        self.columns['report_sql'] = self.request.args.get('report_sql')
+        if not self.columns['report_sql']:
+            self.tmpl['errors']['report_sql'] = 'Report SQL Required'
+
+
+    def get(self, report_type_id=None, *args):
+        self.tmpl['errors'] = {}
+        self.validate_report_type(report_type_id)
+        return self.render_path("report_form.html", **self.tmpl)
+
+
+    def post(self, report_type_id=None, *args):
+        self.logw(self.request.args, "ARGS")
+        self.validate_report_type(report_type_id)
+        self.validate_input()
+        self.logw(self.tmpl['errors'], "ERRORS")
+        self.logw(self.columns, "COLUMNS")
+        if self.tmpl['errors']:
+            return self.render_path("report_form.html", **self.tmpl)
+        # Run against database and send back to Report main
+        report_type_id = aegis.stdlib.validate_int(report_type_id)
+        if report_type_id:
+            where = {'report_type_id': report_type_id}
+            aegis.model.ReportType.update_columns(self.columns, where)
+        else:
+            aegis.model.ReportType.insert_columns(**self.columns)
+        return self.redirect('/aegis/report')
+
+
+
+
+
+class AegisReport(AegisWeb):
+    def get(self, report_type_id=None, *args):
+        self.tmpl['errors'] = {}
+        if report_type_id:
+            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
+            self.tmpl['output'] = None
+            sql = self.tmpl['report']['report_sql']
+            try:
+                self.tmpl['output'] = aegis.model.db().query(sql)
+            except Exception as ex:
+                logging.exception(ex)
+                self.tmpl['errors']['sql_error'] = ex.args[0]
+            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
+            return self.render_path("report.html", **self.tmpl)
+        else:
+            self.tmpl['reports'] = aegis.model.ReportType.scan()
+            return self.render_path("reports.html", **self.tmpl)
+
 
 class AegisHome(AegisWeb):
     def get(self, *args):
@@ -531,7 +596,12 @@ class AegisHome(AegisWeb):
 
 
 handler_urls = [
+    (r'^/aegis/hydra/add\W*$', AegisHydraForm),
+    (r'^/aegis/hydra/(\d+)\W*$', AegisHydraForm),
     (r'^/aegis/hydra\W*$', AegisHydra),
-    (r'^/aegis/reports\W*$', AegisReports),
+    (r'^/aegis/report/form/(\d+)\W*$', AegisReportForm),
+    (r'^/aegis/report/form\W*$', AegisReportForm),
+    (r'^/aegis/report/(\d+)\W*$', AegisReport),
+    (r'^/aegis/report\W*$', AegisReport),
     (r'^/aegis\W*$', AegisHome),
 ]

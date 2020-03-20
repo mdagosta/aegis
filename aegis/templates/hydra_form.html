@@ -22,7 +22,7 @@
   </p>
 
   <p>
-    <label><b>Priority</b>: {% if errors.get('priority_ndx') %}<span class="w3-text-red">{{errors['priority_ndx']}}</span>{% end %}</label>
+    <label><b>Priority</b> {% if errors.get('priority_ndx') %}<span class="w3-text-red">{{errors['priority_ndx']}}</span>{% end %}</label>
     <input class="w3-input {% if errors.get('priority_ndx') %}w3-border w3-border-red{% end %}" type="text" name="priority_ndx" value="{{hydra_type.get('priority_ndx', '')}}" placeholder="Lower number is higher priority" />
   </p>
 

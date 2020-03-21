@@ -55,12 +55,16 @@ dbconns = threading.local()
 def db(use_schema=None):
     if not hasattr(dbconns, 'databases'):
         dbconns.databases = {}
-    if pgsql_available and options.pg_database not in dbconns.databases:
-        dbconns.databases[options.pg_database] = PostgresConnection.connect()
-        use_schema = options.pg_database
-    if mysql_available and options.mysql_schema not in dbconns.databases:
-        dbconns.databases[options.mysql_schema] = MysqlConnection.connect()
-        use_schema = options.mysql_schema
+    if pgsql_available:
+        if options.pg_database not in dbconns.databases:
+            dbconns.databases[options.pg_database] = PostgresConnection.connect()
+        if not use_schema:
+            use_schema = options.pg_database
+    if mysql_available:
+        if options.mysql_schema not in dbconns.databases:
+            dbconns.databases[options.mysql_schema] = MysqlConnection.connect()
+        if not use_schema:
+            use_schema = options.mysql_schema
     # Default situation - much better to be explicit which database we're connecting to!
     if not use_schema and len(dbconns.databases) == 1:
         use_schema = [dbconn for dbconn in dbconns.databases.keys()][0]

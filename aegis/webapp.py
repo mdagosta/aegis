@@ -547,17 +547,22 @@ class AegisReportForm(AegisWeb):
     def get(self, report_type_id=None, *args):
         self.tmpl['errors'] = {}
         self.validate_report_type(report_type_id)
+        self.tmpl['schemas'] = []
+        if aegis.database.pgsql_available and aegis.database.mysql_available:
+            schemas = []
+            self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
         return self.render_path("report_form.html", **self.tmpl)
 
 
     def post(self, report_type_id=None, *args):
-        self.logw(self.request.args, "ARGS")
         self.validate_report_type(report_type_id)
         self.validate_input()
-        self.logw(self.tmpl['errors'], "ERRORS")
-        self.logw(self.columns, "COLUMNS")
         if self.tmpl['errors']:
             return self.render_path("report_form.html", **self.tmpl)
+        # Set which schema the report runs against
+        report_schema = self.request.args.get('report_schema')
+        if report_schema and report_schema in aegis.database.dbconns.databases.keys():
+            self.columns['report_schema'] = report_schema
         # Run against database and send back to Report main
         report_type_id = aegis.stdlib.validate_int(report_type_id)
         if report_type_id:
@@ -576,10 +581,11 @@ class AegisReport(AegisWeb):
             self.tmpl['output'] = None
             sql = self.tmpl['report']['report_sql']
             try:
-                self.tmpl['output'] = aegis.model.db().query(sql)
+                self.tmpl['output'] = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql)
             except Exception as ex:
-                logging.exception(ex)
-                self.tmpl['errors']['sql_error'] = ex.args[0]
+                #logging.exception(ex)
+                sql_error = [str(arg) for arg in ex.args]
+                self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
             self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
             return self.render_path("report.html", **self.tmpl)
         else:

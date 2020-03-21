@@ -10,11 +10,22 @@
     {% if report_type %}
     <input type="hidden" name="report_type_id" value="{{report_type['report_type_id']}}"/>
     {% end %}
-    
+
     <p>
         <label><b>Report Name</b> {% if errors.get('report_type_name') %}<span class="w3-text-red">{{errors['report_type_name']}}</span>{% end %}</label>
         <input class="w3-input" type="text" name="report_type_name" value="{{report_type.get('report_type_name', '')}}" placeholder="ie 'Key Metrics'" />
     </p>
+
+    {% if schemas %}
+    <p>
+        <label><b>Report Schema</b> {% if errors.get('report_schema') %}<span class="w3-text-red">{{errors['report_schema']}}</span>{% end %}</label>
+        <select class="w3-input" name="report_schema">
+            {% for schema in schemas %}
+            <option value="{{schema}}" {% if report_type and report_type['report_schema'] == schema %}selected="selected"{% end %}>{{schema}}</option>
+            {% end %}
+        </select>
+    </p>
+    {% end %}
 
     <p>
         <label><b>Report SQL</b> {% if errors.get('report_sql') %}<span class="w3-text-red">{{errors['report_sql']}}</span>{% end %}</label>

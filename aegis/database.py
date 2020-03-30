@@ -100,7 +100,7 @@ class PostgresConnection(object):
         self._db_args = args
         self._last_use_time = time.time()
         try:
-            self.reconnect()
+            self._connect()
         except Exception:
             logging.error("Cannot connect to PostgreSQL: %s", self.hostname, exc_info=True)
 

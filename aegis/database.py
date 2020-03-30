@@ -84,6 +84,7 @@ class PostgresConnection(object):
     threads = {}
 
     def __init__(self, hostname, port, database, username=None, password=None, max_idle_time=7 * 3600):
+        """ Called by connect() class method using cls() notation """
         self.hostname = hostname
         self.port = port
         self.database = database
@@ -102,14 +103,6 @@ class PostgresConnection(object):
             self.reconnect()
         except Exception:
             logging.error("Cannot connect to PostgreSQL: %s", self.hostname, exc_info=True)
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        if getattr(self, "_db", None) is not None:
-            self._db.close()
-            self._db = None
 
     @classmethod
     def connect(cls, **kwargs):
@@ -137,15 +130,61 @@ class PostgresConnection(object):
             cls.threads[ident][database] = conn
         return connections[database]
 
-    def reconnect(self):
-        self.close()
+    def _connect(self):
         self._db = psycopg2.connect(self._db_args)
+
+    def _cursor(self):
+        """ Reconnect if disconnected. Then return a cursor. """
+        if self._db is None:
+            self._connect()
+        return self._db.cursor()
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        if getattr(self, "_db", None) is not None:
+            self._db.close()
+            self._db = None
+
+    def commit(self):
+        if getattr(self, "_db", None) is not None:
+            self._db.commit()
+
+    def rollback(self):
+        if getattr(self, "_db", None) is not None:
+            self._db.rollback()
+
+    def _execute(self, cursor, query, parameters, **kwargs):
+        do_commit = kwargs.get('do_commit', True)
+        try:
+            # return cursor.execute(query, parameters)
+            cursor.execute(query, parameters)
+            if do_commit:
+                self.commit()
+            return
+        #except psycopg2.ProgrammingError as ex:
+        #    logging.error("Hello Bug Creator. Please Fix Your Code - close connection/rollback")
+        #    logging.exception(ex)
+        #    self.close()
+        #    raise
+        #except psycopg2.OperationalError as ex:
+        #    logging.error("Error connecting to PostgreSQL - close connection/rollback")
+        #    logging.exception(ex)
+        #    self.close()
+        #    raise
+        except psycopg2.Error as ex:
+            logging.error("General Error at PostgreSQL - close connection/rollback")
+            logging.exception(ex)
+            self.close()
+            raise
 
     def query(self, query, *parameters, **kwargs):
         """ Returns a row list for the given query and parameters."""
+        kwargs['do_commit'] = False
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, **kwargs)
             column_names = [d[0] for d in cursor.description]
             cls = kwargs.get('cls')
             if cls:
@@ -166,82 +205,64 @@ class PostgresConnection(object):
         else:
             return rows[0]
 
-    def execute(self, query, *parameters):
-        if query.startswith('INSERT'):
-            return self.execute_lastrowid(query, *parameters)
+    def execute(self, query, *parameters, **kwargs):
+        # If cursor exists, it's probably one of several in a transaction. Don't automatically commit.
+        if kwargs.get('cursor'):
+            kwargs['do_commit'] = False
         else:
-            return self.execute_rowcount(query, *parameters)
+            cursor = self._cursor()
+            kwargs['do_commit'] = True
+        if query.startswith('INSERT'):
+            return self.execute_lastrowid(query, *parameters, **kwargs)
+        else:
+            return self.execute_rowcount(query, *parameters, **kwargs)
 
-    def execute_lastrowid(self, query, *parameters):
+    def execute_lastrowid(self, query, *parameters, **kwargs):
         """ Executes the given query, returning the lastrowid from the query."""
-        cursor = self._cursor()
+        cursor = kwargs.get('cursor', self._cursor())
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
             if cursor.rowcount > 0:
                 last_row_id = cursor.fetchone()[0]
-                #aegis.stdlib.logw(last_row_id, "LAST ROW ID")
+                #stdlib.logw(last_row_id, "LAST ROW ID")
                 return last_row_id
         finally:
-            cursor.close()
+            if kwargs['do_commit']:
+                cursor.close()
 
-    def execute_rowcount(self, query, *parameters):
+    def execute_rowcount(self, query, *parameters, **kwargs):
         """ Return the rowcount from the query."""
-        cursor = self._cursor()
+        cursor = kwargs.get('cursor', self._cursor())
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
             return cursor.rowcount
         finally:
-            cursor.close()
+            if kwargs['do_commit']:
+                cursor.close()
 
-    def executemany(self, query, parameters):
-        """ Return the lastrowid from the query."""
-        return self.executemany_lastrowid(query, parameters)
+    # Commenting until they can be properly tested for use with commit() and rollback()
+    #def executemany(self, query, parameters):
+    #    """ Return the lastrowid from the query."""
+    #    return self.executemany_lastrowid(query, parameters)
+    #
+    #def executemany_lastrowid(self, query, parameters):
+    #    """ Return the lastrowid from the query."""
+    #    cursor = self._cursor()
+    #    try:
+    #        cursor.executemany(query, parameters)
+    #        return cursor.lastrowid
+    #    finally:
+    #        cursor.close()
+    #
+    #def executemany_rowcount(self, query, parameters):
+    #    """ Return the rowcount from the query."""
+    #    cursor = self._cursor()
+    #    try:
+    #        cursor.executemany(query, parameters)
+    #        return cursor.rowcount
+    #    finally:
+    #        cursor.close()
 
-    def executemany_lastrowid(self, query, parameters):
-        """ Return the lastrowid from the query."""
-        cursor = self._cursor()
-        try:
-            cursor.executemany(query, parameters)
-            return cursor.lastrowid
-        finally:
-            cursor.close()
-
-    def executemany_rowcount(self, query, parameters):
-        """ Return the rowcount from the query."""
-        cursor = self._cursor()
-        try:
-            cursor.executemany(query, parameters)
-            return cursor.rowcount
-        finally:
-            cursor.close()
-
-    def _ensure_connected(self):
-        """ If connection is open for more than max_idle_time, close and reconnect """
-        if (self._db is None or (time.time() - self._last_use_time > self.max_idle_time)):
-            self.reconnect()
-        self._last_use_time = time.time()
-
-    def _cursor(self):
-        self._ensure_connected()
-        return self._db.cursor()
-
-    def _execute(self, cursor, query, parameters):
-        try:
-            # return cursor.execute(query, parameters)
-            cursor.execute(query, parameters)
-            return self._db.commit()
-        except PgsqlOperationalError:
-            logging.error("Error connecting to PostgreSQL")
-            self.close()
-            raise
-        except PgsqlDatabaseError:
-            logging.error("General Error at PostgreSQL - rollback transaction and carry on!")
-            self.rollback()
-            raise
-
-    def rollback(self):
-        if getattr(self, "_db", None) is not None:
-            self._db.rollback()
 
 
 class MysqlConnection(object):

@@ -1,0 +1,28 @@
+{% extends frame.html %}
+
+{% block body %}
+<div style="overflow-x: auto;">
+    <h1 style="margin-top: 1em;">{{report['report_type_name']}} Report          <a href="/aegis/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
+
+    {% if output %}
+    <div class="w3-container" style="max-height: calc(60vh)">
+    <table class="w3-table-all w3-hoverable">
+        <tr>
+            {% for name in output[0].keys() %}
+            <th>{{name}}</th>
+            {% end %}
+        </tr>
+        {% for row in output %}
+        <tr>
+            {% for value in row.values() %}
+            <td>{{value}}</td>
+            {% end %}
+        </tr>
+        {% end %}
+    </table>
+    {% elif errors.get('sql_error') %}
+    <pre class="w3-text-red">{{errors['sql_error']}}</pre>
+    {% end %}
+    </div>
+</div>
+{% end %}

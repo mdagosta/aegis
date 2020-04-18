@@ -2,6 +2,7 @@
 
 
 # Python Imports
+import calendar
 import datetime
 import dateutil
 import decimal
@@ -80,6 +81,22 @@ class DateTimeEncoder(json.JSONEncoder):
             return float(obj)
         else:
             return super(DateTimeEncoder, self).default(obj)
+
+
+def ts_to_dt(timestamp):
+    if timestamp is None: return None
+    return datetime.datetime.utcfromtimestamp(timestamp)
+
+def dt_to_ts(dttm, keep_milliseconds=False):
+    """ calendar.timegm() doesn't maintain the microseconds awareness of datetime (!?!)
+        maintain the milliseconds as an integer to fit into 8 bytes: 1516687988867
+        could also for example be sent as decimal representation with microseconds: 1516687988.867397
+    """
+    if dttm is None: return None
+    if keep_milliseconds:
+        return int(str(calendar.timegm(dttm.utctimetuple())) + str(dttm.microsecond)[:3])
+    else:
+        return calendar.timegm(dttm.utctimetuple())
 
 
 # Make it easier to use ansi escape sequences for terminal colors

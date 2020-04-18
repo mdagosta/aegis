@@ -325,3 +325,28 @@ class HydraQueue(aegis.database.Row):
     def past_cnt(cls):
         sql = "SELECT COUNT(*) AS past_cnt FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 1 MINUTE"
         return db().get(sql, cls=cls)
+
+    
+class ReportType(aegis.database.Row):
+    table_name = 'report_type'
+    id_column = 'report_type_id'
+
+    @classmethod
+    def insert(cls, report_type_name, report_sql):
+        sql = "INSERT INTO report_type (report_type_name, report_sql) VALUES (%s, %s) RETURNING report_type_id"
+        return db().execute(sql, report_type_name, report_sql)
+
+    @classmethod
+    def scan(cls):
+        sql = "SELECT * FROM report_type"
+        return db().query(sql, cls=cls)
+
+    @staticmethod
+    def set_name(report_type_id, report_type_name):
+        sql = 'UPDATE report_type SET report_type_name=%s WHERE report_type_id=%s'
+        return db().execute(sql, report_type_name, report_type_id)
+
+    @staticmethod
+    def set_sql(report_type_id, report_type_sql):
+        sql = 'UPDATE report_type SET report_sql=%s WHERE report_type_id=%s'
+        return db().execute(sql, report_type_sql, report_type_id)

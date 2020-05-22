@@ -55,12 +55,16 @@ dbconns = threading.local()
 def db(use_schema=None):
     if not hasattr(dbconns, 'databases'):
         dbconns.databases = {}
-    if pgsql_available and options.pg_database not in dbconns.databases:
-        dbconns.databases[options.pg_database] = PostgresConnection.connect()
-        use_schema = options.pg_database
-    if mysql_available and options.mysql_schema not in dbconns.databases:
-        dbconns.databases[options.mysql_schema] = MysqlConnection.connect()
-        use_schema = options.mysql_schema
+    if pgsql_available:
+        if options.pg_database not in dbconns.databases:
+            dbconns.databases[options.pg_database] = PostgresConnection.connect()
+        if not use_schema:
+            use_schema = options.pg_database
+    if mysql_available:
+        if options.mysql_schema not in dbconns.databases:
+            dbconns.databases[options.mysql_schema] = MysqlConnection.connect()
+        if not use_schema:
+            use_schema = options.mysql_schema
     # Default situation - much better to be explicit which database we're connecting to!
     if not use_schema and len(dbconns.databases) == 1:
         use_schema = [dbconn for dbconn in dbconns.databases.keys()][0]
@@ -80,6 +84,7 @@ class PostgresConnection(object):
     threads = {}
 
     def __init__(self, hostname, port, database, username=None, password=None, max_idle_time=7 * 3600):
+        """ Called by connect() class method using cls() notation """
         self.hostname = hostname
         self.port = port
         self.database = database
@@ -95,17 +100,9 @@ class PostgresConnection(object):
         self._db_args = args
         self._last_use_time = time.time()
         try:
-            self.reconnect()
+            self._connect()
         except Exception:
             logging.error("Cannot connect to PostgreSQL: %s", self.hostname, exc_info=True)
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        if getattr(self, "_db", None) is not None:
-            self._db.close()
-            self._db = None
 
     @classmethod
     def connect(cls, **kwargs):
@@ -133,15 +130,61 @@ class PostgresConnection(object):
             cls.threads[ident][database] = conn
         return connections[database]
 
-    def reconnect(self):
-        self.close()
+    def _connect(self):
         self._db = psycopg2.connect(self._db_args)
+
+    def _cursor(self):
+        """ Reconnect if disconnected. Then return a cursor. """
+        if self._db is None:
+            self._connect()
+        return self._db.cursor()
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        if getattr(self, "_db", None) is not None:
+            self._db.close()
+            self._db = None
+
+    def commit(self):
+        if getattr(self, "_db", None) is not None:
+            self._db.commit()
+
+    def rollback(self):
+        if getattr(self, "_db", None) is not None:
+            self._db.rollback()
+
+    def _execute(self, cursor, query, parameters, **kwargs):
+        do_commit = kwargs.get('do_commit', True)
+        try:
+            # return cursor.execute(query, parameters)
+            cursor.execute(query, parameters)
+            if do_commit:
+                self.commit()
+            return
+        #except psycopg2.ProgrammingError as ex:
+        #    logging.error("Hello Bug Creator. Please Fix Your Code - close connection/rollback")
+        #    logging.exception(ex)
+        #    self.close()
+        #    raise
+        #except psycopg2.OperationalError as ex:
+        #    logging.error("Error connecting to PostgreSQL - close connection/rollback")
+        #    logging.exception(ex)
+        #    self.close()
+        #    raise
+        except psycopg2.Error as ex:
+            logging.error("General Error at PostgreSQL - close connection/rollback")
+            logging.exception(ex)
+            self.close()
+            raise
 
     def query(self, query, *parameters, **kwargs):
         """ Returns a row list for the given query and parameters."""
+        kwargs['do_commit'] = False
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, **kwargs)
             column_names = [d[0] for d in cursor.description]
             cls = kwargs.get('cls')
             if cls:
@@ -162,82 +205,64 @@ class PostgresConnection(object):
         else:
             return rows[0]
 
-    def execute(self, query, *parameters):
-        if query.startswith('INSERT'):
-            return self.execute_lastrowid(query, *parameters)
+    def execute(self, query, *parameters, **kwargs):
+        # If cursor exists, it's probably one of several in a transaction. Don't automatically commit.
+        if kwargs.get('cursor'):
+            kwargs['do_commit'] = False
         else:
-            return self.execute_rowcount(query, *parameters)
+            cursor = self._cursor()
+            kwargs['do_commit'] = True
+        if query.startswith('INSERT'):
+            return self.execute_lastrowid(query, *parameters, **kwargs)
+        else:
+            return self.execute_rowcount(query, *parameters, **kwargs)
 
-    def execute_lastrowid(self, query, *parameters):
+    def execute_lastrowid(self, query, *parameters, **kwargs):
         """ Executes the given query, returning the lastrowid from the query."""
-        cursor = self._cursor()
+        cursor = kwargs.get('cursor', self._cursor())
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
             if cursor.rowcount > 0:
                 last_row_id = cursor.fetchone()[0]
-                #aegis.stdlib.logw(last_row_id, "LAST ROW ID")
+                #stdlib.logw(last_row_id, "LAST ROW ID")
                 return last_row_id
         finally:
-            cursor.close()
+            if kwargs['do_commit']:
+                cursor.close()
 
-    def execute_rowcount(self, query, *parameters):
+    def execute_rowcount(self, query, *parameters, **kwargs):
         """ Return the rowcount from the query."""
-        cursor = self._cursor()
+        cursor = kwargs.get('cursor', self._cursor())
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
             return cursor.rowcount
         finally:
-            cursor.close()
+            if kwargs['do_commit']:
+                cursor.close()
 
-    def executemany(self, query, parameters):
-        """ Return the lastrowid from the query."""
-        return self.executemany_lastrowid(query, parameters)
+    # Commenting until they can be properly tested for use with commit() and rollback()
+    #def executemany(self, query, parameters):
+    #    """ Return the lastrowid from the query."""
+    #    return self.executemany_lastrowid(query, parameters)
+    #
+    #def executemany_lastrowid(self, query, parameters):
+    #    """ Return the lastrowid from the query."""
+    #    cursor = self._cursor()
+    #    try:
+    #        cursor.executemany(query, parameters)
+    #        return cursor.lastrowid
+    #    finally:
+    #        cursor.close()
+    #
+    #def executemany_rowcount(self, query, parameters):
+    #    """ Return the rowcount from the query."""
+    #    cursor = self._cursor()
+    #    try:
+    #        cursor.executemany(query, parameters)
+    #        return cursor.rowcount
+    #    finally:
+    #        cursor.close()
 
-    def executemany_lastrowid(self, query, parameters):
-        """ Return the lastrowid from the query."""
-        cursor = self._cursor()
-        try:
-            cursor.executemany(query, parameters)
-            return cursor.lastrowid
-        finally:
-            cursor.close()
-
-    def executemany_rowcount(self, query, parameters):
-        """ Return the rowcount from the query."""
-        cursor = self._cursor()
-        try:
-            cursor.executemany(query, parameters)
-            return cursor.rowcount
-        finally:
-            cursor.close()
-
-    def _ensure_connected(self):
-        """ If connection is open for more than max_idle_time, close and reconnect """
-        if (self._db is None or (time.time() - self._last_use_time > self.max_idle_time)):
-            self.reconnect()
-        self._last_use_time = time.time()
-
-    def _cursor(self):
-        self._ensure_connected()
-        return self._db.cursor()
-
-    def _execute(self, cursor, query, parameters):
-        try:
-            # return cursor.execute(query, parameters)
-            cursor.execute(query, parameters)
-            return self._db.commit()
-        except PgsqlOperationalError:
-            logging.error("Error connecting to PostgreSQL")
-            self.close()
-            raise
-        except PgsqlDatabaseError:
-            logging.error("General Error at PostgreSQL - rollback transaction and carry on!")
-            self.rollback()
-            raise
-
-    def rollback(self):
-        if getattr(self, "_db", None) is not None:
-            self._db.rollback()
 
 
 class MysqlConnection(object):
@@ -298,6 +323,8 @@ class MysqlConnection(object):
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
             conn.schema = schema
             cls.threads[ident][target] = conn
+        #conn_debug = "%s %s %s" % (ident, target, connections)
+        #aegis.stdlib.logw(conn_debug, "CONN DEBUG")
         return connections[target]
 
     def __del__(self):
@@ -494,6 +521,11 @@ class Row(dict):
         val = db().get(sql, *args, cls=cls)
         return val
 
+    @classmethod
+    def scan(cls):
+        sql = 'SELECT * FROM %s' % cls.table_name
+        return db().query(sql, cls=cls)
+
     # kva_split(), insert(), update() together are a mini-ORM in processing arbitrary column-value combinations on a row.
     # define table_name and data_columns to know which are allowed to be set along with user action
     # columns and where are simple dictionaries: {'full_name': "FULL NAME", 'email': 'email@example.com'}
@@ -518,13 +550,12 @@ class Row(dict):
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
             columns = dict( [ (key,val) for key, val in columns.items() if key in data_columns] )
-        #aegis.stdlib.logw(columns, "COLUMNS")
         keys, values, args = cls.kva_split(columns)
         use_db = db()
-        #aegis.stdlib.logw(use_db, "USE DB")
         if type(use_db) is PostgresConnection:
             sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
+        #aegis.stdlib.logw(sql, "SQL")
         return use_db.execute(sql, *args)
 
     @classmethod
@@ -546,42 +577,5 @@ class Row(dict):
         where_clause = ' AND '.join(['%s=%s' % (key, value) for key, value in zip(keys, values)])
         # SQL statement
         sql = 'UPDATE %s SET %s WHERE %s' % (db_table, set_clause, where_clause)
+        #aegis.stdlib.logw(sql, "SQL")
         return db().execute_rowcount(sql, *args)
-
-
-class SqlDiff(Row):
-    table_name = 'sql_diff'
-    id_column = 'sql_diff_id'
-
-    @staticmethod
-    def create_table():
-        sql_diff_table = """
-            CREATE TABLE IF NOT EXISTS
-            sql_diff (
-              sql_diff_id SERIAL NOT NULL,
-              sql_diff_name VARCHAR(80) NOT NULL,
-              create_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              applied_dttm TIMESTAMP DEFAULT NULL,
-              PRIMARY KEY (sql_diff_name)
-            )"""
-        return db().execute(sql_diff_table)
-
-    @staticmethod
-    def insert(sql_diff_name):
-        sql = 'INSERT INTO sql_diff (sql_diff_name) VALUES (%s) RETURNING sql_diff_id'
-        return db().execute(sql, sql_diff_name)
-
-    @classmethod
-    def scan(cls):
-        sql = 'SELECT * FROM sql_diff'
-        return db().query(sql, cls=cls)
-
-    @staticmethod
-    def mark_applied(sql_diff_name):
-        sql = 'UPDATE sql_diff SET applied_dttm=NOW() WHERE sql_diff_name=%s'
-        return db().execute(sql, sql_diff_name)
-
-    @classmethod
-    def scan_unapplied(cls):
-        sql = """SELECT * FROM sql_diff WHERE applied_dttm IS NULL ORDER BY SUBSTRING(sql_diff_name from 5 for 3) ASC"""
-        return db().query(sql, cls=cls)

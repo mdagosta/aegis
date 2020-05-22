@@ -21,16 +21,30 @@ import user_agents
 import aegis.stdlib
 import aegis.model
 import aegis.config
+import aegis.database
 import config
 
 
 class AegisHandler(tornado.web.RequestHandler):
     def __init__(self, *args, **kwargs):
         super(AegisHandler, self).__init__(*args, **kwargs)
-        self.logw = aegis.stdlib.logw
         self.tmpl = {}
+        self.tmpl['logw'] = self.logw = aegis.stdlib.logw
         hostname = self.request.host.split(':')[0]
         self.tmpl['host'] = hostname
+        # Don't allow direct IP address in the Host header
+        if aegis.stdlib.validate_ip_address(self.tmpl['host']):
+            logging.warning("Disallow IP Address in Host Header: %s", self.tmpl['host'])
+            raise tornado.web.HTTPError(400)
+        # Implement *.domain.com to still work on domain.com
+        host_split = hostname.split('.')
+        valid_subdomains = aegis.config.get('valid_subdomains')
+        if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
+            self.tmpl['host'] = '.'.join(host_split[1:])
+        # Ignore crazy hostnames. Only use the ones we have specified.
+        if self.tmpl['host'] not in config.hostnames.keys():
+            logging.warning("Ignore crazy hostname: %s", self.tmpl['host'])
+            raise tornado.web.HTTPError(404)
         config.apply_hostname(self.tmpl['host'])
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
@@ -170,16 +184,22 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
-        #cookie_duration = {'user': 3650, 'session': None, 'auth': 14}[name]
-        cookie_duration = cookie_duration or options.cookie_durations[name]
+        if not cookie_duration:
+            cookie_durations = aegis.config.get('cookie_durations')
+            if not cookie_durations:
+                cookie_durations = {'user': 3650, 'session': None, 'auth': 14}
+            cookie_duration = cookie_durations[name]
         cookie_flags = {'httponly': True, 'secure': True}
         cookie_val = self.cookie_encode(value)
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
     def cookie_get(self, name, cookie_duration=None):
         # Session cookie is set to 30 since browser should expire session cookie not time-limit
-        #cookie_duration = {'user': 3650, 'session': 30, 'auth': 14}[name]
-        cookie_duration = cookie_duration or options.cookie_durations[name]
+        if not cookie_duration:
+            cookie_durations = aegis.config.get('cookie_durations')
+            if not cookie_durations:
+                cookie_durations = {'user': 3650, 'session': 30, 'auth': 14}
+            cookie_duration = cookie_durations[name]
         cookie_val = self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration)
         cookie_val = tornado.escape.to_basestring(cookie_val)
         cookie_val = self.cookie_decode(cookie_val)
@@ -259,7 +279,8 @@ class AegisHandler(tornado.web.RequestHandler):
     def is_super_admin(self):
         if not self.get_current_user():
             return False
-        if self.get_member_email() in aegis.config.get('super_admins'):
+        super_admins = aegis.config.get('super_admins')
+        if super_admins and self.get_member_email() in super_admins:
             return True
 
 
@@ -432,17 +453,147 @@ class AegisWeb(AegisHandler):
         if not self.is_super_admin():
             raise tornado.web.HTTPError(403)
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
+        self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
+        self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
 
     def get_template_path(self):
-        return os.path.join(os.path.dirname(__file__), 'templates')
+        return self.tmpl.get('template_dir')
+
+class AegisHydraForm(AegisWeb):
+    def get(self, hydra_type_id=None, *args):
+        self.tmpl['errors'] = {}
+        hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
+        if hydra_type_id:
+            self.tmpl['hydra_type'] = aegis.model.HydraType.get_id(hydra_type_id)
+        else:
+            self.tmpl['hydra_type'] = {}
+        return self.render_path("hydra_form.html", **self.tmpl)
+
+    def post(self, hydra_type_id=None, *args):
+        self.logw(self.request.args, "ARGS")
+        # Validate Input
+        self.tmpl['errors'] = {}
+        hydra_type = {}
+        hydra_type['hydra_type_name'] = self.request.args.get('hydra_type_name')
+        hydra_type['hydra_type_desc'] = self.request.args.get('hydra_type_desc')
+        hydra_type['priority_ndx'] = aegis.stdlib.validate_int(self.request.args.get('priority_ndx'))
+        hydra_type['next_run_sql'] = self.request.args.get('next_run_sql')
+        if not hydra_type['priority_ndx']:
+            self.tmpl['errors']['priority_ndx'] = 'Must be an integer'
+        if self.tmpl['errors']:
+            return self.render_path("hydra_form.html", **self.tmpl)
+        # Run against database and send back to Hydra main
+        hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
+        if hydra_type_id:
+            where = {'hydra_type_id': hydra_type_id}
+            aegis.model.HydraType.update_columns(hydra_type, where)
+        else:
+            aegis.model.HydraType.insert_columns(**hydra_type)
+        return self.redirect('/aegis/hydra')
+
 
 class AegisHydra(AegisWeb):
     def get(self, *args):
+        self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
         return self.render_path("hydra.html", **self.tmpl)
 
-class AegisReports(AegisWeb):
-    def get(self, *args):
-        return self.render_path("reports.html", **self.tmpl)
+    def post(self, *args):
+        self.logw(self.request.args, "ARGS")
+        pause_ids = [aegis.stdlib.validate_int(k.replace('pause_', '')) for k in self.request.args.keys() if k.startswith('pause_')]
+        unpause_ids = [aegis.stdlib.validate_int(k.replace('unpause_', '')) for k in self.request.args.keys() if k.startswith('unpause_')]
+        run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
+        self.logw(pause_ids, "PAUSE IDS")
+        self.logw(run_ids, "RUN IDS")
+
+        # Do Pause
+        if pause_ids:
+            hydra_type = aegis.model.HydraType.get_id(pause_ids[0])
+            self.logw(hydra_type, "HYDRA TYPE")
+            hydra_type.set_status('paused')
+
+        # Do Unpause
+        if unpause_ids:
+            hydra_type = aegis.model.HydraType.get_id(unpause_ids[0])
+            self.logw(hydra_type, "HYDRA TYPE")
+            hydra_type.set_status('live')
+
+        # Do Run --- hooks over to batch!
+        if run_ids:
+            hydra_type = aegis.model.HydraType.get_id(run_ids[0])
+            self.logw(hydra_type, "HYDRA TYPE")
+            hydra_type.run_now()
+
+        return self.redirect(self.request.uri)
+
+
+class AegisReportForm(AegisWeb):
+
+    def validate_report_type(self, report_type_id):
+        report_type_id = aegis.stdlib.validate_int(report_type_id)
+        if report_type_id:
+            self.tmpl['report_type'] = aegis.model.ReportType.get_id(report_type_id)
+        else:
+            self.tmpl['report_type'] = {}
+
+    def validate_input(self):
+        self.tmpl['errors'] = {}
+        self.columns = {}
+        self.columns['report_type_name'] = self.request.args.get('report_type_name')
+        if not self.columns['report_type_name']:
+            self.tmpl['errors']['report_type_name'] = 'Report Name Required'
+        self.columns['report_sql'] = self.request.args.get('report_sql')
+        if not self.columns['report_sql']:
+            self.tmpl['errors']['report_sql'] = 'Report SQL Required'
+
+
+    def get(self, report_type_id=None, *args):
+        self.tmpl['errors'] = {}
+        self.validate_report_type(report_type_id)
+        self.tmpl['schemas'] = []
+        if aegis.database.pgsql_available and aegis.database.mysql_available:
+            schemas = []
+            self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
+        return self.render_path("report_form.html", **self.tmpl)
+
+
+    def post(self, report_type_id=None, *args):
+        self.validate_report_type(report_type_id)
+        self.validate_input()
+        if self.tmpl['errors']:
+            return self.render_path("report_form.html", **self.tmpl)
+        # Set which schema the report runs against
+        report_schema = self.request.args.get('report_schema')
+        if report_schema and report_schema in aegis.database.dbconns.databases.keys():
+            self.columns['report_schema'] = report_schema
+        # Run against database and send back to Report main
+        report_type_id = aegis.stdlib.validate_int(report_type_id)
+        if report_type_id:
+            where = {'report_type_id': report_type_id}
+            aegis.model.ReportType.update_columns(self.columns, where)
+        else:
+            aegis.model.ReportType.insert_columns(**self.columns)
+        return self.redirect('/aegis/report')
+
+
+class AegisReport(AegisWeb):
+    def get(self, report_type_id=None, *args):
+        self.tmpl['errors'] = {}
+        if report_type_id:
+            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
+            self.tmpl['output'] = None
+            sql = self.tmpl['report']['report_sql']
+            try:
+                self.tmpl['output'] = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql)
+            except Exception as ex:
+                #logging.exception(ex)
+                sql_error = [str(arg) for arg in ex.args]
+                self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
+            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
+            return self.render_path("report.html", **self.tmpl)
+        else:
+            self.tmpl['reports'] = aegis.model.ReportType.scan()
+            return self.render_path("reports.html", **self.tmpl)
+
 
 class AegisHome(AegisWeb):
     def get(self, *args):
@@ -450,7 +601,12 @@ class AegisHome(AegisWeb):
 
 
 handler_urls = [
+    (r'^/aegis/hydra/add\W*$', AegisHydraForm),
+    (r'^/aegis/hydra/(\d+)\W*$', AegisHydraForm),
     (r'^/aegis/hydra\W*$', AegisHydra),
-    (r'^/aegis/reports\W*$', AegisReports),
+    (r'^/aegis/report/form/(\d+)\W*$', AegisReportForm),
+    (r'^/aegis/report/form\W*$', AegisReportForm),
+    (r'^/aegis/report/(\d+)\W*$', AegisReport),
+    (r'^/aegis/report\W*$', AegisReport),
     (r'^/aegis\W*$', AegisHome),
 ]

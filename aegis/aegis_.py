@@ -13,7 +13,8 @@ import sys
 import tornado.options
 
 # Project Imports
-import aegis.stdlib
+#import aegis.stdlib
+import stdlib
 
 
 # Create a new spinoff of aegis
@@ -26,7 +27,7 @@ def create(parser):
         sys.exit()
     app_name = args.appname[0]
     domain = args.domain[0]
-    aegis.stdlib.logw("AEGIS CREATE  %s  %s" % (app_name, domain))
+    stdlib.logw("AEGIS CREATE  %s  %s" % (app_name, domain))
     aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     src_dir = os.path.dirname(aegis_dir)
     template_vars = {'app_name': app_name, 'aegis_domain': domain}
@@ -93,7 +94,7 @@ def deploy(cmd, app_name, domain):
     define('diff', default=True, help='Show Diffs', type=bool)
     define('dry_run', default=True, help='Dry Run - make no changes', type=bool)
     config.initialize()
-    src_dir = os.path.dirname(aegis.stdlib.absdir(__file__))
+    src_dir = os.path.dirname(stdlib.absdir(__file__))
     exclude_file = os.path.join(src_dir, 'etc', 'deploy.excludes')
     environments = {'prod': '/srv/www/_prod/' % app_name,
                     'dev': '/srv/www/<appname>_dev/' % app_name}
@@ -111,10 +112,10 @@ def deploy(cmd, app_name, domain):
         rsync_opts += ' -T %s --delay-updates --exclude-from=%s --delete' % (temp_dir, exclude_file)
         cmd = "rsync %s %s/ %s" % (rsync_opts, src_dir, dest_dir)
         if not silent:
-            aegis.stdlib.logw(rsync_opts, 'RSYNC_OPTS:')
-            aegis.stdlib.logw(src_dir, 'SRC:')
-            aegis.stdlib.logw(dest_dir, 'DEST:')
-            aegis.stdlib.logw(cmd, 'CMD:')
+            stdlib.logw(rsync_opts, 'RSYNC_OPTS:')
+            stdlib.logw(src_dir, 'SRC:')
+            stdlib.logw(dest_dir, 'DEST:')
+            stdlib.logw(cmd, 'CMD:')
         pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         output, error_code = pipe.communicate()
         # filter it down to a simple file list
@@ -147,9 +148,9 @@ def deploy(cmd, app_name, domain):
             line = line.strip()
             if not line: continue
             if line.startswith('-'):
-                cdiff.append(aegis.stdlib.cstr(line, color='red'))
+                cdiff.append(stdlib.cstr(line, color='red'))
             elif line.startswith('+') or line.startswith('*'):
-                cdiff.append(aegis.stdlib.cstr(line, color='green'))
+                cdiff.append(stdlib.cstr(line, color='green'))
             else:
                 cdiff.append(line)
         cdiff = '\n'.join(cdiff)
@@ -160,10 +161,10 @@ def deploy(cmd, app_name, domain):
             if fn.endswith('/'):
                 continue
             if fn.startswith('cannot delete'):
-                logging.warning(aegis.stdlib.cstr('- %s' % fn, color='magenta'))
+                logging.warning(stdlib.cstr('- %s' % fn, color='magenta'))
                 continue
             if fn.startswith('deleting '):
-                logging.warning(aegis.stdlib.cstr('- %s' % fn, color='magenta'))
+                logging.warning(stdlib.cstr('- %s' % fn, color='magenta'))
                 continue
             # Display useful diff information since this is deploying
             src_file = (src_dir + '/' + fn).strip()   # '/' because of rsync slash oddity
@@ -171,7 +172,7 @@ def deploy(cmd, app_name, domain):
             fn_status = fn
             if not os.path.exists(dest_file):
                 fn_status += '   [NEW FILE]'
-            logging.warning(aegis.stdlib.cstr('+ writing %s ' % fn_status, color='cyan'))
+            logging.warning(stdlib.cstr('+ writing %s ' % fn_status, color='cyan'))
             if os.path.exists(dest_file):
                 if options.diff:
                     cdiff = diff_files(src_file, dest_file)
@@ -279,5 +280,5 @@ elif __name__ == 'aegis.aegis':
     sys.exit(retval)
 else:
     initialize()
-    aegis.stdlib.logw(__name__, "Called by __name__")
-    sys.exit(126)
+    stdlib.logw(__name__, "Called by __name__")
+    #sys.exit(126)

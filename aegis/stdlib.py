@@ -2,6 +2,7 @@
 
 
 # Python Imports
+import calendar
 import datetime
 import dateutil
 import decimal
@@ -37,7 +38,7 @@ def logw(var, msg=''):
 
 def logline(*args):
     caller = get_caller()
-    msg = '%s %s' % (cstr(caller, 'yellow').ljust(20), args[0])
+    msg = '%s %s' % (cstr(caller, 'yellow'), args[0])
     logging.warning(msg, *args[1:])
 
 def force_int(string):
@@ -80,6 +81,22 @@ class DateTimeEncoder(json.JSONEncoder):
             return float(obj)
         else:
             return super(DateTimeEncoder, self).default(obj)
+
+
+def ts_to_dt(timestamp):
+    if timestamp is None: return None
+    return datetime.datetime.utcfromtimestamp(timestamp)
+
+def dt_to_ts(dttm, keep_milliseconds=False):
+    """ calendar.timegm() doesn't maintain the microseconds awareness of datetime (!?!)
+        maintain the milliseconds as an integer to fit into 8 bytes: 1516687988867
+        could also for example be sent as decimal representation with microseconds: 1516687988.867397
+    """
+    if dttm is None: return None
+    if keep_milliseconds:
+        return int(str(calendar.timegm(dttm.utctimetuple())) + str(dttm.microsecond)[:3])
+    else:
+        return calendar.timegm(dttm.utctimetuple())
 
 
 # Make it easier to use ansi escape sequences for terminal colors
@@ -289,6 +306,7 @@ class RobotValidator:
         '^binlar_',
         '^bitlybot',
         '^Browserlet',
+        '^BublupBot',
         '^Bufferbot',
         '^CatchBot',
         '^CCBot',
@@ -304,6 +322,7 @@ class RobotValidator:
         '^crawl',
         '^Crowsnest',
         '^curl/',
+        'Daum/',
         '^Docunator',
         '^DomainCrawler',
         '^Domnutch-Bot',
@@ -599,3 +618,19 @@ def is_robot(user_agent):
     if not RobotValidator.robot_re:
         RobotValidator.robot_re = re.compile(RobotValidator.robot_str)
     return bool(RobotValidator.robot_re.search(user_agent) is not None)
+
+
+
+
+
+
+# XXX How does this fit in here?
+def rate_limit(self, key, hostname, delta_sec):
+    """ Return True if should be rate-limited """
+    attr_name = '%s-%s' % (key, hostname)
+    if hasattr(self, attr_name):
+        attr = getattr(self, attr_name)
+        if attr + datetime.timedelta(seconds=delta_sec) > datetime.datetime.now():
+            return True
+    setattr(self, attr_name, datetime.datetime.now())
+    return False

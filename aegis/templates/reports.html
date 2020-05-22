@@ -1,0 +1,24 @@
+{% extends frame.html %}
+
+{% block body %}
+<h1 style="margin-top: 1em;">Reports     <a href="/aegis/report/form" class="w3-right w3-btn w3-blue w3-large">+ New Report</a></h1>
+
+{% if reports %}
+<form action="{{request.uri}}" style="display: inline-block" method="POST">
+    {% raw xsrf_form_html() %}
+    <table class="w3-table-all w3-responsive">
+        <tr>
+            <th>Report Name</th>
+            <th>Edit</th>
+        </tr>
+        {% for report in reports %}
+        <tr>
+            <td><a class="w3-text-blue" href="{{request.uri}}/{{report['report_type_id']}}">{{report['report_type_name']}}</a></td>
+            <td><a class="w3-text-blue" href="{{request.uri}}/form/{{report['report_type_id']}}">edit</a></td>
+        </tr>
+        {% end %}
+    </table>
+</form>
+{% end %}
+
+{% end %}

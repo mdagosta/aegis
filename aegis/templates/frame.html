@@ -10,10 +10,16 @@
 
     <body class="w3-light-gray w3-large">
         {# Header #}
-        <div class="w3-top w3-gray w3-large">
-            <div class="w3-bar">
-                <a href="/aegis" class="w3-bar-item w3-padding-medium" style="text-decoration: none;">Aegis Admin</a>
-                <div class="w3-right w3-bar-item w3-padding-medium">{{get_member_email()}}</div>
+        <div class="w3-top">
+            <div class="w3-gray w3-large">
+                <div class="w3-bar">
+                    <a href="/aegis" class="w3-bar-item w3-padding-medium" style="text-decoration: none;">Aegis {{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</a>
+                    <div class="w3-right w3-bar-item w3-padding-medium">{{get_member_email()}}</div>
+                </div>
+            </div>
+            <div class="w3-bar w3-light-gray w3-padding-small w3-card">
+                <span style="margin: 0 1em;"><a href="/aegis/hydra">Hydra</a></span>
+                <span style="margin: 0 1em;"><a href="/aegis/report">Reports</a></span>
             </div>
         </div>
 

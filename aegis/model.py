@@ -16,6 +16,44 @@ import aegis.config
 db = aegis.database.db
 
 
+class SqlDiff(aegis.database.Row):
+    table_name = 'sql_diff'
+    id_column = 'sql_diff_id'
+
+    @staticmethod
+    def create_table():
+        sql_diff_table = """
+            CREATE TABLE IF NOT EXISTS
+            sql_diff (
+              sql_diff_id SERIAL NOT NULL,
+              sql_diff_name VARCHAR(80) NOT NULL,
+              create_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              applied_dttm TIMESTAMP DEFAULT NULL,
+              PRIMARY KEY (sql_diff_name)
+            )"""
+        return db().execute(sql_diff_table)
+
+    @staticmethod
+    def insert(sql_diff_name):
+        sql = 'INSERT INTO sql_diff (sql_diff_name) VALUES (%s) RETURNING sql_diff_id'
+        return db().execute(sql, sql_diff_name)
+
+    @classmethod
+    def scan(cls):
+        sql = 'SELECT * FROM sql_diff'
+        return db().query(sql, cls=cls)
+
+    @staticmethod
+    def mark_applied(sql_diff_name):
+        sql = 'UPDATE sql_diff SET applied_dttm=NOW() WHERE sql_diff_name=%s'
+        return db().execute(sql, sql_diff_name)
+
+    @classmethod
+    def scan_unapplied(cls):
+        sql = """SELECT * FROM sql_diff WHERE applied_dttm IS NULL ORDER BY SUBSTRING(sql_diff_name from 5 for 3) ASC"""
+        return db().query(sql, cls=cls)
+
+
 class UserAgent(aegis.database.Row):
     table_name = 'user_agent'
     id_column = 'user_agent_id'
@@ -208,3 +246,107 @@ class Pageview(aegis.database.Row):
     def insert(cls, user_id, member_id, url_path, url_query, url_tx, request_name):
       sql = "INSERT INTO pageview (user_id, member_id, url_path, url_query, url_tx, request_name) VALUES (%s, %s, %s, %s, %s, %s) RETURNING pageview_id"
       return db().execute(sql, user_id, member_id, url_path, url_query, url_tx, request_name)
+
+
+class HydraType(aegis.database.Row):
+    table_name = 'hydra_type'
+    id_column = 'hydra_type_id'
+    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql')
+
+    def run_now(self):
+        sql = "UPDATE hydra_type SET next_run_dttm=NOW() WHERE hydra_type_id=%s"
+        return db().execute(sql, self['hydra_type_id'])
+
+    def set_status(self, status):
+        sql = "UPDATE hydra_type SET status=%s WHERE hydra_type_id=%s"
+        return db().execute(sql, status, self['hydra_type_id'])
+
+    @classmethod
+    def get_runnable(cls, hydra_type_id):
+        sql = """SELECT hydra_type_id, hydra_type_name, next_run_sql
+                   FROM hydra_type
+                  WHERE next_run_dttm <= NOW()
+                    AND status='live'
+                    AND hydra_type_id=%s"""
+        return db().get(sql, hydra_type_id, cls=cls)
+
+    def schedule_next(self):
+        sql = "UPDATE hydra_type SET next_run_dttm="+self['next_run_sql']+" WHERE hydra_type_id=%s AND status = 'live'"
+        return db().execute(sql, self['hydra_type_id'])
+
+
+class HydraQueue(aegis.database.Row):
+    table_name = 'hydra_queue'
+    id_column = 'hydra_queue_id'
+    data_columns = ('hydra_type_id', 'priority_ndx', 'work_data', 'work_dttm', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')
+
+    @classmethod
+    def scan_work_priority(cls, limit=10):
+        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY priority_ndx ASC LIMIT %s"
+        return db().query(sql, limit, cls=cls)
+
+    @classmethod
+    def scan_work(cls, limit=10):
+        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY work_dttm ASC LIMIT %s"
+        return db().query(sql, limit, cls=cls)
+
+    def claim(self):
+        sql = 'UPDATE hydra_queue SET claimed_dttm=NOW() WHERE hydra_queue_id=%s AND claimed_dttm IS NULL'
+        return db().execute_rowcount(sql, self['hydra_queue_id'])
+
+    def unclaim(self):
+        sql = 'UPDATE hydra_queue SET claimed_dttm=NULL WHERE hydra_queue_id=%s AND claimed_dttm IS NOT NULL'
+        return db().execute_rowcount(sql, self['hydra_queue_id'])
+
+    def incr_try_cnt(self):
+        self['try_cnt'] += 1
+        sql = 'UPDATE hydra_queue SET try_cnt=try_cnt+1 WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    def start(self):
+        sql = 'UPDATE hydra_queue SET start_dttm=NOW() WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    def complete(self):
+        sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    @staticmethod
+    def purge_completed():
+        sql = "DELETE FROM hydra_queue WHERE finish_dttm IS NOT NULL AND finish_dttm < NOW()"
+        return db().execute_rowcount(sql)
+
+    @staticmethod
+    def clear_claims():
+        sql = 'UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 15 MINUTE AND finish_dttm IS NULL'
+        return db().execute_rowcount(sql)
+
+    @classmethod
+    def past_cnt(cls):
+        sql = "SELECT COUNT(*) AS past_cnt FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 1 MINUTE"
+        return db().get(sql, cls=cls)
+
+    
+class ReportType(aegis.database.Row):
+    table_name = 'report_type'
+    id_column = 'report_type_id'
+
+    @classmethod
+    def insert(cls, report_type_name, report_sql):
+        sql = "INSERT INTO report_type (report_type_name, report_sql) VALUES (%s, %s) RETURNING report_type_id"
+        return db().execute(sql, report_type_name, report_sql)
+
+    @classmethod
+    def scan(cls):
+        sql = "SELECT * FROM report_type"
+        return db().query(sql, cls=cls)
+
+    @staticmethod
+    def set_name(report_type_id, report_type_name):
+        sql = 'UPDATE report_type SET report_type_name=%s WHERE report_type_id=%s'
+        return db().execute(sql, report_type_name, report_type_id)
+
+    @staticmethod
+    def set_sql(report_type_id, report_type_sql):
+        sql = 'UPDATE report_type SET report_sql=%s WHERE report_type_id=%s'
+        return db().execute(sql, report_type_sql, report_type_id)

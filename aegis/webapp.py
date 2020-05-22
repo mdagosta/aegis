@@ -401,6 +401,8 @@ class AegisApplication():
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
             if handler.tmpl.get('user_agent_obj').is_bot:
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
+            if hasattr(handler, 'json_length'):
+                extra_debug += '   kbytes: %4.2f' % (handler.json_length / 1024.0)
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 

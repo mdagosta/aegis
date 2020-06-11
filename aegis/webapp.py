@@ -81,8 +81,11 @@ class AegisHandler(tornado.web.RequestHandler):
         logged_out = (self.tmpl.get('logged_out') == True)
         if auth_ck and not logged_out:
             self.cookie_set('auth', auth_ck)
-        if self.tmpl.get('session_ck'):
-            self.cookie_set('session', self.tmpl['session_ck'])
+        if 'session_ck' in self.tmpl:
+            if self.tmpl.get('session_ck'):
+                self.cookie_set('session', self.tmpl['session_ck'])
+            else:
+                self.cookie_clear('session')
         super(AegisHandler, self).finish(chunk)
 
     def setup_user(self):

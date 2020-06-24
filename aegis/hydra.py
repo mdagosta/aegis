@@ -100,7 +100,7 @@ class HydraThread(threading.Thread):
 
     @staticmethod
     def signal_reset(signal, frm):
-        logging.warning("SIGNUP received... clearing stale claims")
+        logging.warning("SIGHUP received... clearing stale claims")
         aegis.model.HydraQueue.clear_claims()
 
 
@@ -140,15 +140,17 @@ class HydraHead(HydraThread):
                         # Do the work
                         hydra_queue.incr_try_cnt()
                         hydra_queue.start()
-                        result, work_cnt = work_fn(hydra_queue)
+                        result, work_cnt = work_fn(hydra_queue, hydra_type)
+                        #self.logw(result, "RESULT")
+                        #self.logw(work_cnt, "WORK CNT")
                         if result:
                             hydra_queue.complete()
                         else:
                             logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
                             continue
                         # Worker accounting
+                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
                         self.processed_cnt += work_cnt
-                        logging.warning("%s completed %s" % (self.name, hydra_type['hydra_type_name']))
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
                         logging.exception(ex)
@@ -159,6 +161,10 @@ class HydraHead(HydraThread):
             logging.exception(ex)
         finally:
             self.finish()
+
+
+    def log_line(self, hydra_type, work_cnt=0, msg=''):
+        return '%s %s %s %s' % (self.name, hydra_type['hydra_type_name'], ("%d" % work_cnt).rjust(8), msg)
 
 
 class Hydra(HydraThread):
@@ -203,11 +209,11 @@ class Hydra(HydraThread):
                             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
                             hydra_type.schedule_next()
                             _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
-                            logging.warning("%s queueing %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
+                            logging.warning("%s queue up %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
                             # Clean out queue then sleep depending on how much work there is to do
                             purged_completed = aegis.model.HydraQueue.purge_completed()
                             if purged_completed:
-                                logging.warning("%s purged %s completed rows" % (self.thread_name, purged_completed))
+                                logging.warning("%s queue purge deleted %s hydra_queue" % (self.thread_name, purged_completed))
                             # Log if there are expired queue items in the past...
                             past_cnt = aegis.model.HydraQueue.past_cnt()
                             if past_cnt and past_cnt['past_cnt']:

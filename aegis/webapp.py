@@ -83,8 +83,11 @@ class AegisHandler(tornado.web.RequestHandler):
         logged_out = (self.tmpl.get('logged_out') == True)
         if auth_ck and not logged_out:
             self.cookie_set('auth', auth_ck)
-        if self.tmpl.get('session_ck'):
-            self.cookie_set('session', self.tmpl['session_ck'])
+        if 'session_ck' in self.tmpl:
+            if self.tmpl.get('session_ck'):
+                self.cookie_set('session', self.tmpl['session_ck'])
+            else:
+                self.cookie_clear('session')
         super(AegisHandler, self).finish(chunk)
 
     def setup_user(self):
@@ -426,6 +429,8 @@ class AegisApplication():
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
             if handler.tmpl.get('user_agent_obj').is_bot:
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
+            if hasattr(handler, 'json_length'):
+                extra_debug += '   kbytes: %4.2f' % (handler.json_length / 1024.0)
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 

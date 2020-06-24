@@ -4,6 +4,7 @@
 # Aegis is your shield to protect you on the Brave New Web
 
 # Python Imports
+import datetime
 import json
 import logging
 import os
@@ -61,6 +62,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['get_user_id'] = self.get_user_id
         self.tmpl['get_member_id'] = self.get_member_id
         self.tmpl['get_member_email'] = self.get_member_email
+        self.tmpl['utcnow'] = datetime.datetime.utcnow()
         self.models = {}
         self.models['UserAgent'] = aegis.model.UserAgent
         self.models['User'] = aegis.model.User
@@ -392,6 +394,8 @@ class AegisApplication():
         settings.update(kwargs)
         if 'static_path' in options:
             settings['static_path'] = options.static_path
+        if 'static_url_prefix' in options:
+            settings['static_url_prefix'] = options.static_url_prefix
         return settings
 
     def log_request(self, handler):

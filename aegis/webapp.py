@@ -141,10 +141,11 @@ class AegisHandler(tornado.web.RequestHandler):
         return options.template_path
 
     def _handle_request_exception(self, ex):
+        aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
         #self.logw(ex, "EX")
         #logging.exception(ex)
+        # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.
         if self.request.headers.get('Cookie'):
-            # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.
             del self.request.headers['Cookie']
         # Don't post boring pseudo-errors to channels
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
@@ -154,11 +155,14 @@ class AegisHandler(tornado.web.RequestHandler):
         # Send errors to chat hooks, based on them being configured for the environment
         header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}
-        hooks = ['alerts_chat_hook', 'debug_chat_hook']
+        error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
+        if config.get_env() == 'prod':
+            hooks = ['alerts_chat_hook']
+        else:
+            hooks = ['debug_chat_hook']
         for hook in hooks:
             hook_url = aegis.config.get(hook)
             if hook_url:
-                error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
                 requests.post(hook_url, json={"text": error_message})
         super(AegisHandler, self)._handle_request_exception(ex)
 
@@ -224,14 +228,9 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['member'] = aegis.model.Member.get_auth(member_id)
 
     def get_member_id(self):
-        ck = self.cookie_get("auth")
-        if ck:
-            try:
-                return int(ck)
-            except Exception as ex:
-                logging.exception(ex)
-                self.del_current_user()
-                return None
+        # Cookie can't change mid-request so we can just cache the value on the handler
+        if hasattr(self, '_member_id'):
+            return self._member_id
         # When not on production, if test token and test member_id are present, use that for the request.
         test_token = self.request.headers.get('Test-Token')
         test_member_id = aegis.stdlib.validate_int(self.request.headers.get('Test-Member-Id'))
@@ -239,7 +238,18 @@ class AegisHandler(tornado.web.RequestHandler):
             # Check member exists so we don't just explode from exhuberant testing!
             if aegis.model.Member.get_id(test_member_id):
                 logging.warning("Test Mode | MemberId Override: %s", test_member_id)
-                return test_member_id
+                self._member_id = test_member_id
+                return self._member_id
+        ck = self.cookie_get("auth")
+        #self.logw(ck, "Auth Cookie MemberID")
+        if ck:
+            try:
+                self._member_id = int(ck)
+                return self._member_id
+            except Exception as ex:
+                logging.exception(ex)
+                self.del_current_user()
+                return None
 
     def get_current_user(self):
         if not aegis.database.pgsql_available and not aegis.database.mysql_available:

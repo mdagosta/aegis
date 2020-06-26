@@ -68,7 +68,7 @@ class HydraThread(threading.Thread):
         # Main thread is used only as a control thread... monitors quitting variable, and sleep gets interrupted by signal. And that's it!
         while threading.active_count() > 1:
             if HydraThread.quitting:
-                logging.warning("%s waiting %ss for threads to finish... %s active" % (self.filename, options.hydra_sleep, threading.active_count()))
+                logging.warning("aegis/hydra.py waiting %ss for threads to finish... %s active" % (options.hydra_sleep, threading.active_count()))
                 threads = threading.enumerate()
                 thr = random.choice(threads[1:])
                 if thr != threading.current_thread():

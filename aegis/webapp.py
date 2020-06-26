@@ -17,6 +17,7 @@ import requests
 from tornado.options import options
 import tornado.web
 import user_agents
+import zlib
 
 # Project Imports
 import aegis.stdlib
@@ -288,6 +289,26 @@ class AegisHandler(tornado.web.RequestHandler):
         if super_admins and self.get_member_email() in super_admins:
             return True
 
+    @staticmethod
+    def auth_admin():
+        """ Weird wrapper to check access to a resource using @VirungaApi.auth_access('super_admin') notation """
+        def call_wrapper(func):
+            def authorize(self, *args, **kwargs):
+                if not self.is_super_admin():
+                    raise tornado.web.HTTPError(403)
+                return func(self, *args, **kwargs)
+            return authorize
+        return call_wrapper
+
+    # Instead of tornado.web.authenticated sending users to a login url, only send a 403
+    @staticmethod
+    def auth_required(method):
+        def wrapper(self, *args, **kwargs):
+            if not self.current_user:
+                raise tornado.web.HTTPError(403)
+            return method(self, *args, **kwargs)
+        return wrapper
+
 
 class JsonRestApi(AegisHandler):
     def check_xsrf_cookie(self): pass
@@ -298,9 +319,12 @@ class JsonRestApi(AegisHandler):
 
     def prepare(self):
         super(JsonRestApi, self).prepare()
-        api_token_value = self.request.headers.get(options.api_token_header)
-        if not api_token_value or api_token_value != options.api_token_value:
-            raise tornado.web.HTTPError(401, 'Wrong API Token')
+        if aegis.config.get('api_token_header'):
+            api_token_value = self.request.headers.get(options.api_token_header)
+            if not api_token_value or api_token_value != options.api_token_value:
+                raise tornado.web.HTTPError(401, 'Wrong API Token')
+        else:
+            logging.error("Set options.api_token_header and options.api_token_value to enforce basic API Keys from clients")
         self.json_req = self.json_unpack()
         self.json_resp = {}
 
@@ -327,7 +351,6 @@ class JsonRestApi(AegisHandler):
                 return json_req or {}
             except json.decoder.JSONDecodeError:
                 raise tornado.web.HTTPError(401, 'Bad JSON Value')
-
         else:
             return dict(self.request.arguments)
 
@@ -351,6 +374,11 @@ class JsonRestApi(AegisHandler):
         json_resp = json.dumps(data, cls=aegis.stdlib.DateTimeEncoder)
         if debug or self.debug:
             logging.warning("=== JSON RESPONSE ===")
+            # Limit length of a single log line
+            if len(str(data)) < 50000:
+                self.logw(data, "RESPONSE DATA")
+            else:
+                self.logw(str(data)[:50000], "RESPONSE DATA - TOO LONG TO LOG")
             headers = []
             for (k,v) in sorted(self._headers.get_all()):
                 headers.append('%s: %s' % (k,v))
@@ -361,6 +389,7 @@ class JsonRestApi(AegisHandler):
                     cookies.append("Set-Cookie: %s" % cookie.OutputString(None))
             self.logw(cookies, "COOKIES")
             self.logw(json_resp, "JSON RESPONSE")
+        self.json_length = len(zlib.compress(json_resp.encode("utf-8")))
         self.write(json_resp + '\n')
         self.finish()
 
@@ -426,11 +455,11 @@ class AegisApplication():
             if handler.tmpl.get('member'):
                 member_id = handler.tmpl['member'].get('member_id')
             extra_debug = '| uid: %s | mid: %s' % (user_id or '-', member_id or '-')
+            if hasattr(handler, 'json_length'):
+                extra_debug += ' | kb: %4.2f' % (handler.json_length / 1024.0)
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
             if handler.tmpl.get('user_agent_obj').is_bot:
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
-            if hasattr(handler, 'json_length'):
-                extra_debug += '   kbytes: %4.2f' % (handler.json_length / 1024.0)
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 

@@ -617,7 +617,7 @@ class AegisReportForm(AegisWeb):
     def screen(self):
         self.tmpl['schemas'] = []
         if aegis.database.pgsql_available and aegis.database.mysql_available:
-            schemas = []
+            aegis.database.db()
             self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
         return self.render_path("report_form.html", **self.tmpl)
 

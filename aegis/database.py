@@ -207,11 +207,7 @@ class PostgresConnection(object):
 
     def execute(self, query, *parameters, **kwargs):
         # If cursor exists, it's probably one of several in a transaction. Don't automatically commit.
-        if kwargs.get('cursor'):
-            kwargs['do_commit'] = False
-        else:
-            cursor = self._cursor()
-            kwargs['do_commit'] = True
+        kwargs['do_commit'] = not 'cursor' in kwargs
         if query.startswith('INSERT'):
             return self.execute_lastrowid(query, *parameters, **kwargs)
         else:
@@ -219,25 +215,37 @@ class PostgresConnection(object):
 
     def execute_lastrowid(self, query, *parameters, **kwargs):
         """ Executes the given query, returning the lastrowid from the query."""
-        cursor = kwargs.get('cursor', self._cursor())
+        # Use existing cursor without committing, or create cursor and use existing do_commit flag or default to True
+        if kwargs.get('cursor'):
+            cursor = kwargs['cursor']
+            do_commit = False
+        else:
+            cursor = self._cursor()
+            do_commit = kwargs.get('do_commit', True)
         try:
-            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
+            self._execute(cursor, query, parameters, do_commit=do_commit)
             if cursor.rowcount > 0:
                 last_row_id = cursor.fetchone()[0]
-                #stdlib.logw(last_row_id, "LAST ROW ID")
+                #aegis.stdlib.logw(last_row_id, "LAST ROW ID")
                 return last_row_id
         finally:
-            if kwargs['do_commit']:
+            if do_commit:
                 cursor.close()
 
     def execute_rowcount(self, query, *parameters, **kwargs):
-        """ Return the rowcount from the query."""
-        cursor = kwargs.get('cursor', self._cursor())
+        """ Executes the given query, returning the rowcount from the query."""
+        # Use existing cursor without committing, or create cursor and use existing do_commit flag or default to True
+        if kwargs.get('cursor'):
+            cursor = kwargs['cursor']
+            do_commit = False
+        else:
+            cursor = self._cursor()
+            do_commit = kwargs.get('do_commit', True)
         try:
-            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
+            self._execute(cursor, query, parameters, do_commit=do_commit)
             return cursor.rowcount
         finally:
-            if kwargs['do_commit']:
+            if do_commit:
                 cursor.close()
 
     # Commenting until they can be properly tested for use with commit() and rollback()

@@ -24,5 +24,15 @@
     <pre class="w3-text-red">{{errors['sql_error']}}</pre>
     {% end %}
     </div>
+
 </div>
+
+
+<h2 class="w3-border-top w3-border-blue w3-margin-top">SQL       <a href="/aegis/report/form/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Edit</a></h2>
+
+<pre>
+{{report['report_sql']}}
+</pre>
+
+
 {% end %}

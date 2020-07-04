@@ -1,0 +1,10 @@
+{# Following lines are crammed so that plaintext formats nicely in email #}
+{{header}}
+{% if handler %}{% raw handler.request %}{% end %}
+
+{% raw traceback %}
+
+Additional Debug Info:
+
+{% for key, val in kwargs.items() %}{{key}}: {% raw val %}
+{% end %}

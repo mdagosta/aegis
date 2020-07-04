@@ -29,10 +29,9 @@
 
     <p>
         <label><b>Report SQL</b> {% if errors.get('report_sql') %}<span class="w3-text-red">{{errors['report_sql']}}</span>{% end %}</label>
-        <textarea class="w3-input" name="report_sql" rows="8">
+        <textarea class="w3-input" style="font-family: monospace" name="report_sql" rows="8">
           {{report_type.get('report_sql', '')}}
         </textarea>
-
     </p>
 
     <div class="w3-center w3-padding">

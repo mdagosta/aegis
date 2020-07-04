@@ -591,22 +591,16 @@ class AegisReportForm(AegisWeb):
         if not self.columns['report_sql']:
             self.tmpl['errors']['report_sql'] = 'Report SQL Required'
 
-
     def get(self, report_type_id=None, *args):
         self.tmpl['errors'] = {}
         self.validate_report_type(report_type_id)
-        self.tmpl['schemas'] = []
-        if aegis.database.pgsql_available and aegis.database.mysql_available:
-            schemas = []
-            self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
-        return self.render_path("report_form.html", **self.tmpl)
-
+        return self.screen()
 
     def post(self, report_type_id=None, *args):
         self.validate_report_type(report_type_id)
         self.validate_input()
         if self.tmpl['errors']:
-            return self.render_path("report_form.html", **self.tmpl)
+            return self.screen()
         # Set which schema the report runs against
         report_schema = self.request.args.get('report_schema')
         if report_schema and report_schema in aegis.database.dbconns.databases.keys():
@@ -620,6 +614,13 @@ class AegisReportForm(AegisWeb):
             aegis.model.ReportType.insert_columns(**self.columns)
         return self.redirect('/aegis/report')
 
+    def screen(self):
+        self.tmpl['schemas'] = []
+        if aegis.database.pgsql_available and aegis.database.mysql_available:
+            schemas = []
+            self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
+        return self.render_path("report_form.html", **self.tmpl)
+
 
 class AegisReport(AegisWeb):
     def get(self, report_type_id=None, *args):
@@ -630,6 +631,7 @@ class AegisReport(AegisWeb):
             sql = self.tmpl['report']['report_sql']
             try:
                 self.tmpl['output'] = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql)
+                aegis.stdlib.json_snake_to_camel(self.tmpl['output'], upper=True, space=True, debug=False)
             except Exception as ex:
                 #logging.exception(ex)
                 sql_error = [str(arg) for arg in ex.args]

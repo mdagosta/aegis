@@ -192,9 +192,11 @@ class PostgresConnection(object):
             cls = kwargs.get('cls')
             if cls:
                 rows = [cls(list(zip(column_names, row))) for row in cursor]
-                return rows
             else:
-                return [Row(zip(column_names, row)) for row in cursor]
+                rows = [Row(zip(column_names, row)) for row in cursor]
+            if kwargs.get('return_column_names'):
+                return (rows, column_names)
+            return rows
         finally:
             cursor.close()
 

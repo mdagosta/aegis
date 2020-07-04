@@ -9,6 +9,7 @@ python setup.py develop
 To build aegis for PyPi:
 
 Increment the version # ... should this be tied to git tag? `aegis release` ?
+rm dist/*
 python3 setup.py sdist bdist_wheel
 python3 -m twine upload dist/*
 """

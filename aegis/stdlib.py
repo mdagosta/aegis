@@ -91,9 +91,7 @@ def snake_to_camel(snake_str, upper=False, space=False):
         if space:
             join_char = ' '
         # Capitalize the first letter of each component, using title(), then join them together.
-        done = join_char.join(x.title() for x in components)
-        return done
-        #return components[0].title() + join_char.join(x.title() for x in components[1:])
+        return join_char.join(x.title() for x in components)
     else:
         # Capitalize the first letter of each component except the first one, using title(), then join them together.
         return components[0] + ''.join(x.title() for x in components[1:])
@@ -106,13 +104,20 @@ def camel_to_snake(camelStr):
 def json_snake_to_camel(json_obj, upper=False, space=False, debug=False):
     mro = inspect.getmro(json_obj.__class__)
     if dict in mro:
-        for snake_key, value in json_obj.items():
+        # Since the json_obj is changing in place, grab the keys to iterate up front so the iterator doesn't change during the loop
+        for snake_key in list(json_obj.keys()):
+            value = json_obj.get(snake_key)
+            if debug:
+                logw(snake_key, "SNAKE KEY")
+                logw(value, "VALUE")
             camel_key = snake_to_camel(snake_key, upper=upper, space=space)
+            if debug:
+                logw(camel_key, "CAMEL KEY")
             value_mro = inspect.getmro(value.__class__)
             if dict in value_mro or list in value_mro:
                 if debug:
                     logw(value, "DICT VALUE BEFORE")
-                json_snake_to_camel(value, upper=upper, space=space)
+                json_snake_to_camel(value, upper=upper, space=space, debug=debug)
                 if debug:
                     logw(value, "DICT VALUE AFTER")
             json_obj[camel_key] = value
@@ -122,7 +127,7 @@ def json_snake_to_camel(json_obj, upper=False, space=False, debug=False):
         for item in json_obj:
             if debug:
                 logw(item, "LIST ITEM BEFORE")
-            json_snake_to_camel(item, upper=upper, space=space)
+            json_snake_to_camel(item, upper=upper, space=space, debug=debug)
             if debug:
                 logw(item, "LIST ITEM AFTER")
 

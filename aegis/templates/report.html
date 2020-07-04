@@ -8,14 +8,14 @@
     <div class="w3-container" style="max-height: calc(60vh)">
     <table class="w3-table-all w3-hoverable">
         <tr>
-            {% for name in output[0].keys() %}
+            {% for name in column_names %}
             <th>{{name}}</th>
             {% end %}
         </tr>
         {% for row in output %}
         <tr>
-            {% for value in row.values() %}
-            <td>{{value}}</td>
+            {% for name in column_names %}
+            <td>{{row.get(name)}}</td>
             {% end %}
         </tr>
         {% end %}

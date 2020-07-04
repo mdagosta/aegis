@@ -11,7 +11,10 @@ import time
 # Extern Imports
 import tornado.options
 from tornado.options import options
+
+# Project Imports
 import aegis.stdlib
+
 
 # Import drivers as needed and set up error classes
 pgsql_available = False
@@ -189,9 +192,11 @@ class PostgresConnection(object):
             cls = kwargs.get('cls')
             if cls:
                 rows = [cls(list(zip(column_names, row))) for row in cursor]
-                return rows
             else:
-                return [Row(zip(column_names, row)) for row in cursor]
+                rows = [Row(zip(column_names, row)) for row in cursor]
+            if kwargs.get('return_column_names'):
+                return (rows, column_names)
+            return rows
         finally:
             cursor.close()
 
@@ -373,9 +378,12 @@ class MysqlConnection(object):
             self._execute(cursor, query, parameters)
             column_names = [d[0] for d in cursor.description]
             if kwargs.get('cls'):
-                return [kwargs['cls'](zip(column_names, row)) for row in cursor]
+                rows = [kwargs['cls'](zip(column_names, row)) for row in cursor]
             else:
-                return [Row(zip(column_names, row)) for row in cursor]
+                rows = [Row(zip(column_names, row)) for row in cursor]
+            if kwargs.get('return_column_names'):
+                return (rows, column_names)
+            return rows
         finally:
             cursor.close()
 
@@ -462,8 +470,9 @@ class MysqlConnection(object):
     def _execute(self, cursor, query, parameters):
         try:
             return cursor.execute(query, parameters)
-        except MysqlOperationalError:
-            logging.error("Error connecting to MySQL on %s", self.host)
+        except MysqlOperationalError as ex:
+            logging.error("Error with MySQL on %s", self.host)
+            logging.exception(ex)
             self.close()
             raise
 

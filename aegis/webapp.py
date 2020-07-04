@@ -4,6 +4,7 @@
 # Aegis is your shield to protect you on the Brave New Web
 
 # Python Imports
+import copy
 import datetime
 import json
 import logging
@@ -617,7 +618,6 @@ class AegisReportForm(AegisWeb):
     def screen(self):
         self.tmpl['schemas'] = []
         if aegis.database.pgsql_available and aegis.database.mysql_available:
-            aegis.database.db()
             self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
         return self.render_path("report_form.html", **self.tmpl)
 
@@ -625,15 +625,20 @@ class AegisReportForm(AegisWeb):
 class AegisReport(AegisWeb):
     def get(self, report_type_id=None, *args):
         self.tmpl['errors'] = {}
+        self.tmpl['column_names'] = []
         if report_type_id:
             self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
             self.tmpl['output'] = None
             sql = self.tmpl['report']['report_sql']
             try:
-                self.tmpl['output'] = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql)
-                aegis.stdlib.json_snake_to_camel(self.tmpl['output'], upper=True, space=True, debug=False)
+                data, column_names = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql, return_column_names=True)
+                data = copy.deepcopy(data)
+                aegis.stdlib.json_snake_to_camel(data, upper=True, space=True, debug=False)
+                self.tmpl['output'] = data
+                for column_name in column_names:
+                    self.tmpl['column_names'].append(aegis.stdlib.snake_to_camel(column_name, upper=True, space=True))
             except Exception as ex:
-                #logging.exception(ex)
+                logging.exception(ex)
                 sql_error = [str(arg) for arg in ex.args]
                 self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
             self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)

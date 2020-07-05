@@ -473,8 +473,8 @@ class MysqlConnection(object):
         except MysqlOperationalError as ex:
             logging.error("Error with MySQL on %s", self.host)
             logging.exception(ex)
-            self.close()
-            raise
+            #self.close()
+            raise ex
 
 
 # To support inserting something literally, like NOW(), into mini-ORM below

@@ -28,7 +28,7 @@
             <tr>
                 <th class="w3-border-bottom w3-border-blue-grey">{{num_rows}} Rows</th>
                 {% for column_name in column_names[1:] %}
-                <th class="w3-border-bottom w3-border-blue-grey">{{report_totals[column_name]}}</th>
+                <th class="w3-border-bottom w3-border-blue-grey">{{report_totals.get(column_name, '')}}</th>
                 {% end %}
             </tr>
         </table>

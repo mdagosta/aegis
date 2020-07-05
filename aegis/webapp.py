@@ -608,11 +608,17 @@ class AegisReportForm(AegisWeb):
             self.columns['report_schema'] = report_schema
         # Run against database and send back to Report main
         report_type_id = aegis.stdlib.validate_int(report_type_id)
-        if report_type_id:
-            where = {'report_type_id': report_type_id}
-            aegis.model.ReportType.update_columns(self.columns, where)
-        else:
-            aegis.model.ReportType.insert_columns(**self.columns)
+        try:
+            if report_type_id:
+                where = {'report_type_id': report_type_id}
+                aegis.model.ReportType.update_columns(self.columns, where)
+            else:
+                report_type_id = aegis.model.ReportType.insert_columns(**self.columns)
+        except Exception as ex:
+            logging.exception(ex)
+            sql_error = [str(arg) for arg in ex.args]
+            self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
+            return self.screen()
         return self.redirect('/aegis/report/%s' % report_type_id)
 
     def screen(self):

@@ -11,6 +11,10 @@
     <input type="hidden" name="report_type_id" value="{{report_type['report_type_id']}}"/>
     {% end %}
 
+    {% if errors.get('sql_error') %}
+    <pre class="w3-text-red">{{errors['sql_error']}}</pre>
+    {% end %}
+
     <p>
         <label><b>Report Name</b> {% if errors.get('report_type_name') %}<span class="w3-text-red">{{errors['report_type_name']}}</span>{% end %}</label>
         <input class="w3-input" type="text" name="report_type_name" value="{{report_type.get('report_type_name', '')}}" placeholder="ie 'Key Metrics'" />

@@ -75,7 +75,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.set_header('Expires', 'Fri, 21 Dec 2012 03:08:13 GMT')
         self.tmpl['request_name'] = self.page_name = '%s.%s' % (self.__class__.__name__, self.request.method)
         self.tmpl['next_url'] = self.get_next_url()
-        self.request.args = dict([(key, self.get_argument(key)) for key, val in self.request.arguments.items()])
+        self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
         if aegis.config.get('pg_database') or aegis.config.get('mysql_database'):
             self.setup_user()
         super(AegisHandler, self).prepare()
@@ -613,7 +613,7 @@ class AegisReportForm(AegisWeb):
             aegis.model.ReportType.update_columns(self.columns, where)
         else:
             aegis.model.ReportType.insert_columns(**self.columns)
-        return self.redirect('/aegis/report')
+        return self.redirect('/aegis/report/%s' % report_type_id)
 
     def screen(self):
         self.tmpl['schemas'] = []
@@ -629,11 +629,19 @@ class AegisReport(AegisWeb):
         if report_type_id:
             self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
             self.tmpl['output'] = None
+            self.tmpl['report_totals'] = {}
             sql = self.tmpl['report']['report_sql']
             try:
                 data, column_names = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql, return_column_names=True)
+                for row in data:
+                    for column_name, value in row.items():
+                        if type(value) is int:
+                            colname = aegis.stdlib.snake_to_camel(column_name, upper=True, space=True)
+                            self.tmpl['report_totals'].setdefault(colname, 0)
+                            self.tmpl['report_totals'][colname] += value
                 data = copy.deepcopy(data)
                 aegis.stdlib.json_snake_to_camel(data, upper=True, space=True, debug=False)
+                self.tmpl['num_rows'] = len(data)
                 self.tmpl['output'] = data
                 for column_name in column_names:
                     self.tmpl['column_names'].append(aegis.stdlib.snake_to_camel(column_name, upper=True, space=True))

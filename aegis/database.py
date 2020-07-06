@@ -404,9 +404,12 @@ class MysqlConnection(object):
     # but for historical compatibility execute() must return lastrowid.
     def execute(self, query, *parameters, **kwargs):
         """Executes the given query, returning the lastrowid from the query."""
-        return self.execute_lastrowid(query, *parameters)
+        if query.startswith('INSERT'):
+            return self.execute_lastrowid(query, *parameters, **kwargs)
+        else:
+            return self.execute_rowcount(query, *parameters, **kwargs)
 
-    def execute_lastrowid(self, query, *parameters):
+    def execute_lastrowid(self, query, *parameters, **kwargs):
         """Executes the given query, returning the lastrowid from the query."""
         cursor = self._cursor()
         try:
@@ -415,7 +418,7 @@ class MysqlConnection(object):
         finally:
             cursor.close()
 
-    def execute_rowcount(self, query, *parameters):
+    def execute_rowcount(self, query, *parameters, **kwargs):
         """Executes the given query, returning the rowcount from the query."""
         cursor = self._cursor()
         try:

@@ -152,13 +152,16 @@ def format_money(amount, rjust=None):
     return amt
 
 
-# >>> "%4.2f Trillion Should Be Enough" % (float(pow(36, 8)) / float(pow(1024, 4)))
-# '2.57 Trillion Should Be Enough'
-# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities
-token_length = 8
+# >>> "%4.2f Trillion Should Be Enough" % (float(26*pow(36, 7)) / float(pow(1024, 4)))
+# '1.85 Trillion Should Be Enough'
+# >>> "If Not, %4.2f Trillion Should Definitely Be Enough" % (float(26*pow(36, 9)) / float(pow(1024, 4)))
+# 'If Not, 2401.57 Trillion Should Definitely Be Enough'
+
+# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities. Enforce at least one letter so it can't be cast to an int
+token_length = 10
 token_chars = string.ascii_letters + string.digits
 def magic_token(length=token_length):
-    return functools.reduce(lambda x, y: x + random.choice(token_chars), range(length), '').lower()
+    return random.choice(string.ascii_letters) + functools.reduce(lambda x, y: x + random.choice(token_chars), range(length-1), '').lower()
 
 def validate_token(row_id, token):
     return validate_int(row_id) and len([ch for ch in token if ch in token_chars]) == token_length

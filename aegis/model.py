@@ -253,6 +253,11 @@ class HydraType(aegis.database.Row):
     id_column = 'hydra_type_id'
     data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql')
 
+    @classmethod
+    def scan(cls):
+        sql = "SELECT * FROM hydra_type ORDER BY next_run_dttm ASC"
+        return db().query(sql, cls=cls)
+
     def run_now(self):
         sql = "UPDATE hydra_type SET next_run_dttm=NOW() WHERE hydra_type_id=%s"
         return db().execute(sql, self['hydra_type_id'])
@@ -271,7 +276,7 @@ class HydraType(aegis.database.Row):
         return db().get(sql, hydra_type_id, cls=cls)
 
     def schedule_next(self):
-        sql = "UPDATE hydra_type SET next_run_dttm="+self['next_run_sql']+" WHERE hydra_type_id=%s AND status = 'live'"
+        sql = "UPDATE hydra_type SET run_cnt=run_cnt+1, last_run_dttm=next_run_dttm, next_run_dttm="+self['next_run_sql']+" WHERE hydra_type_id=%s AND status = 'live'"
         return db().execute(sql, self['hydra_type_id'])
 
 
@@ -303,6 +308,11 @@ class HydraQueue(aegis.database.Row):
         sql = 'UPDATE hydra_queue SET try_cnt=try_cnt+1 WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])
 
+    def incr_error_cnt(self):
+        self['error_cnt'] += 1
+        sql = 'UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=work_dttm + INTERVAL 1 MINUTE WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
     def start(self):
         sql = 'UPDATE hydra_queue SET start_dttm=NOW() WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])
@@ -322,11 +332,11 @@ class HydraQueue(aegis.database.Row):
         return db().execute(sql)
 
     @classmethod
-    def past_cnt(cls):
-        sql = "SELECT COUNT(*) AS past_cnt FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 1 MINUTE"
-        return db().get(sql, cls=cls)
+    def past_items(cls):
+        sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 5 MINUTE"
+        return db().query(sql, cls=cls)
 
-    
+
 class ReportType(aegis.database.Row):
     table_name = 'report_type'
     id_column = 'report_type_id'

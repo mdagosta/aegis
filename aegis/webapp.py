@@ -535,7 +535,9 @@ class AegisHydraForm(AegisWeb):
             where = {'hydra_type_id': hydra_type_id}
             aegis.model.HydraType.update_columns(hydra_type, where)
         else:
-            aegis.model.HydraType.insert_columns(**hydra_type)
+            hydra_type_id = aegis.model.HydraType.insert_columns(**hydra_type)
+            hydra_type_row = aegis.model.HydraType.get_id(hydra_type_id)
+            hydra_type_row.set_status('paused')
         return self.redirect('/aegis/hydra')
 
 

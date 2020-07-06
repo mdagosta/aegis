@@ -154,6 +154,7 @@ class HydraHead(HydraThread):
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
                         logging.exception(ex)
+                        hydra_queue.incr_error_cnt()
                         hydra_queue.unclaim()
                 # Iterate!
                 time.sleep(options.hydra_sleep)
@@ -215,15 +216,18 @@ class Hydra(HydraThread):
                             if purged_completed:
                                 logging.warning("%s queue purge deleted %s hydra_queue" % (self.thread_name, purged_completed))
                             # Log if there are expired queue items in the past...
-                            past_cnt = aegis.model.HydraQueue.past_cnt()
-                            if past_cnt and past_cnt['past_cnt']:
-                                logging.error("HydraQueue has %s stuck items", past_cnt['past_cnt'])
+                            past_items = aegis.model.HydraQueue.past_items()
+                            if past_items and len(past_items):
+                                logging.error("HydraQueue has %s stuck items", len(past_items))
+                                for past_item in past_items:
+                                    logging.error("Unclaiming stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
+                                    past_item.unclaim()
 
-        # XXX will it ever have an outer failure?
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")
                     # Chat Hooks?
                 # Iterate!
+                #logging.warning("The great hydra sleeps...")
                 time.sleep(options.hydra_sleep)
         except Exception as ex:
             logging.exception(ex)

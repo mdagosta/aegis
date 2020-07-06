@@ -11,7 +11,10 @@ import time
 # Extern Imports
 import tornado.options
 from tornado.options import options
+
+# Project Imports
 import aegis.stdlib
+
 
 # Import drivers as needed and set up error classes
 pgsql_available = False
@@ -189,9 +192,11 @@ class PostgresConnection(object):
             cls = kwargs.get('cls')
             if cls:
                 rows = [cls(list(zip(column_names, row))) for row in cursor]
-                return rows
             else:
-                return [Row(zip(column_names, row)) for row in cursor]
+                rows = [Row(zip(column_names, row)) for row in cursor]
+            if kwargs.get('return_column_names'):
+                return (rows, column_names)
+            return rows
         finally:
             cursor.close()
 
@@ -207,11 +212,7 @@ class PostgresConnection(object):
 
     def execute(self, query, *parameters, **kwargs):
         # If cursor exists, it's probably one of several in a transaction. Don't automatically commit.
-        if kwargs.get('cursor'):
-            kwargs['do_commit'] = False
-        else:
-            cursor = self._cursor()
-            kwargs['do_commit'] = True
+        kwargs['do_commit'] = not 'cursor' in kwargs
         if query.startswith('INSERT'):
             return self.execute_lastrowid(query, *parameters, **kwargs)
         else:
@@ -219,25 +220,37 @@ class PostgresConnection(object):
 
     def execute_lastrowid(self, query, *parameters, **kwargs):
         """ Executes the given query, returning the lastrowid from the query."""
-        cursor = kwargs.get('cursor', self._cursor())
+        # Use existing cursor without committing, or create cursor and use existing do_commit flag or default to True
+        if kwargs.get('cursor'):
+            cursor = kwargs['cursor']
+            do_commit = False
+        else:
+            cursor = self._cursor()
+            do_commit = kwargs.get('do_commit', True)
         try:
-            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
+            self._execute(cursor, query, parameters, do_commit=do_commit)
             if cursor.rowcount > 0:
                 last_row_id = cursor.fetchone()[0]
-                #stdlib.logw(last_row_id, "LAST ROW ID")
+                #aegis.stdlib.logw(last_row_id, "LAST ROW ID")
                 return last_row_id
         finally:
-            if kwargs['do_commit']:
+            if do_commit:
                 cursor.close()
 
     def execute_rowcount(self, query, *parameters, **kwargs):
-        """ Return the rowcount from the query."""
-        cursor = kwargs.get('cursor', self._cursor())
+        """ Executes the given query, returning the rowcount from the query."""
+        # Use existing cursor without committing, or create cursor and use existing do_commit flag or default to True
+        if kwargs.get('cursor'):
+            cursor = kwargs['cursor']
+            do_commit = False
+        else:
+            cursor = self._cursor()
+            do_commit = kwargs.get('do_commit', True)
         try:
-            self._execute(cursor, query, parameters, do_commit=kwargs['do_commit'])
+            self._execute(cursor, query, parameters, do_commit=do_commit)
             return cursor.rowcount
         finally:
-            if kwargs['do_commit']:
+            if do_commit:
                 cursor.close()
 
     # Commenting until they can be properly tested for use with commit() and rollback()
@@ -365,9 +378,12 @@ class MysqlConnection(object):
             self._execute(cursor, query, parameters)
             column_names = [d[0] for d in cursor.description]
             if kwargs.get('cls'):
-                return [kwargs['cls'](zip(column_names, row)) for row in cursor]
+                rows = [kwargs['cls'](zip(column_names, row)) for row in cursor]
             else:
-                return [Row(zip(column_names, row)) for row in cursor]
+                rows = [Row(zip(column_names, row)) for row in cursor]
+            if kwargs.get('return_column_names'):
+                return (rows, column_names)
+            return rows
         finally:
             cursor.close()
 
@@ -454,10 +470,11 @@ class MysqlConnection(object):
     def _execute(self, cursor, query, parameters):
         try:
             return cursor.execute(query, parameters)
-        except MysqlOperationalError:
-            logging.error("Error connecting to MySQL on %s", self.host)
-            self.close()
-            raise
+        except MysqlOperationalError as ex:
+            logging.error("Error with MySQL on %s", self.host)
+            logging.exception(ex)
+            #self.close()
+            raise ex
 
 
 # To support inserting something literally, like NOW(), into mini-ORM below

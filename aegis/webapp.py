@@ -4,6 +4,7 @@
 # Aegis is your shield to protect you on the Brave New Web
 
 # Python Imports
+import copy
 import datetime
 import json
 import logging
@@ -17,6 +18,7 @@ import requests
 from tornado.options import options
 import tornado.web
 import user_agents
+import zlib
 
 # Project Imports
 import aegis.stdlib
@@ -73,7 +75,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.set_header('Expires', 'Fri, 21 Dec 2012 03:08:13 GMT')
         self.tmpl['request_name'] = self.page_name = '%s.%s' % (self.__class__.__name__, self.request.method)
         self.tmpl['next_url'] = self.get_next_url()
-        self.request.args = dict([(key, self.get_argument(key)) for key, val in self.request.arguments.items()])
+        self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
         if aegis.config.get('pg_database') or aegis.config.get('mysql_database'):
             self.setup_user()
         super(AegisHandler, self).prepare()
@@ -140,10 +142,11 @@ class AegisHandler(tornado.web.RequestHandler):
         return options.template_path
 
     def _handle_request_exception(self, ex):
+        aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
         #self.logw(ex, "EX")
         #logging.exception(ex)
+        # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.
         if self.request.headers.get('Cookie'):
-            # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.
             del self.request.headers['Cookie']
         # Don't post boring pseudo-errors to channels
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
@@ -153,11 +156,14 @@ class AegisHandler(tornado.web.RequestHandler):
         # Send errors to chat hooks, based on them being configured for the environment
         header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}
-        hooks = ['alerts_chat_hook', 'debug_chat_hook']
+        error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
+        if config.get_env() == 'prod':
+            hooks = ['alerts_chat_hook']
+        else:
+            hooks = ['debug_chat_hook']
         for hook in hooks:
             hook_url = aegis.config.get(hook)
             if hook_url:
-                error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
                 requests.post(hook_url, json={"text": error_message})
         super(AegisHandler, self)._handle_request_exception(ex)
 
@@ -223,14 +229,9 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['member'] = aegis.model.Member.get_auth(member_id)
 
     def get_member_id(self):
-        ck = self.cookie_get("auth")
-        if ck:
-            try:
-                return int(ck)
-            except Exception as ex:
-                logging.exception(ex)
-                self.del_current_user()
-                return None
+        # Cookie can't change mid-request so we can just cache the value on the handler
+        if hasattr(self, '_member_id'):
+            return self._member_id
         # When not on production, if test token and test member_id are present, use that for the request.
         test_token = self.request.headers.get('Test-Token')
         test_member_id = aegis.stdlib.validate_int(self.request.headers.get('Test-Member-Id'))
@@ -238,7 +239,18 @@ class AegisHandler(tornado.web.RequestHandler):
             # Check member exists so we don't just explode from exhuberant testing!
             if aegis.model.Member.get_id(test_member_id):
                 logging.warning("Test Mode | MemberId Override: %s", test_member_id)
-                return test_member_id
+                self._member_id = test_member_id
+                return self._member_id
+        ck = self.cookie_get("auth")
+        #self.logw(ck, "Auth Cookie MemberID")
+        if ck:
+            try:
+                self._member_id = int(ck)
+                return self._member_id
+            except Exception as ex:
+                logging.exception(ex)
+                self.del_current_user()
+                return None
 
     def get_current_user(self):
         if not aegis.database.pgsql_available and not aegis.database.mysql_available:
@@ -288,6 +300,26 @@ class AegisHandler(tornado.web.RequestHandler):
         if super_admins and self.get_member_email() in super_admins:
             return True
 
+    @staticmethod
+    def auth_admin():
+        """ Weird wrapper to check access to a resource using @VirungaApi.auth_access('super_admin') notation """
+        def call_wrapper(func):
+            def authorize(self, *args, **kwargs):
+                if not self.is_super_admin():
+                    raise tornado.web.HTTPError(403)
+                return func(self, *args, **kwargs)
+            return authorize
+        return call_wrapper
+
+    # Instead of tornado.web.authenticated sending users to a login url, only send a 403
+    @staticmethod
+    def auth_required(method):
+        def wrapper(self, *args, **kwargs):
+            if not self.current_user:
+                raise tornado.web.HTTPError(403)
+            return method(self, *args, **kwargs)
+        return wrapper
+
 
 class JsonRestApi(AegisHandler):
     def check_xsrf_cookie(self): pass
@@ -298,9 +330,12 @@ class JsonRestApi(AegisHandler):
 
     def prepare(self):
         super(JsonRestApi, self).prepare()
-        api_token_value = self.request.headers.get(options.api_token_header)
-        if not api_token_value or api_token_value != options.api_token_value:
-            raise tornado.web.HTTPError(401, 'Wrong API Token')
+        if aegis.config.get('api_token_header'):
+            api_token_value = self.request.headers.get(options.api_token_header)
+            if not api_token_value or api_token_value != options.api_token_value:
+                raise tornado.web.HTTPError(401, 'Wrong API Token')
+        else:
+            logging.error("Set options.api_token_header and options.api_token_value to enforce basic API Keys from clients")
         self.json_req = self.json_unpack()
         self.json_resp = {}
 
@@ -327,7 +362,6 @@ class JsonRestApi(AegisHandler):
                 return json_req or {}
             except json.decoder.JSONDecodeError:
                 raise tornado.web.HTTPError(401, 'Bad JSON Value')
-
         else:
             return dict(self.request.arguments)
 
@@ -351,6 +385,11 @@ class JsonRestApi(AegisHandler):
         json_resp = json.dumps(data, cls=aegis.stdlib.DateTimeEncoder)
         if debug or self.debug:
             logging.warning("=== JSON RESPONSE ===")
+            # Limit length of a single log line
+            if len(str(data)) < 50000:
+                self.logw(data, "RESPONSE DATA")
+            else:
+                self.logw(str(data)[:50000], "RESPONSE DATA - TOO LONG TO LOG")
             headers = []
             for (k,v) in sorted(self._headers.get_all()):
                 headers.append('%s: %s' % (k,v))
@@ -361,6 +400,7 @@ class JsonRestApi(AegisHandler):
                     cookies.append("Set-Cookie: %s" % cookie.OutputString(None))
             self.logw(cookies, "COOKIES")
             self.logw(json_resp, "JSON RESPONSE")
+        self.json_length = len(zlib.compress(json_resp.encode("utf-8")))
         self.write(json_resp + '\n')
         self.finish()
 
@@ -426,11 +466,11 @@ class AegisApplication():
             if handler.tmpl.get('member'):
                 member_id = handler.tmpl['member'].get('member_id')
             extra_debug = '| uid: %s | mid: %s' % (user_id or '-', member_id or '-')
+            if hasattr(handler, 'json_length'):
+                extra_debug += ' | kb: %4.2f' % (handler.json_length / 1024.0)
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
             if handler.tmpl.get('user_agent_obj').is_bot:
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
-            if hasattr(handler, 'json_length'):
-                extra_debug += '   kbytes: %4.2f' % (handler.json_length / 1024.0)
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 
@@ -552,47 +592,67 @@ class AegisReportForm(AegisWeb):
         if not self.columns['report_sql']:
             self.tmpl['errors']['report_sql'] = 'Report SQL Required'
 
-
     def get(self, report_type_id=None, *args):
         self.tmpl['errors'] = {}
         self.validate_report_type(report_type_id)
-        self.tmpl['schemas'] = []
-        if aegis.database.pgsql_available and aegis.database.mysql_available:
-            schemas = []
-            self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
-        return self.render_path("report_form.html", **self.tmpl)
-
+        return self.screen()
 
     def post(self, report_type_id=None, *args):
         self.validate_report_type(report_type_id)
         self.validate_input()
         if self.tmpl['errors']:
-            return self.render_path("report_form.html", **self.tmpl)
+            return self.screen()
         # Set which schema the report runs against
         report_schema = self.request.args.get('report_schema')
         if report_schema and report_schema in aegis.database.dbconns.databases.keys():
             self.columns['report_schema'] = report_schema
         # Run against database and send back to Report main
         report_type_id = aegis.stdlib.validate_int(report_type_id)
-        if report_type_id:
-            where = {'report_type_id': report_type_id}
-            aegis.model.ReportType.update_columns(self.columns, where)
-        else:
-            aegis.model.ReportType.insert_columns(**self.columns)
-        return self.redirect('/aegis/report')
+        try:
+            if report_type_id:
+                where = {'report_type_id': report_type_id}
+                aegis.model.ReportType.update_columns(self.columns, where)
+            else:
+                report_type_id = aegis.model.ReportType.insert_columns(**self.columns)
+        except Exception as ex:
+            logging.exception(ex)
+            sql_error = [str(arg) for arg in ex.args]
+            self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
+            return self.screen()
+        return self.redirect('/aegis/report/%s' % report_type_id)
+
+    def screen(self):
+        self.tmpl['schemas'] = []
+        if aegis.database.pgsql_available and aegis.database.mysql_available:
+            self.tmpl['schemas'] = list(aegis.database.dbconns.databases.keys())
+        return self.render_path("report_form.html", **self.tmpl)
 
 
 class AegisReport(AegisWeb):
     def get(self, report_type_id=None, *args):
         self.tmpl['errors'] = {}
+        self.tmpl['column_names'] = []
         if report_type_id:
             self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
             self.tmpl['output'] = None
+            self.tmpl['report_totals'] = {}
             sql = self.tmpl['report']['report_sql']
             try:
-                self.tmpl['output'] = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql)
+                data, column_names = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql, return_column_names=True)
+                for row in data:
+                    for column_name, value in row.items():
+                        if type(value) is int:
+                            colname = aegis.stdlib.snake_to_camel(column_name, upper=True, space=True)
+                            self.tmpl['report_totals'].setdefault(colname, 0)
+                            self.tmpl['report_totals'][colname] += value
+                data = copy.deepcopy(data)
+                aegis.stdlib.json_snake_to_camel(data, upper=True, space=True, debug=False)
+                self.tmpl['num_rows'] = len(data)
+                self.tmpl['output'] = data
+                for column_name in column_names:
+                    self.tmpl['column_names'].append(aegis.stdlib.snake_to_camel(column_name, upper=True, space=True))
             except Exception as ex:
-                #logging.exception(ex)
+                logging.exception(ex)
                 sql_error = [str(arg) for arg in ex.args]
                 self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
             self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)

@@ -252,7 +252,9 @@ def schema(parser):
 
 
 def initialize():
-    tornado.options.parse_command_line()
+    remaining = tornado.options.parse_command_line()
+    # parse_command_line returns the remaining command line arguments
+    logging.warning(remaining)
 
 
 def main():

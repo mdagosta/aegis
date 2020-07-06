@@ -5,24 +5,46 @@
     <h1 style="margin-top: 1em;">{{report['report_type_name']}} Report          <a href="/aegis/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
 
     {% if output %}
-    <div class="w3-container" style="max-height: calc(60vh)">
-    <table class="w3-table-all w3-hoverable">
-        <tr>
-            {% for name in output[0].keys() %}
-            <th>{{name}}</th>
+    <div class="w3-container" style="max-height: calc(60vh);">
+        <table class="w3-table-all w3-hoverable w3-border w3-border-blue-grey">
+            <tr>
+                {% for name in column_names %}
+                <th>{{name}}</th>
+                {% end %}
+            </tr>
+            {% for row in output %}
+            <tr>
+                {% for name in column_names %}
+                <td>{{row.get(name)}}</td>
+                {% end %}
+            </tr>
             {% end %}
-        </tr>
-        {% for row in output %}
-        <tr>
-            {% for value in row.values() %}
-            <td>{{value}}</td>
-            {% end %}
-        </tr>
+            <tr>
+                <th class="w3-border-top w3-border-cyan">TOTALS</th>
+                {% for name in column_names[1:] %}
+                <td class="w3-border-top w3-border-cyan">{{name}}</td>
+                {% end %}
+            </tr>
+            <tr>
+                <th class="w3-border-bottom w3-border-blue-grey">{{num_rows}} Rows</th>
+                {% for column_name in column_names[1:] %}
+                <th class="w3-border-bottom w3-border-blue-grey">{{report_totals.get(column_name, '')}}</th>
+                {% end %}
+            </tr>
+        </table>
+        {% elif errors.get('sql_error') %}
+        <pre class="w3-text-red">{{errors['sql_error']}}</pre>
         {% end %}
-    </table>
-    {% elif errors.get('sql_error') %}
-    <pre class="w3-text-red">{{errors['sql_error']}}</pre>
-    {% end %}
     </div>
+
 </div>
+
+<br/>
+<h2 class="w3-border-top w3-border-blue w3-margin-top">SQL       <a href="/aegis/report/form/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Edit</a></h2>
+
+<pre>
+{{report['report_sql']}}
+</pre>
+
+
 {% end %}

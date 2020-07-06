@@ -292,11 +292,11 @@ class HydraQueue(aegis.database.Row):
 
     def claim(self):
         sql = 'UPDATE hydra_queue SET claimed_dttm=NOW() WHERE hydra_queue_id=%s AND claimed_dttm IS NULL'
-        return db().execute_rowcount(sql, self['hydra_queue_id'])
+        return db().execute(sql, self['hydra_queue_id'])
 
     def unclaim(self):
         sql = 'UPDATE hydra_queue SET claimed_dttm=NULL WHERE hydra_queue_id=%s AND claimed_dttm IS NOT NULL'
-        return db().execute_rowcount(sql, self['hydra_queue_id'])
+        return db().execute(sql, self['hydra_queue_id'])
 
     def incr_try_cnt(self):
         self['try_cnt'] += 1
@@ -314,12 +314,12 @@ class HydraQueue(aegis.database.Row):
     @staticmethod
     def purge_completed():
         sql = "DELETE FROM hydra_queue WHERE finish_dttm IS NOT NULL AND finish_dttm < NOW()"
-        return db().execute_rowcount(sql)
+        return db().execute(sql)
 
     @staticmethod
     def clear_claims():
         sql = 'UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 15 MINUTE AND finish_dttm IS NULL'
-        return db().execute_rowcount(sql)
+        return db().execute(sql)
 
     @classmethod
     def past_cnt(cls):

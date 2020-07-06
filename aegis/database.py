@@ -358,7 +358,7 @@ class MysqlConnection(object):
     def iter(self, query, *parameters, **kwargs):
         """Returns an iterator for the given query and parameters."""
         self._ensure_connected()
-        cursor = self._db.cursor(SSCursor)
+        cursor = self._db.cursor(MySQLdb.cursors.SSCursor)
         try:
             self._execute(cursor, query, parameters)
             column_names = [d[0] for d in cursor.description]

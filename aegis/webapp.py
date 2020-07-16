@@ -76,8 +76,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['request_name'] = self.page_name = '%s.%s' % (self.__class__.__name__, self.request.method)
         self.tmpl['next_url'] = self.get_next_url()
         self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
-        if aegis.config.get('pg_database') or aegis.config.get('mysql_database'):
-            self.setup_user()
+        self.setup_user()
         super(AegisHandler, self).prepare()
 
     def finish(self, chunk=None):
@@ -94,10 +93,12 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def setup_user(self):
         # Set up user-cookie tracking system, based on user-agent
+        self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
+        if not (aegis.config.get('pg_database') or aegis.config.get('mysql_database')):
+            return
         self.tmpl['user'] = {}
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
-        self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
         user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
         user_agents_bot = self.tmpl['user_agent_obj'].is_bot
         aegis_bot = aegis.stdlib.is_robot(self.tmpl["user_agent"])

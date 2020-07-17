@@ -6,6 +6,8 @@
 
     {% if output %}
     <div class="w3-container" style="max-height: calc(60vh);">
+        {# Combined with timeframe/rollup and table sorting, this could be super powerful      #}
+        {# Simple Sort HTML Table:   https://www.w3schools.com/howto/howto_js_sort_table.asp   #}
         <table class="w3-table-all w3-hoverable w3-border w3-border-blue-grey">
             <tr>
                 {% for name in column_names %}

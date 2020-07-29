@@ -164,6 +164,7 @@ class AegisHandler(tornado.web.RequestHandler):
             hooks = ['debug_chat_hook']
         for hook in hooks:
             hook_url = aegis.config.get(hook)
+            # Call own function? So the client can write custom error messages.
             if hook_url:
                 requests.post(hook_url, json={"text": error_message})
         super(AegisHandler, self)._handle_request_exception(ex)
@@ -498,17 +499,21 @@ class WebApplication(AegisApplication, tornado.web.Application):
 class AegisWeb(AegisHandler):
     def prepare(self):
         super(AegisWeb, self).prepare()
-        if not self.is_super_admin():
-            raise tornado.web.HTTPError(403)
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
         self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
         self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
+
+    def enforce_admin(self):
+        if not self.is_super_admin():
+            raise tornado.web.HTTPError(403)
 
     def get_template_path(self):
         return self.tmpl.get('template_dir')
 
 class AegisHydraForm(AegisWeb):
+    @tornado.web.authenticated
     def get(self, hydra_type_id=None, *args):
+        self.enforce_admin()
         self.tmpl['errors'] = {}
         hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
         if hydra_type_id:
@@ -517,7 +522,9 @@ class AegisHydraForm(AegisWeb):
             self.tmpl['hydra_type'] = {}
         return self.render_path("hydra_form.html", **self.tmpl)
 
+    @tornado.web.authenticated
     def post(self, hydra_type_id=None, *args):
+        self.enforce_admin()
         self.logw(self.request.args, "ARGS")
         # Validate Input
         self.tmpl['errors'] = {}
@@ -543,11 +550,15 @@ class AegisHydraForm(AegisWeb):
 
 
 class AegisHydra(AegisWeb):
+    @tornado.web.authenticated
     def get(self, *args):
+        self.enforce_admin()
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
         return self.render_path("hydra.html", **self.tmpl)
 
+    @tornado.web.authenticated
     def post(self, *args):
+        self.enforce_admin()
         self.logw(self.request.args, "ARGS")
         pause_ids = [aegis.stdlib.validate_int(k.replace('pause_', '')) for k in self.request.args.keys() if k.startswith('pause_')]
         unpause_ids = [aegis.stdlib.validate_int(k.replace('unpause_', '')) for k in self.request.args.keys() if k.startswith('unpause_')]
@@ -595,12 +606,16 @@ class AegisReportForm(AegisWeb):
         if not self.columns['report_sql']:
             self.tmpl['errors']['report_sql'] = 'Report SQL Required'
 
+    @tornado.web.authenticated
     def get(self, report_type_id=None, *args):
+        self.enforce_admin()
         self.tmpl['errors'] = {}
         self.validate_report_type(report_type_id)
         return self.screen()
 
+    @tornado.web.authenticated
     def post(self, report_type_id=None, *args):
+        self.enforce_admin()
         self.validate_report_type(report_type_id)
         self.validate_input()
         if self.tmpl['errors']:
@@ -632,7 +647,9 @@ class AegisReportForm(AegisWeb):
 
 
 class AegisReport(AegisWeb):
+    @tornado.web.authenticated
     def get(self, report_type_id=None, *args):
+        self.enforce_admin()
         self.tmpl['errors'] = {}
         self.tmpl['column_names'] = []
         if report_type_id:
@@ -666,7 +683,9 @@ class AegisReport(AegisWeb):
 
 
 class AegisHome(AegisWeb):
+    @tornado.web.authenticated
     def get(self, *args):
+        self.enforce_admin()
         return self.render_path("index.html", **self.tmpl)
 
 

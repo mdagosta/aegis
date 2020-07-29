@@ -683,7 +683,7 @@ class AegisReport(AegisWeb):
 
 
 class AegisHome(AegisWeb):
-    @tornado.web.authenticated
+    @tornado.web.authenticated    # Could do something like @aegis.webapp.admin_only which also sends for login but then rejects if not admin
     def get(self, *args):
         self.enforce_admin()
         return self.render_path("index.html", **self.tmpl)

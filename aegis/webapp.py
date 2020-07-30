@@ -100,11 +100,7 @@ class AegisHandler(tornado.web.RequestHandler):
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
         user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
-        user_agents_bot = self.tmpl['user_agent_obj'].is_bot
-        aegis_bot = aegis.stdlib.is_robot(self.tmpl["user_agent"])
-        if user_agents_bot or aegis_bot:
-            if user_agents_bot and aegis_bot:
-                logging.warning("Duplicate robot: %s", self.tmpl['user_agent'])
+        if self.user_is_robot():
             self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True)
             user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
@@ -130,6 +126,9 @@ class AegisHandler(tornado.web.RequestHandler):
                     user_ck = {'user_id': user_id}
                 self.cookie_set('user', user_ck)
         self.tmpl['user']['user_id'] = user['user_id']
+
+    def user_is_robot(self):
+        return bool(self.tmpl['user_agent_obj'].is_bot or aegis.stdlib.is_robot(self.tmpl['user_agent']))
 
     def render(self, template_name, **kwargs):
         template_path = os.path.join(options.template_path, template_name)
@@ -471,7 +470,7 @@ class AegisApplication():
             if hasattr(handler, 'json_length'):
                 extra_debug += ' | kb: %4.2f' % (handler.json_length / 1024.0)
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
-            if handler.tmpl.get('user_agent_obj').is_bot:
+            if handler.user_is_robot():
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 

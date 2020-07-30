@@ -61,7 +61,9 @@ class UserAgent(aegis.database.Row):
     @staticmethod
     def insert(user_agent_tx):
         user_agent_md5 = hashlib.md5(str(user_agent_tx).encode('utf-8')).hexdigest()
-        sql = 'INSERT INTO user_agent (user_agent_tx, user_agent_md5) VALUES (%s, %s) RETURNING user_agent_id'
+        sql = 'INSERT INTO user_agent (user_agent_tx, user_agent_md5) VALUES (%s, %s)'
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING user_agent_id'
         return db().execute(sql, user_agent_tx, user_agent_md5)
 
     @classmethod
@@ -74,8 +76,13 @@ class UserAgent(aegis.database.Row):
     def set_user_agent(cls, user_agent_tx):
         user_agent_row = cls.get_agent(user_agent_tx)
         if not user_agent_row:
-            user_agent_id = cls.insert(user_agent_tx)
-            user_agent_row = cls.get_id(user_agent_id)
+            try:
+                user_agent_id = cls.insert(user_agent_tx)
+                user_agent_row = cls.get_id(user_agent_id)
+            except (aegis.database.PgsqlIntegrityError, aegis.database.MysqlIntegrityError) as ex:
+                user_agent_row = cls.get_agent(user_agent_tx)
+                if not user_agent_row:
+                    logging.exception(ex)
         return user_agent_row
 
     @staticmethod

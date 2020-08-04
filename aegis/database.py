@@ -490,10 +490,9 @@ class Literal(str):
 class Row(dict):
     """ A dict that allows for object-like property access syntax."""
     def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError:
+        if name not in self:
             raise AttributeError(name)
+        return self[name]
 
     @classmethod
     def _table_name(cls):

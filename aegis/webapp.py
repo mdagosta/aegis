@@ -524,7 +524,6 @@ class AegisHydraForm(AegisWeb):
     @tornado.web.authenticated
     def post(self, hydra_type_id=None, *args):
         self.enforce_admin()
-        self.logw(self.request.args, "ARGS")
         # Validate Input
         self.tmpl['errors'] = {}
         hydra_type = {}
@@ -532,8 +531,11 @@ class AegisHydraForm(AegisWeb):
         hydra_type['hydra_type_desc'] = self.request.args.get('hydra_type_desc')
         hydra_type['priority_ndx'] = aegis.stdlib.validate_int(self.request.args.get('priority_ndx'))
         hydra_type['next_run_sql'] = self.request.args.get('next_run_sql')
+        self.tmpl['hydra_type'] = hydra_type
+        if not hydra_type['hydra_type_name']:
+            self.tmpl['errors']['hydra_type_name'] = '** required (string)'
         if not hydra_type['priority_ndx']:
-            self.tmpl['errors']['priority_ndx'] = 'Must be an integer'
+            self.tmpl['errors']['priority_ndx'] = '** required (integer)'
         if self.tmpl['errors']:
             return self.render_path("hydra_form.html", **self.tmpl)
         # Run against database and send back to Hydra main

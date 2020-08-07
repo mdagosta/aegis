@@ -7,23 +7,23 @@
 
 <form id="hydra_add" class="w3-card w3-padding" action="{{request.path}}" method="POST">
   {% raw xsrf_form_html() %}
-  {% if hydra_type %}
+  {% if hydra_type and hydra_type.get('hydra_type_id') %}
   <input type="hidden" name="hydra_type_id" value="{{hydra_type['hydra_type_id']}}"/>
   {% end %}
   
   <p>
-    <label><b>Work Type Name</b></label>
-    <input class="w3-input" type="text" name="hydra_type_name" value="{{hydra_type.get('hydra_type_name', '')}}" placeholder="ie 'housekeeping'" />
+    <label><b>Work Type Name</b> {% if errors.get('hydra_type_name') %}<span class="w3-text-red">{{errors['hydra_type_name']}}</span>{% end %}</label>
+    <input class="w3-input {% if errors.get('hydra_type_name') %}w3-border w3-border-red{% end %}" type="text" name="hydra_type_name" value="{{hydra_type.get('hydra_type_name') or ''}}" placeholder="ie 'housekeeping' [required]" />
   </p>
 
   <p>
-    <label><b>Work Description</b></label>
-    <input class="w3-input" type="text" name="hydra_type_desc" value="{{hydra_type.get('hydra_type_desc', '')}}" placeholder="ie 'tidying and rotating data'" />
+    <label><b>Work Description</b> {% if errors.get('hydra_type_desc') %}<span class="w3-text-red">{{errors['hydra_type_desc']}}</span>{% end %}</label>
+    <input class="w3-input {% if errors.get('hydra_type_desc') %}w3-border w3-border-red{% end %}" type="text" name="hydra_type_desc" value="{{hydra_type.get('hydra_type_desc') or ''}}" placeholder="ie 'tidying and rotating data'" />
   </p>
 
   <p>
     <label><b>Priority</b> {% if errors.get('priority_ndx') %}<span class="w3-text-red">{{errors['priority_ndx']}}</span>{% end %}</label>
-    <input class="w3-input {% if errors.get('priority_ndx') %}w3-border w3-border-red{% end %}" type="text" name="priority_ndx" value="{{hydra_type.get('priority_ndx', '')}}" placeholder="Lower number is higher priority" />
+    <input class="w3-input {% if errors.get('priority_ndx') %}w3-border w3-border-red{% end %}" type="text" name="priority_ndx" value="{{hydra_type.get('priority_ndx') or ''}}" placeholder="Lower number is higher priority [required] " />
   </p>
 
   <p>

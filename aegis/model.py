@@ -261,6 +261,11 @@ class HydraType(aegis.database.Row):
     data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql')
 
     @classmethod
+    def get_name(cls, hydra_type_name):
+        sql = "SELECT * FROM hydra_type WHERE hydra_type_name=%s"
+        return db().get(sql, hydra_type_name, cls=cls)
+
+    @classmethod
     def scan(cls):
         sql = "SELECT * FROM hydra_type ORDER BY next_run_dttm ASC"
         return db().query(sql, cls=cls)
@@ -301,6 +306,16 @@ class HydraQueue(aegis.database.Row):
     def scan_work(cls, limit=10):
         sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY work_dttm ASC LIMIT %s"
         return db().query(sql, limit, cls=cls)
+
+    @classmethod
+    def scan_work_type(cls, hydra_type_id):
+        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL AND hydra_type_id=%s"
+        return db().query(sql, hydra_type_id, cls=cls)
+
+    @classmethod
+    def scan_existing(cls, hydra_type_id, data):
+        sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND hydra_type_id=%s AND work_data=%s"
+        return db().query(sql, hydra_type_id, data, cls=cls)
 
     def claim(self):
         sql = 'UPDATE hydra_queue SET claimed_dttm=NOW() WHERE hydra_queue_id=%s AND claimed_dttm IS NULL'

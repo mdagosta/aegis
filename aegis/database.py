@@ -32,6 +32,10 @@ except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now - but shim the exception types.")
     class PgsqlIntegrityError(BaseException):
         pass
+    class PgsqlOperationalError(BaseException):
+        pass
+    class PgsqlDatabaseError(BaseException):
+        pass
 
 mysql_available = False
 MysqlIntegrityError = None
@@ -50,6 +54,10 @@ try:
 except Exception as ex:
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now - but shim the exception types.")
     class MysqlIntegrityError(BaseException):
+        pass
+    class MysqlOperationalError(BaseException):
+        pass
+    class MysqlDataErrorError(BaseException):
         pass
 
 

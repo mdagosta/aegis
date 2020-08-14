@@ -116,7 +116,8 @@ class AegisHandler(tornado.web.RequestHandler):
             user_ck = self.cookie_get('user')
             if user_ck and user_ck.get('user_id'):
                 user = self.models['User'].get_id(user_ck['user_id'])
-                self.cookie_set('user', user_ck)
+                if user:
+                    self.cookie_set('user', user_ck)
             else:
                 user_id = self.models['User'].insert(user_agent['user_agent_id'])
                 user = self.models['User'].get_id(user_id)
@@ -125,7 +126,8 @@ class AegisHandler(tornado.web.RequestHandler):
                 else:
                     user_ck = {'user_id': user_id}
                 self.cookie_set('user', user_ck)
-        self.tmpl['user']['user_id'] = user['user_id']
+        if user:
+            self.tmpl['user']['user_id'] = user['user_id']
 
     def user_is_robot(self):
         return bool(self.tmpl['user_agent_obj'].is_bot or aegis.stdlib.is_robot(self.tmpl['user_agent']))

@@ -113,12 +113,13 @@ class AegisHandler(tornado.web.RequestHandler):
             user = self.models['User'].get_id(user_agent['robot_user_id'])
             user_ck = {}
         else:
+            # Check if the cookie exists, and if the record exists. If either doesn't exist, start a new user record.
             user_ck = self.cookie_get('user')
             if user_ck and user_ck.get('user_id'):
                 user = self.models['User'].get_id(user_ck['user_id'])
                 if user:
                     self.cookie_set('user', user_ck)
-            else:
+            if not user:
                 user_id = self.models['User'].insert(user_agent['user_agent_id'])
                 user = self.models['User'].get_id(user_id)
                 if user_ck:

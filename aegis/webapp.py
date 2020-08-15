@@ -105,6 +105,7 @@ class AegisHandler(tornado.web.RequestHandler):
             user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
+        user = None
         if user_agent['robot_ind']:
             if not user_agent['robot_user_id']:
                 user_id = self.models['User'].insert(user_agent['user_agent_id'])

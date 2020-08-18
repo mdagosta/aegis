@@ -191,6 +191,10 @@ class Hydra(HydraThread):
         if self.hydra_id == 0:
             logging.warning("%s clearing stale claims" % self.name)
             aegis.model.HydraQueue.clear_claims()
+            # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
+            # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
+            logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
+            aegis.model.HydraType.clear_running()
         try:
             self.spawn_heads()
             while(not HydraThread.quitting):

@@ -271,7 +271,7 @@ class HydraType(aegis.database.Row):
         return db().query(sql, cls=cls)
 
     def run_now(self):
-        sql = "UPDATE hydra_type SET next_run_dttm=NOW() WHERE hydra_type_id=%s"
+        sql = "UPDATE hydra_type SET next_run_dttm=NOW(), status='live' WHERE hydra_type_id=%s"
         return db().execute(sql, self['hydra_type_id'])
 
     def set_status(self, status):
@@ -290,6 +290,11 @@ class HydraType(aegis.database.Row):
     def schedule_next(self):
         sql = "UPDATE hydra_type SET run_cnt=run_cnt+1, last_run_dttm=next_run_dttm, next_run_dttm="+self['next_run_sql']+" WHERE hydra_type_id=%s AND status = 'live'"
         return db().execute(sql, self['hydra_type_id'])
+
+    @staticmethod
+    def clear_running():
+        sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL 45 MINUTE"
+        return db().execute(sql)
 
 
 class HydraQueue(aegis.database.Row):
@@ -336,10 +341,16 @@ class HydraQueue(aegis.database.Row):
         return db().execute(sql, self['hydra_queue_id'])
 
     def start(self):
+        hydra_type = HydraType.get_id(self['hydra_type_id'])
+        if hydra_type['next_run_sql']:
+            hydra_type.set_status('running')
         sql = 'UPDATE hydra_queue SET start_dttm=NOW() WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])
 
     def complete(self):
+        hydra_type = HydraType.get_id(self['hydra_type_id'])
+        if hydra_type['next_run_sql']:
+            hydra_type.set_status('live')
         sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])
 

@@ -225,8 +225,9 @@ class Hydra(HydraThread):
                             if past_items and len(past_items):
                                 logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
-                                    logging.error("Unclaiming stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
-                                    past_item.unclaim()
+                                    logging.error("Stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
+                                    #logging.error("Unclaiming stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
+                                    #past_item.unclaim()
 
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")

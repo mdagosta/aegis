@@ -349,7 +349,7 @@ class HydraQueue(aegis.database.Row):
 
     def complete(self):
         hydra_type = HydraType.get_id(self['hydra_type_id'])
-        if hydra_type['next_run_sql']:
+        if hydra_type['next_run_sql'] and hydra_type['status'] == 'running':
             hydra_type.set_status('live')
         sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])

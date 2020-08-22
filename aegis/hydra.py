@@ -126,7 +126,7 @@ class HydraHead(HydraThread):
                         # Fetch rows from database queue and claim items before processing
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
                         claimed = hydra_queue.claim()
-                        stdlib.logw(claimed, "CLAIMED HYDRA QUEUE: %s" % hydra_queue['hydra_queue_id'])
+                        self.logw(claimed, "CLAIMED HYDRA QUEUE: %s" % hydra_queue['hydra_queue_id'])
                         if not claimed: continue
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead

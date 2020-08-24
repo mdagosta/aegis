@@ -44,9 +44,9 @@ class AegisHandler(tornado.web.RequestHandler):
         valid_subdomains = aegis.config.get('valid_subdomains')
         if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
             self.tmpl['host'] = '.'.join(host_split[1:])
-        # Ignore crazy hostnames. Only use the ones we have specified.
+        # Ignore hostnames not in config.py. Only use the ones we have specified.
         if self.tmpl['host'] not in config.hostnames.keys():
-            logging.warning("Ignore crazy hostname: %s", self.tmpl['host'])
+            logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
             raise tornado.web.HTTPError(404)
         config.apply_hostname(self.tmpl['host'])
         self.tmpl['options'] = options

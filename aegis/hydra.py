@@ -206,6 +206,9 @@ class Hydra(HydraThread):
                         if HydraThread.quitting: break
                         # Check if the task is runnable
                         runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
+
+                        # XXX TODO Do we need to claim here too?
+                        
                         if runnable:
                             # Set up a hydra_queue row to represent the work and re-schedule the batch's next run
                             hydra_queue = {}

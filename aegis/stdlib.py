@@ -16,7 +16,9 @@ import os
 import pprint
 import random
 import re
+import shlex
 import string
+import subprocess
 import xml
 
 
@@ -40,6 +42,12 @@ def logline(*args):
     caller = get_caller()
     msg = '%s %s' % (cstr(caller, 'yellow'), args[0])
     logging.warning(msg, *args[1:])
+
+def shell(cmd, cwd=None):
+    if type(cmd) not in (tuple, list):
+        cmd = shlex.split(cmd)
+    output = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False, cwd=cwd).communicate()[0]
+    return output
 
 def force_int(string):
     if type(string) in (int, int): return int(string)

@@ -47,7 +47,7 @@ def shell(cmd, cwd=None):
     if type(cmd) not in (tuple, list):
         cmd = shlex.split(cmd)
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False, cwd=cwd).communicate()[0]
-    return output
+    return output.decode('utf-8').strip()
 
 def force_int(string):
     if type(string) in (int, int): return int(string)

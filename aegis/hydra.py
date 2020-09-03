@@ -43,6 +43,11 @@ class HydraThread(threading.Thread):
         self.last_id = 0
 
 
+    def exception_alert(self, ex):
+        # Alert and debug hooks
+        self.logw(ex, "EXCEPTION ALERT")
+
+
     def run(self):
         try:
             self.process()
@@ -70,9 +75,10 @@ class HydraThread(threading.Thread):
             if HydraThread.quitting:
                 logging.warning("aegis/hydra.py waiting %ss for threads to finish... %s active" % (options.hydra_sleep, threading.active_count()))
                 threads = threading.enumerate()
-                thr = random.choice(threads[1:])
-                if thr != threading.current_thread():
-                    thr.join(1.0)
+                if len(threads) > 1:
+                    thr = random.choice(threads[1:])
+                    if thr != threading.current_thread():
+                        thr.join(1.0)
             else:
                 time.sleep(options.hydra_sleep)
 
@@ -126,9 +132,9 @@ class HydraHead(HydraThread):
                         # Fetch rows from database queue and claim items before processing
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
                         claimed = hydra_queue.claim()
-                        self.logw(claimed, "CLAIMED HYDRA QUEUE: %s" % hydra_queue['hydra_queue_id'])
-                        if not claimed: continue
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
+                        self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name']))
+                        if not claimed: continue
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
                         if not hydra_type:
                             logging.error("Missing hydra type for hydra_type_id: %s", hydra_type)
@@ -191,6 +197,7 @@ class Hydra(HydraThread):
         # When starting up, hydra_id 0 clears claims before spawning heads.
         if self.hydra_id == 0:
             logging.warning("%s clearing stale claims" % self.name)
+            aegis.model.HydraType.clear_claims()
             aegis.model.HydraQueue.clear_claims()
             # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
             # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
@@ -206,10 +213,10 @@ class Hydra(HydraThread):
                         if HydraThread.quitting: break
                         # Check if the task is runnable
                         runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
-
-                        # XXX TODO Do we need to claim here too?
-                        
                         if runnable:
+                            claimed = hydra_type.claim()
+                            self.logw(claimed, "CLAIMED HYDRA TYPE: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
+                            if not claimed: continue
                             # Set up a hydra_queue row to represent the work and re-schedule the batch's next run
                             hydra_queue = {}
                             hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
@@ -217,6 +224,7 @@ class Hydra(HydraThread):
                             hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
                             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
                             hydra_type.schedule_next()
+                            self.logw("SCHEDULED NEXT: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
                             _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
                             logging.warning("%s queue up %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
                             # Clean out queue then sleep depending on how much work there is to do
@@ -234,14 +242,14 @@ class Hydra(HydraThread):
 
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")
-                    # Chat Hooks?
+                    self.exception_alert(ex)
                 # Iterate!
                 #logging.warning("The great hydra sleeps...")
                 time.sleep(options.hydra_sleep)
         except Exception as ex:
             logging.exception(ex)
             traceback.print_exc()
-            # Alert and debug hooks
+            self.exception_alert(ex)
 
 
         finally:

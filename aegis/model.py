@@ -258,7 +258,7 @@ class Pageview(aegis.database.Row):
 class HydraType(aegis.database.Row):
     table_name = 'hydra_type'
     id_column = 'hydra_type_id'
-    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql')
+    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm')
 
     @classmethod
     def get_name(cls, hydra_type_name):
@@ -284,16 +284,38 @@ class HydraType(aegis.database.Row):
                    FROM hydra_type
                   WHERE next_run_dttm <= NOW()
                     AND status='live'
-                    AND hydra_type_id=%s"""
+                    AND hydra_type_id=%s
+                    AND claimed_dttm IS NULL
+                    AND next_run_sql IS NOT NULL"""
         return db().get(sql, hydra_type_id, cls=cls)
 
     def schedule_next(self):
-        sql = "UPDATE hydra_type SET run_cnt=run_cnt+1, last_run_dttm=next_run_dttm, next_run_dttm="+self['next_run_sql']+" WHERE hydra_type_id=%s AND status = 'live'"
+        sql = """
+            UPDATE hydra_type
+               SET run_cnt=run_cnt+1,
+                   last_run_dttm=next_run_dttm,
+                   claimed_dttm=NULL,
+                   next_run_dttm="""+self['next_run_sql']+"""
+             WHERE hydra_type_id=%s
+               AND status = 'live'"""
         return db().execute(sql, self['hydra_type_id'])
 
     @staticmethod
     def clear_running():
         sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL 45 MINUTE"
+        return db().execute(sql)
+
+    def claim(self):
+        sql = 'UPDATE hydra_type SET claimed_dttm=NOW() WHERE hydra_type_id=%s AND claimed_dttm IS NULL'
+        return db().execute(sql, self['hydra_type_id'])
+
+    def unclaim(self):
+        sql = 'UPDATE hydra_type SET claimed_dttm=NULL WHERE hydra_type_id=%s AND claimed_dttm IS NOT NULL'
+        return db().execute(sql, self['hydra_type_id'])
+
+    @staticmethod
+    def clear_claims():
+        sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 5 MINUTE AND status='live'"
         return db().execute(sql)
 
 

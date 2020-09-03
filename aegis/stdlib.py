@@ -56,8 +56,13 @@ def force_int(string):
     if not match: return None
     return int(match.group(1))
 
-def md5hex(val):
-    return hashlib.md5(val).hexdigest()
+def md5hex(val=None, encoding=None):
+    if val:
+        if encoding:
+            val = val.encode(encoding)
+        return hashlib.md5(val).hexdigest()
+    else:
+        return hashlib.md5().hexdigest()
 
 def html_unescape(val):
     return xml.sax.saxutils.unescape(val, {'&quot;': '"'})

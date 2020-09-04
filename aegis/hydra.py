@@ -43,9 +43,9 @@ class HydraThread(threading.Thread):
         self.last_id = 0
 
 
+    # Alert and debug hooks likely need to be defined in applications
     def exception_alert(self, ex):
-        # Alert and debug hooks
-        self.logw(ex, "EXCEPTION ALERT")
+        self.logw(ex, "EXCEPTION ALERT - OVERRIDE ME IN CHILD CLASS")
 
 
     def run(self):
@@ -53,7 +53,7 @@ class HydraThread(threading.Thread):
             self.process()
         except Exception as ex:
             logging.exception(ex)
-            # XXX TODO chat_hook debug_hook
+            self.exception_alert(ex)
 
 
     def finish(self):
@@ -163,10 +163,12 @@ class HydraHead(HydraThread):
                         logging.exception(ex)
                         hydra_queue.incr_error_cnt()
                         hydra_queue.unclaim()
+                        self.exception_alert(ex)
                 # Iterate!
                 time.sleep(options.hydra_sleep)
         except Exception as ex:
             logging.exception(ex)
+            self.exception_alert(ex)
         finally:
             self.finish()
 

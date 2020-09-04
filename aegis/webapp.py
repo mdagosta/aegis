@@ -132,6 +132,9 @@ class AegisHandler(tornado.web.RequestHandler):
             self.tmpl['user']['user_id'] = user['user_id']
 
     def user_is_robot(self):
+        # If this fails so early that setup_user() doesn't run, just parse the user_agent here
+        if not self.tmpl.get('user_agent_obj'):
+            self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
         return bool(self.tmpl['user_agent_obj'].is_bot or aegis.stdlib.is_robot(self.tmpl['user_agent']))
 
     def render(self, template_name, **kwargs):

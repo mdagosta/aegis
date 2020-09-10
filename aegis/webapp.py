@@ -271,8 +271,9 @@ class AegisHandler(tornado.web.RequestHandler):
             return None
         if 'member' not in self.tmpl:
             self.get_current_user()
-        if self.tmpl['member']:
+        if self.tmpl['member'] and self.tmpl['member'].get('email'):
             return self.tmpl['member']['email']['email']
+        logging.error("No email for this member. Does get_member_email() need to be overridden in a subclass? Is self.get_current_user() overridden in a subclass?")
 
     def del_current_user(self):
         self.cookie_clear('auth')

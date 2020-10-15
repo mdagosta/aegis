@@ -65,10 +65,14 @@ except Exception as ex:
 dbconns = threading.local()
 
 
-def db(use_schema=None):
+def db(use_schema=None, autocommit=True):
     if not hasattr(dbconns, 'databases'):
         dbconns.databases = {}
     if pgsql_available:
+        # Autocommit==False will be its own short-lived connection, not cached, so we don't end up with transactions open from other cursors.
+        if not autocommit:
+            return PostgresConnection.connect(autocommit=False)
+        # Autocommit==True we can cache the database connection and let autocommit handle cursor-transaction-safety
         if options.pg_database not in dbconns.databases:
             dbconns.databases[options.pg_database] = PostgresConnection.connect()
         if not use_schema:
@@ -96,12 +100,11 @@ def sql_in_format(lst, cast):
 class PostgresConnection(object):
     threads = {}
 
-    def __init__(self, hostname, port, database, username=None, password=None, max_idle_time=7 * 3600):
+    def __init__(self, hostname, port, database, username=None, password=None, autocommit=True):
         """ Called by connect() class method using cls() notation """
         self.hostname = hostname
         self.port = port
         self.database = database
-        self.max_idle_time = max_idle_time
         args = "port={0} dbname={1}".format(self.port, self.database)
         if hostname is not None:
             args += " host={0}".format(hostname)
@@ -111,14 +114,13 @@ class PostgresConnection(object):
             args += " password={0}".format(password)
         self._db = None
         self._db_args = args
-        self._last_use_time = time.time()
         try:
-            self._connect()
+            self._connect(autocommit=autocommit)
         except Exception:
             logging.error("Cannot connect to PostgreSQL: %s", self.hostname, exc_info=True)
 
     @classmethod
-    def connect(cls, **kwargs):
+    def connect(cls, autocommit=True, **kwargs):
         if 'pg_database' in kwargs:
             database = kwargs['pg_database']
             hostname = kwargs['pg_hostname']
@@ -131,9 +133,9 @@ class PostgresConnection(object):
             username = options.pg_username
             password = options.pg_password
             port = options.pg_port
-        # force a new connection
-        if kwargs.get('force', False):
-            return cls(hostname, port, database, username, password)
+        # force a new connection with a flag, or implicitly when using autocommit False
+        if kwargs.get('force', False) or autocommit == False:
+            return cls(hostname, port, database, username, password, autocommit=autocommit)
         # check existing connections
         ident = threading.current_thread().ident
         connections = cls.threads.setdefault(ident, {})
@@ -143,8 +145,9 @@ class PostgresConnection(object):
             cls.threads[ident][database] = conn
         return connections[database]
 
-    def _connect(self):
+    def _connect(self, autocommit):
         self._db = psycopg2.connect(self._db_args)
+        self._db.autocommit = autocommit
 
     def _cursor(self):
         """ Reconnect if disconnected. Then return a cursor. """
@@ -241,7 +244,6 @@ class PostgresConnection(object):
             self._execute(cursor, query, parameters, do_commit=do_commit)
             if cursor.rowcount > 0:
                 last_row_id = cursor.fetchone()[0]
-                #aegis.stdlib.logw(last_row_id, "LAST ROW ID")
                 return last_row_id
         finally:
             if do_commit:

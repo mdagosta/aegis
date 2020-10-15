@@ -596,6 +596,14 @@ class AegisHydra(AegisWeb):
         return self.redirect(self.request.uri)
 
 
+class AegisHydraQueue(AegisWeb):
+    @tornado.web.authenticated
+    def get(self, *args):
+        self.enforce_admin()
+        self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
+        return self.render_path("hydra_queue.html", **self.tmpl)
+
+
 class AegisReportForm(AegisWeb):
 
     def validate_report_type(self, report_type_id):

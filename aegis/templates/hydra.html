@@ -1,7 +1,7 @@
 {% extends frame.html %}
 
 {% block body %}
-<h1 style="margin-top: 1em;">Hydra     <a href="/aegis/hydra/add" class="w3-right w3-btn w3-blue w3-large">+ New Work Type</a></h1>
+<h1 style="margin-top: 1em;">Hydra <a href="/aegis/hydra/queue" class="w3-text-blue">Queue</a>   <a href="/aegis/hydra/add" class="w3-right w3-btn w3-blue w3-large">+ New Work Type</a></h1>
 
 {% if hydra_types %}
 <form action="{{request.uri}}" method="POST">
@@ -28,7 +28,7 @@
       <td>{{hydra_type['last_run_dttm']}}</td>
       <td>{{hydra_type['next_run_dttm']}}</td>
       <td><input type="submit" class="w3-button w3-light-blue w3-small" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}p{% end %}ause"/></td>
-      <td><input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now"/></td>
+      <td><input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
       <td>{{hydra_type['next_run_sql']}}</td>
     </tr>
     {% end %}

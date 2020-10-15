@@ -326,12 +326,41 @@ class HydraQueue(aegis.database.Row):
 
     @classmethod
     def scan_work_priority(cls, limit=10):
-        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY priority_ndx ASC LIMIT %s"
+        sql = """
+        SELECT hydra_queue.*,
+               hydra_type.hydra_type_name,
+               hydra_type.hydra_type_desc
+          FROM hydra_queue
+          JOIN hydra_type USING (hydra_type_id)
+         WHERE hydra_queue.work_dttm <= NOW()
+           AND hydra_queue.claimed_dttm IS NULL
+           AND hydra_queue.finish_dttm IS NULL
+           AND hydra_queue.delete_dttm IS NULL
+           AND hydra_type.status <> 'paused'
+      ORDER BY hydra_queue.priority_ndx ASC
+         LIMIT %s"""
         return db().query(sql, limit, cls=cls)
 
     @classmethod
     def scan_work(cls, limit=10):
-        sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL ORDER BY work_dttm ASC LIMIT %s"
+        sql = """
+        SELECT hydra_queue.*,
+               hydra_type.hydra_type_name,
+               hydra_type.hydra_type_desc
+          FROM hydra_queue
+          JOIN hydra_type USING (hydra_type_id)
+         WHERE hydra_queue.work_dttm <= NOW()
+           AND hydra_queue.claimed_dttm IS NULL
+           AND hydra_queue.finish_dttm IS NULL
+           AND hydra_queue.delete_dttm IS NULL
+           AND hydra_type.status <> 'paused'
+      ORDER BY hydra_queue.work_dttm ASC
+         LIMIT %s"""
+        return db().query(sql, limit, cls=cls)
+
+    @classmethod
+    def scan(cls, limit=100):
+        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY create_dttm ASC LIMIT %s"
         return db().query(sql, limit, cls=cls)
 
     @classmethod

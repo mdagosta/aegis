@@ -142,6 +142,7 @@ class PostgresConnection(object):
         if not database in connections:
             conn = cls(hostname, port, database, username, password)
             conn.database = database
+            conn._connect(autocommit)
             cls.threads[ident][database] = conn
         return connections[database]
 
@@ -151,8 +152,6 @@ class PostgresConnection(object):
 
     def _cursor(self):
         """ Reconnect if disconnected. Then return a cursor. """
-        if self._db is None:
-            self._connect()
         return self._db.cursor()
 
     def __del__(self):

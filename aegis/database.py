@@ -152,6 +152,8 @@ class PostgresConnection(object):
 
     def _cursor(self):
         """ Reconnect if disconnected. Then return a cursor. """
+        if self._db is None:
+            self._connect()
         return self._db.cursor()
 
     def __del__(self):

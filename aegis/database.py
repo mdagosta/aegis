@@ -21,6 +21,7 @@ pgsql_available = False
 PgsqlIntegrityError = None
 PgsqlOperationalError = None
 PgsqlDatabaseError = None
+PgsqlProgrammingError = None
 try:
     import psycopg2
     pgsql_available = True
@@ -28,6 +29,7 @@ try:
     PgsqlIntegrityError = psycopg2.IntegrityError
     PgsqlOperationalError = psycopg2.OperationalError
     PgsqlDatabaseError = psycopg2.Error
+    PgsqlProgrammingError = psycopg2.ProgrammingError
 except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now - but shim the exception types.")
     class PgsqlIntegrityError(BaseException):
@@ -35,6 +37,8 @@ except Exception as ex:
     class PgsqlOperationalError(BaseException):
         pass
     class PgsqlDatabaseError(BaseException):
+        pass
+    class PgsqlProgrammingError(BaseException):
         pass
 
 mysql_available = False
@@ -245,8 +249,11 @@ class PostgresConnection(object):
         try:
             self._execute(cursor, query, parameters, do_commit=do_commit)
             if cursor.rowcount > 0:
-                last_row_id = cursor.fetchone()[0]
-                return last_row_id
+                try:
+                    return cursor.fetchone()[0]
+                except PgsqlProgrammingError as ex:
+                    logging.error("No Results even though cursor says rowcount > 0. Probably left out '... RETURNING row_id'")
+                    return None
         finally:
             if do_commit:
                 cursor.close()

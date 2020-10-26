@@ -114,6 +114,7 @@ class PostgresConnection(object):
             args += " password={0}".format(password)
         self._db = None
         self._db_args = args
+        self._autocommit = autocommit
         try:
             self._connect(autocommit=autocommit)
         except Exception:
@@ -153,7 +154,7 @@ class PostgresConnection(object):
     def _cursor(self):
         """ Reconnect if disconnected. Then return a cursor. """
         if self._db is None:
-            self._connect()
+            self._connect(self._autocommit)
         return self._db.cursor()
 
     def __del__(self):

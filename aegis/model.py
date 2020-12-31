@@ -183,6 +183,53 @@ class Member(aegis.database.Row):
         return member
 
 
+class MemberAuth(aegis.database.Row):
+    table_name = 'member_auth'
+    id_column = 'member_auth_id'
+    data_columns = ('member_auth_type_id', 'magic_token', 'user_id', 'email_id', 'member_id', 'ip_address', 'expire_dttm', 'register_flag', 'login_flag')
+
+    @classmethod
+    def insert(cls, **columns):
+        columns['magic_token'] = aegis.stdlib.magic_token()
+        # XXX TODO Do input validation here
+        return cls.insert_columns(**columns)
+
+    @classmethod
+    def get_auth(cls, member_id, member_auth_id, magic_token):
+        sql = """
+        SELECT *
+          FROM member
+          JOIN member_auth USING (member_id)
+         WHERE member_id=%s
+           AND member_auth_id=%s
+           AND magic_token=%s
+           AND member.delete_dttm IS NULL
+           AND member_auth.expire_dttm > NOW()
+           AND member_auth.delete_dttm IS NULL"""
+        return db().get(sql, member_id, member_auth_id, magic_token, cls=cls)
+
+    @classmethod
+    def scan_member(cls, member_id):
+        sql = """
+        SELECT *
+          FROM member
+          JOIN member_auth USING (member_id)
+         WHERE member_id=%s
+           AND member.delete_dttm IS NULL
+           AND member_auth.expire_dttm > NOW()
+           AND member_auth.delete_dttm IS NULL"""
+        return db().query(sql, member_id, cls=cls)
+
+    def refresh(self, auth_duration_sec):
+        auth_duration_sec = aegis.stdlib.validate_int(auth_duration_sec)
+        sql = "UPDATE member_auth SET expire_dttm=NOW() + INTERVAL '%s SECOND' WHERE member_auth_id=%s"
+        return db().execute(sql, auth_duration_sec, self['member_auth_id'])
+
+    def revoke(self):
+        sql = "UPDATE member_auth SET delete_dttm=NOW() WHERE member_auth_id=%s"
+        return db().execute(sql, self['member_auth_id'])
+
+
 class EmailType(aegis.database.Row):
     table_name = 'email_type'
     id_column = 'email_type_id'

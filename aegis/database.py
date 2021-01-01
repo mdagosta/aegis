@@ -180,7 +180,6 @@ class PostgresConnection(object):
     def _execute(self, cursor, query, parameters, **kwargs):
         do_commit = kwargs.get('do_commit', True)
         try:
-            # return cursor.execute(query, parameters)
             cursor.execute(query, parameters)
             if do_commit:
                 self.commit()

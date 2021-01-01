@@ -83,6 +83,9 @@ class AegisHandler(tornado.web.RequestHandler):
         auth_ck = self.cookie_get('auth')
         logged_out = (self.tmpl.get('logged_out') == True)
         if auth_ck and not logged_out:
+            # If there's a member_auth, refresh the expiration in the backend along with the cookie
+            if hasattr(self, '_member_auth'):
+                self._member_auth.refresh(options.cookie_durations['auth'] * 86400)
             self.cookie_set('auth', auth_ck)
         if 'session_ck' in self.tmpl:
             if self.tmpl.get('session_ck'):
@@ -137,6 +140,9 @@ class AegisHandler(tornado.web.RequestHandler):
             self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
         return bool(self.tmpl['user_agent_obj'].is_bot or aegis.stdlib.is_robot(self.tmpl['user_agent']))
 
+    def get_template_path(self):
+        return options.template_path
+
     def render(self, template_name, **kwargs):
         template_path = os.path.join(options.template_path, template_name)
         return super(AegisHandler, self).render(template_path, **kwargs)
@@ -144,9 +150,6 @@ class AegisHandler(tornado.web.RequestHandler):
     def render_path(self, template_name, **kwargs):
         template_path = os.path.join(self.get_template_path(), template_name)
         return super(AegisHandler, self).render(template_path, **kwargs)
-
-    def get_template_path(self):
-        return options.template_path
 
     def _handle_request_exception(self, ex):
         aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
@@ -232,9 +235,29 @@ class AegisHandler(tornado.web.RequestHandler):
     def get_user_id(self):
         return self.tmpl.get('user', {}).get('user_id')
 
-    def set_current_user(self, member_id):
-        self.cookie_set('auth', int(member_id))
-        self.tmpl['member'] = aegis.model.Member.get_auth(member_id)
+    def member_auth(self, member_auth_type_id, member_id, email_id, register_flag=False, login_flag=False):
+        auth_duration_sec = options.cookie_durations['auth'] * 86400
+        member_auth = {'member_auth_type_id': member_auth_type_id, 'email_id': email_id, 'register_flag': bool(register_flag), 'login_flag': bool(login_flag),
+                       'member_id': member_id, 'user_id': self.get_user_id(), 'ip_address': self.request.remote_ip,
+                       'expire_dttm': datetime.datetime.utcnow() + datetime.timedelta(seconds=auth_duration_sec)}
+        return aegis.model.MemberAuth.insert(**member_auth)
+
+    def validate_member_auth_ck(self):
+        # Cookie can't change mid-request so we can just cache the value on the handler
+        if hasattr(self, '_member_id') and hasattr(self, '_member_auth_id') and hasattr(self, '_member_auth'):
+            return (self._member_id, self._member_auth_id, self._member_auth)
+        member_id, member_auth_id, magic_token = self.cookie_get("auth").split('|')
+        member_id = aegis.stdlib.validate_int(member_id)
+        member_auth_id = aegis.stdlib.validate_int(member_auth_id)
+        member_auth = None
+        if member_id and member_auth_id:
+            member_auth = aegis.model.MemberAuth.get_auth(member_id, member_auth_id, magic_token)
+        if not member_auth:
+            raise Exception("MemberAuth doesn't match, is expired, or is deleted: %s|%s|%s" % (member_id, member_auth_id, magic_token))
+        self._member_id = member_id
+        self._member_auth_id = member_auth_id
+        self._member_auth = member_auth
+        return (self._member_id, self._member_auth_id, self._member_auth)
 
     def get_member_id(self):
         # Cookie can't change mid-request so we can just cache the value on the handler
@@ -244,38 +267,53 @@ class AegisHandler(tornado.web.RequestHandler):
         test_token = self.request.headers.get('Test-Token')
         test_member_id = aegis.stdlib.validate_int(self.request.headers.get('Test-Member-Id'))
         if self.tmpl['env'] != 'prod' and test_token and test_token == options.test_token and test_member_id:
-            # Check member exists so we don't just explode from exhuberant testing!
+            # Check member exists so we don't just explode from exuberant testing!
             if aegis.model.Member.get_id(test_member_id):
                 logging.warning("Test Mode | MemberId Override: %s", test_member_id)
                 self._member_id = test_member_id
                 return self._member_id
         ck = self.cookie_get("auth")
-        #self.logw(ck, "Auth Cookie MemberID")
+        #self.logw(ck, "Auth Cookie")
         if ck:
             try:
-                self._member_id = int(ck)
+                if aegis.config.get('use_server_logout'):
+                    self.validate_member_auth_ck()
+                else:
+                    self._member_id = int(ck)
                 return self._member_id
             except Exception as ex:
                 logging.exception(ex)
                 self.del_current_user()
                 return None
 
-    def get_current_user(self):
+    def set_current_user(self, member_id, member_auth_id=None, magic_token=None, get_auth_fn=aegis.model.Member.get_auth):
+        cookie_val = int(member_id)
+        if member_auth_id and magic_token:
+            cookie_val = '%s|%s|%s' % (member_id, member_auth_id, magic_token)
+        self.cookie_set('auth', cookie_val)
+        self.tmpl['member'] = get_auth_fn(member_id)
+
+    def get_current_user(self, get_auth_fn=aegis.model.Member.get_auth):
         if not aegis.database.pgsql_available and not aegis.database.mysql_available:
             return None
-        self.tmpl['member'] = aegis.model.Member.get_auth(self.get_member_id())
+        if self.tmpl.get('member'):
+            return self.tmpl['member']
+        self.tmpl['member'] = get_auth_fn(self.get_member_id())
         return self.tmpl['member']
 
-    def get_member_email(self):
+    def get_member_email(self, get_auth_fn=aegis.model.Member.get_auth):
         if not aegis.database.pgsql_available and not aegis.database.mysql_available:
             return None
         if 'member' not in self.tmpl:
-            self.get_current_user()
+            self.get_current_user(get_auth_fn=get_auth_fn)
         if self.tmpl['member'] and self.tmpl['member'].get('email'):
             return self.tmpl['member']['email']['email']
         logging.error("No email for this member. Does get_member_email() need to be overridden in a subclass? Is self.get_current_user() overridden in a subclass?")
 
     def del_current_user(self):
+        # check if member_auth record exists, if so delete it
+        if aegis.config.get('use_server_logout') and hasattr(self, '_member_auth'):
+            self._member_auth.revoke()
         self.cookie_clear('auth')
         self.tmpl['logged_out'] = True
 
@@ -311,7 +349,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     @staticmethod
     def auth_admin():
-        """ Weird wrapper to check access to a resource using @VirungaApi.auth_access('super_admin') notation """
+        """ Require user to be both logged-in and a super admin, or 403. """
         def call_wrapper(func):
             def authorize(self, *args, **kwargs):
                 if not self.is_super_admin():

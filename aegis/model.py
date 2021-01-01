@@ -230,6 +230,16 @@ class MemberAuth(aegis.database.Row):
         return db().execute(sql, self['member_auth_id'])
 
 
+class MemberAuthType(aegis.database.Row):
+    table_name = 'member_auth_type'
+    id_column = 'member_auth_type_id'
+
+    @classmethod
+    def get_name(cls, member_auth_type_name):
+        sql = "SELECT * FROM member_auth_type WHERE member_auth_type_name=%s"
+        return db().get(sql, member_auth_type_name, cls=cls)
+
+
 class EmailType(aegis.database.Row):
     table_name = 'email_type'
     id_column = 'email_type_id'

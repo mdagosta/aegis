@@ -312,6 +312,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def del_current_user(self):
         # check if member_auth record exists, if so delete it
+        self.validate_member_auth_ck()
         if aegis.config.get('use_server_logout') and hasattr(self, '_member_auth'):
             self._member_auth.revoke()
         self.cookie_clear('auth')

@@ -501,3 +501,25 @@ class ReportType(aegis.database.Row):
     def set_sql(report_type_id, report_type_sql):
         sql = 'UPDATE report_type SET report_sql=%s WHERE report_type_id=%s'
         return db().execute(sql, report_type_sql, report_type_id)
+
+
+class Build(aegis.database.Row):
+    table_name = 'build'
+    id_column = 'build_id'
+
+    @classmethod
+    def scan(cls):
+        sql = "SELECT * FROM build ORDER BY build_id DESC"
+        return db().query(sql, cls=cls)
+
+    def set_output(self, output_tx, exit_status=None):
+        sql = "UPDATE build SET output_tx=%s, exit_status=%s WHERE build_id=%s"
+        return db().execute(sql, output_tx, exit_status, self['build_id'])
+
+    def set_version(self, version):
+        sql = "UPDATE build SET version=%s WHERE build_id=%s"
+        return db().execute(sql, version, self['build_id'])
+
+    def set_revision(self, revision):
+        sql = "UPDATE build SET revision=%s WHERE build_id=%s"
+        return db().execute(sql, revision, self['build_id'])

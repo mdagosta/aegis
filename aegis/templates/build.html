@@ -1,0 +1,35 @@
+{% extends frame.html %}
+
+{% block body %}
+<h1 style="margin-top: 1em;">Build    <a href="/aegis/build/add" class="w3-right w3-btn w3-blue w3-large">+ New Build</a></h1>
+
+<form action="{{request.uri}}" method="POST">
+    {% raw xsrf_form_html() %}
+    <table class="w3-table-all w3-responsive">
+        <tr>
+            <th>ID</th>
+            <th>Branch</th>
+            <th>Revision</th>
+            <th>Version</th>
+            <th>Status</th>
+            <th>Deploy</th>
+            <th>Revert</th>
+        </tr>
+
+        {% for build in builds %}
+        <tr>
+            <td>{{build['build_id']}}</td>
+            <td>{{build['branch']}}</td>
+            <td><a target="_blank" href="https://{{options.git_repo.replace(':', '/')}}/commit{% if options.git_repo.startswith('bitbucket') %}s{% end %}/{{build['revision']}}">{{build['revision'][0:8]}}</a></td>
+            <td>{{build['version'] or ''}}</td>
+            <td><a href="/aegis/build/{{build['build_id']}}">{% if build['exit_status'] %}ERROR {{build['exit_status']}}{% elif build['exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+        {% end %}
+
+    </table>
+</form>
+
+{% end %}

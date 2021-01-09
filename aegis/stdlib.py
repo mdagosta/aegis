@@ -43,11 +43,14 @@ def logline(*args):
     msg = '%s %s' % (cstr(caller, 'yellow'), args[0])
     logging.warning(msg, *args[1:])
 
-def shell(cmd, cwd=None):
+def shell(cmd, cwd=None, env=None):
     if type(cmd) not in (tuple, list):
         cmd = shlex.split(cmd)
-    output = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=False, cwd=cwd).communicate()[0]
-    return output.decode('utf-8').strip()
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, cwd=cwd, env=env)
+    stdout, stderr = proc.communicate()
+    stdout = stdout.decode('utf-8').strip()
+    stderr = stderr.decode('utf-8').strip()
+    return (stdout, stderr, proc.returncode)
 
 def force_int(string):
     if type(string) in (int, int): return int(string)

@@ -836,6 +836,9 @@ class AegisBuildForm(AegisWeb):
                     return
                 if self.build_exec("nice yarn run %s --cache-folder /srv/www/.cache/yarn" % options.env, cwd=self.build_dir):
                     return
+                self.build_size = os.path.getsize(os.path.join(self.build_dir, options.build_output_file % {'tag': self.next_tag}))
+                if self.build_size:
+                    self.build.set_build_size(self.build_size)
             # Rsync the files to the servers if it's configured
             rsync_hosts = [rh for rh in aegis.config.get('rsync_hosts') if rh != self.host]
             for rsync_host in rsync_hosts:

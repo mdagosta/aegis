@@ -523,3 +523,7 @@ class Build(aegis.database.Row):
     def set_revision(self, revision):
         sql = "UPDATE build SET revision=%s WHERE build_id=%s"
         return db().execute(sql, revision, self['build_id'])
+
+    def set_build_size(self, build_size):
+        sql = "UPDATE build SET build_size=%s WHERE build_id=%s"
+        return db().execute(sql, build_size, self['build_id'])

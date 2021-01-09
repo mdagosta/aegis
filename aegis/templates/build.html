@@ -12,6 +12,7 @@
             <th>Revision</th>
             <th>Version</th>
             <th>Status</th>
+            <th>Size</th>
             <th>Deploy</th>
             <th>Revert</th>
         </tr>
@@ -23,8 +24,8 @@
             <td><a target="_blank" href="https://{{options.git_repo.replace(':', '/')}}/commit{% if options.git_repo.startswith('bitbucket') %}s{% end %}/{{build['revision']}}">{{build['revision'][0:8]}}</a></td>
             <td>{{build['version'] or ''}}</td>
             <td><a href="/aegis/build/{{build['build_id']}}">{% if build['exit_status'] %}ERROR {{build['exit_status']}}{% elif build['exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a></td>
-            <td></td>
-            <td></td>
+            <td>{% if build['build_size'] %}{{"%4.2f MB" % (build['build_size'] / 1024 / 1024)}}{% end %}</td>
+            <td>{% if build['exit_status'] == 0 %}<a href="/aegis/build/{{build['build_id']}}/deploy" class="w3-right w3-btn w3-blue w3-medium w3-padding-small">Deploy</a>{% end %}</td>
             <td></td>
         </tr>
         {% end %}

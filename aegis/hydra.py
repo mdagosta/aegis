@@ -6,9 +6,11 @@
 
 # Python Imports
 import datetime
+import json
 import logging
 import random
 import signal
+import socket
 import sys
 import threading
 import time
@@ -175,6 +177,76 @@ class HydraHead(HydraThread):
 
     def log_line(self, hydra_type, work_cnt=0, msg=''):
         return '%s %s %s %s' % (self.name, hydra_type['hydra_type_name'], ("%d" % work_cnt).rjust(8), msg)
+
+
+    def deploy_build(self, hydra_queue, hydra_type):
+        #self.logw(hydra_queue, "deploy_build HYDRA QUEUE")
+        # host-specific by putting hostname: key in the work_data JSON
+        work_data = json.loads(hydra_queue['work_data'])
+        self.logw(work_data, "WORK DATA")
+        if work_data.get('hostname') == socket.gethostname() and work_data.get('env') == aegis.config.get('env'):
+            # Environment Settings
+            self.logw(socket.gethostname(), "HOSTNAME MATCH")
+            self.logw(aegis.config.get('env'), "ENV MATCH")
+            build = aegis.model.Build.get_id(work_data['build_id'])
+            app_dir = os.path.join(options.deploy_dir, options.program_name)
+            build_dir = os.path.join(app_dir, build['version'])
+            live_symlink = os.path.join(app_dir, aegis.config.get('env'))
+            self.start_t = time.time()
+            self.output_tx = ''
+            self.username, stderr, exit_status = aegis.stdlib.shell('whoami')
+            self.host = socket.gethostname()
+            # What to restart
+            supervisor_status, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
+            self.logw(supervisor_status, 'super status')
+            processes = [ss for ss in supervisor_status if ss.endswith(aegis.config.get('env'))]
+            self.logw(processes, "PROCESSES")
+            self.logw(build_dir, "BUILD DIR")
+            self.logw(live_symlink, "LIVE SYMLINK")
+            # Set the previous version so we know what to revert back to
+            live_build = aegis.model.Build.get_live_build()
+            if live_build:
+                self.logw(live_build, "LIVE BUILD")
+                build.set_previous_version(build['version'])
+                build = aegis.model.Build.get_id(build['build_id'])
+            # Remove and re-link
+            if self.deploy_exec("rm %s" % live_symlink):
+                logging.warning("ERROR RM")
+            if self.deploy_exec("ln -s %s %s" % (build_dir, live_symlink)):
+                logging.warning("ERROR LN")
+            # Mark deployed and restart processes
+            build.set_deploy_dttm()
+            for process in processes:
+                if self.deploy_exec("sudo /usr/bin/supervisorctl restart %s" % (process)):
+                    self.logw(process, "ERROR RESTARTING PROCESS")
+                    break
+        return True, 1
+
+
+    def deploy_exec(self, cmd, cwd, env=None):
+        self.output_tx += "\n%s@%s:%s> %s\n" % (self.username, self.host, cwd, cmd)
+        stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=cwd, env=env)
+        self.output_tx += stdout
+        self.output_tx += "\n%s" % stderr
+        self.build.set_deploy_output(self.output_tx)
+        self.build = aegis.model.Build.get_id(self.build['build_id'])
+        if exit_status:
+            self.deploy_done_exec(exit_status)
+        return exit_status
+
+    def deploy_done_exec(self, exit_status=0):
+        end_t = time.time()
+        exec_t = end_t - self.start_t
+        self.output_tx += "\n  [ Exit %s   (%4.2f sec) ]" % (exit_status, exec_t)
+        self.build.set_deploy_output(self.output_tx, exit_status)
+
+    def revert_build(self, hydra_queue, hydra_type):
+        self.logw(hydra_queue, "revert_build HYDRA QUEUE")
+        self.logw(hydra_type, "revert_build HYDRA TYPE")
+        # Do a supervisor stop, then start
+        # host-specific by putting hostname: key in the work_data JSON
+        # capture output onto build deploy_output
+        # This is mostly calling the deploy_build() tho
 
 
 class Hydra(HydraThread):

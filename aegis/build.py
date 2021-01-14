@@ -211,7 +211,7 @@ class Build:
         return '%s.%s.%s' % (x, y, z)
 
     def write_py_version(self):
-        self.config.set(self.section, 'version', self.next_tag)
+        self.config.set(aegis.config.get('env'), 'version', self.next_tag)
         fd = open(self.version_file, 'w')
         self.config.write(fd)
         fd.close()

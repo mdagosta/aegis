@@ -7,14 +7,32 @@
 import argparse
 import logging
 import os
+import pwd
 import sys
 
 # Extern Imports
 import tornado.options
+from tornado.options import define, options
 
 # Project Imports
-#import aegis.stdlib
-import stdlib
+import aegis.stdlib
+import aegis.build as build_
+
+# Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
+venv = os.environ.get('VIRTUAL_ENV')
+if venv:
+    # Running from within a virtualenv
+    repo_dir = os.path.dirname(venv)
+    src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+    sys.path.insert(0, src_dir)
+    import config
+elif sys.argv[0] == 'virtualenv/bin/aegis':
+    # Running by calling the virtualenv binary directly
+    repo_dir = os.getcwd()
+    src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+    sys.path.insert(0, src_dir)
+    import config
+
 
 
 # Create a new spinoff of aegis
@@ -75,109 +93,9 @@ def create(parser):
     # <appname>/<appname>.py
 
 
-# Deploy code with colorized diffs
-def deploy(cmd, app_name, domain):
-    # Require sudo to deploy, set effective uid and gif
-    if not os.geteuid() == 0:
-        logging.error('You need root privileges, please run it with sudo.')
-        sys.exit(1)
-    pw = pwd.getpwnam('www-data')
-    os.setegid(pw[3])
-    os.seteuid(pw[2])
-    # Create temp_dir if not exists
-    if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
-    # Run Deploy
-    files, output = rsync(silent=True)
-    display(files, output)
-    # Command line options and directory layout in global scope
-    define('diff', default=True, help='Show Diffs', type=bool)
-    define('dry_run', default=True, help='Dry Run - make no changes', type=bool)
-    config.initialize()
-    src_dir = os.path.dirname(stdlib.absdir(__file__))
-    exclude_file = os.path.join(src_dir, 'etc', 'deploy.excludes')
-    environments = {'prod': '/srv/www/_prod/' % app_name,
-                    'dev': '/srv/www/<appname>_dev/' % app_name}
-    if options.env not in environments:
-        logging.error("Environment %s isn't on the deploy list.", options.env)
-        sys.exit()
-    dest_dir = environments[options.env]
-    temp_dir = '/tmp/%s/deploy' % os.getenv('USER')
-    logging.info("Running deploy.py   Env: %s   Src: %s   Dest: %s   Dry Run: %s", options.env, src_dir, dest_dir, options.dry_run)
-    # set up rsync and file list filtering
-    def rsync(silent=False):
-        rsync_opts = '-vzrlDc'
-        if options.dry_run:
-            rsync_opts += 'n'
-        rsync_opts += ' -T %s --delay-updates --exclude-from=%s --delete' % (temp_dir, exclude_file)
-        cmd = "rsync %s %s/ %s" % (rsync_opts, src_dir, dest_dir)
-        if not silent:
-            stdlib.logw(rsync_opts, 'RSYNC_OPTS:')
-            stdlib.logw(src_dir, 'SRC:')
-            stdlib.logw(dest_dir, 'DEST:')
-            stdlib.logw(cmd, 'CMD:')
-        pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-        output, error_code = pipe.communicate()
-        # filter it down to a simple file list
-        files = []
-        output = output.decode('utf-8')
-        for line in output.splitlines():
-            fn = filter_line(line)
-            if fn:
-                files.append(fn)
-        return files, output
-    regexes = (
-        re.compile(r'^building file list ...'),
-        re.compile(r'^sent [\d,]+ bytes'),
-        re.compile(r'^total size is \d+'),
-        )
-    def filter_line(line):
-        if line in ('', './', 'sending incremental file list'):
-            return ''
-        for regex in regexes:
-            if regex.search(line):
-                return ''
-        return line
-    def diff_files(src_file, dest_file, colorize=True):
-        cmd = "diff -ub %s %s" % (dest_file, src_file)
-        pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-        output, error_code = pipe.communicate()
-        output = output.decode('utf-8')
-        cdiff = []
-        for line in output.splitlines():
-            line = line.strip()
-            if not line: continue
-            if line.startswith('-'):
-                cdiff.append(stdlib.cstr(line, color='red'))
-            elif line.startswith('+') or line.startswith('*'):
-                cdiff.append(stdlib.cstr(line, color='green'))
-            else:
-                cdiff.append(line)
-        cdiff = '\n'.join(cdiff)
-        return cdiff
-    def display(files, output):
-        for fn in files:
-            #if fn.endswith('/') or ' -> ' in fn:
-            if fn.endswith('/'):
-                continue
-            if fn.startswith('cannot delete'):
-                logging.warning(stdlib.cstr('- %s' % fn, color='magenta'))
-                continue
-            if fn.startswith('deleting '):
-                logging.warning(stdlib.cstr('- %s' % fn, color='magenta'))
-                continue
-            # Display useful diff information since this is deploying
-            src_file = (src_dir + '/' + fn).strip()   # '/' because of rsync slash oddity
-            dest_file = (dest_dir + fn).strip()
-            fn_status = fn
-            if not os.path.exists(dest_file):
-                fn_status += '   [NEW FILE]'
-            logging.warning(stdlib.cstr('+ writing %s ' % fn_status, color='cyan'))
-            if os.path.exists(dest_file):
-                if options.diff:
-                    cdiff = diff_files(src_file, dest_file)
-                    if cdiff:
-                        logging.warning(cdiff)
+# Diff and apply system configs to /etc and /srv
+def install(parser):
+    aegis.stdlib.logw(parser, "INSTALL ARG PARSER")
 
 
 def schema(parser):
@@ -192,7 +110,7 @@ def schema(parser):
     if not options.pg_database:
         logging.error("Database isn't configured for this hostname")
         exit(1)
-    if not options.app_name:
+    if not options.app_name:    # is this program_name ?
         logging.error("Please specify app_name to find sql diffs")
         exit(1)
     # Do schema
@@ -251,20 +169,229 @@ def schema(parser):
         return diffs
 
 
+def build(parser):
+    # Argument Handling
+    args = parser.parse_args()
+    build_args = {'branch': args.branch, 'revision': args.revision}
+    if not aegis.config.get('env') or not(build_args['branch'] or build_args['revision']):
+        aegis.stdlib.logw(aegis.config.get('env'), "ENV")
+        aegis.stdlib.logw(build_args, "BUILD ARGS")
+        logging.error("aegis build requires --env and one of --branch or --revision")
+        sys.exit(1)
+    # Require sudo to build, set real and effective uid and gid, as well as HOME for www-data user
+    if not os.geteuid() == 0:
+        logging.error('You need root privileges, please run it with sudo.')
+        sys.exit(1)
+    pw = pwd.getpwnam('www-data')
+    os.putenv('HOME', pw.pw_dir)
+    os.setregid(pw.pw_gid, pw.pw_gid)
+    os.setreuid(pw.pw_uid, pw.pw_uid)
+    # Set up build
+    logging.info("Running aegis build   Env: %s   Branch: %s   Revision: %s", aegis.config.get('env'), build_args['branch'], build_args['revision'])
+    new_build = build_.Build()
+    build_row = new_build.create(build_args)
+    if build_row.get('error'):
+        logging.error(build_row['error'])
+        sys.exit(1)
+    # Running build itself
+    exit_status = new_build.build_git_venv_yarn(build_row)
+    build_row = aegis.model.Build.get_id(build_row['build_id'])
+    if exit_status:
+        logging.error("Build Failed. Version: %s" % build_row['version'])
+    else:
+        logging.info("Build Success. Version: %s" % build_row['version'])
+        logging.info("Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version']))
+    sys.exit(exit_status)
+
+
+
+def deploy(parser):
+    # Argument Handling
+    args = parser.parse_args()
+    version = args.version
+    env = args.env
+    if not version or not env:
+        aegis.stdlib.logw(version, "VERSION")
+        aegis.stdlib.logw(env, "ENV")
+        logging.error("aegis deploy requires --version and --env")
+        sys.exit()
+    # Require sudo to build, set real and effective uid and gid, as well as HOME for www-data user
+    if not os.geteuid() == 0:
+        logging.error('You need root privileges, please run it with sudo.')
+        sys.exit(1)
+    pw = pwd.getpwnam('www-data')
+    os.putenv('HOME', pw.pw_dir)
+    os.setregid(pw.pw_gid, pw.pw_gid)
+    os.setreuid(pw.pw_uid, pw.pw_uid)
+    # Make it so
+    logging.info("Running aegis deploy   Version: %s   Env: %s", version, env)
+    build = build_.Build()
+    build.deploy(version, env=env)
+
+
+
+
+
+
+    # This could produce a diff and then ask
+    # Could also record the diff (!!)
+
+
+    # This is a separate deploy program here, which we can reference at least in concept for producing diffs
+
+    # Create temp_dir if not exists
+    #if not os.path.exists(temp_dir):
+    #    os.makedirs(temp_dir)
+    ## Run Deploy
+    #files, output = rsync(silent=True)
+    #display(files, output)
+    ## Command line options and directory layout in global scope
+    #define('diff', default=True, help='Show Diffs', type=bool)
+    #define('dry_run', default=True, help='Dry Run - make no changes', type=bool)
+    #config.initialize()
+    #src_dir = os.path.dirname(aegis.stdlib.absdir(__file__))
+    #exclude_file = os.path.join(src_dir, 'etc', 'deploy.excludes')
+    #environments = {'prod': '/srv/www/_prod/' % app_name,
+    #                'dev': '/srv/www/<appname>_dev/' % app_name}
+    #if options.env not in environments:
+    #    logging.error("Environment %s isn't on the deploy list.", options.env)
+    #    sys.exit()
+    #dest_dir = environments[options.env]
+    #temp_dir = '/tmp/%s/deploy' % os.getenv('USER')
+    #logging.info("Running deploy.py   Env: %s   Src: %s   Dest: %s   Dry Run: %s", options.env, src_dir, dest_dir, options.dry_run)
+    ## set up rsync and file list filtering
+    #def rsync(silent=False):
+    #    rsync_opts = '-vzrlDc'
+    #    if options.dry_run:
+    #        rsync_opts += 'n'
+    #    rsync_opts += ' -T %s --delay-updates --exclude-from=%s --delete' % (temp_dir, exclude_file)
+    #    cmd = "rsync %s %s/ %s" % (rsync_opts, src_dir, dest_dir)
+    #    if not silent:
+    #        aegis.stdlib.logw(rsync_opts, 'RSYNC_OPTS:')
+    #        aegis.stdlib.logw(src_dir, 'SRC:')
+    #        aegis.stdlib.logw(dest_dir, 'DEST:')
+    #        aegis.stdlib.logw(cmd, 'CMD:')
+    #    pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    #    output, error_code = pipe.communicate()
+    #    # filter it down to a simple file list
+    #    files = []
+    #    output = output.decode('utf-8')
+    #    for line in output.splitlines():
+    #        fn = filter_line(line)
+    #        if fn:
+    #            files.append(fn)
+    #    return files, output
+    #regexes = (
+    #    re.compile(r'^building file list ...'),
+    #    re.compile(r'^sent [\d,]+ bytes'),
+    #    re.compile(r'^total size is \d+'),
+    #    )
+    #def filter_line(line):
+    #    if line in ('', './', 'sending incremental file list'):
+    #        return ''
+    #    for regex in regexes:
+    #        if regex.search(line):
+    #            return ''
+    #    return line
+    #def diff_files(src_file, dest_file, colorize=True):
+    #    cmd = "diff -ub %s %s" % (dest_file, src_file)
+    #    pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    #    output, error_code = pipe.communicate()
+    #    output = output.decode('utf-8')
+    #    cdiff = []
+    #    for line in output.splitlines():
+    #        line = line.strip()
+    #        if not line: continue
+    #        if line.startswith('-'):
+    #            cdiff.append(aegis.stdlib.cstr(line, color='red'))
+    #        elif line.startswith('+') or line.startswith('*'):
+    #            cdiff.append(aegis.stdlib.cstr(line, color='green'))
+    #        else:
+    #            cdiff.append(line)
+    #    cdiff = '\n'.join(cdiff)
+    #    return cdiff
+    #def display(files, output):
+    #    for fn in files:
+    #        #if fn.endswith('/') or ' -> ' in fn:
+    #        if fn.endswith('/'):
+    #            continue
+    #        if fn.startswith('cannot delete'):
+    #            logging.warning(aegis.stdlib.cstr('- %s' % fn, color='magenta'))
+    #            continue
+    #        if fn.startswith('deleting '):
+    #            logging.warning(aegis.stdlib.cstr('- %s' % fn, color='magenta'))
+    #            continue
+    #        # Display useful diff information since this is deploying
+    #        src_file = (src_dir + '/' + fn).strip()   # '/' because of rsync slash oddity
+    #        dest_file = (dest_dir + fn).strip()
+    #        fn_status = fn
+    #        if not os.path.exists(dest_file):
+    #            fn_status += '   [NEW FILE]'
+    #        logging.warning(aegis.stdlib.cstr('+ writing %s ' % fn_status, color='cyan'))
+    #        if os.path.exists(dest_file):
+    #            if options.diff:
+    #                cdiff = diff_files(src_file, dest_file)
+    #                if cdiff:
+    #                    logging.warning(cdiff)
+
+
+def revert(parser):
+    # Argument Handling
+    args = parser.parse_args()
+    env = args.env
+    if not env:
+        aegis.stdlib.logw(env, "ENV")
+        logging.error("aegis revert requires --env")
+        sys.exit()
+    # Require sudo to build, set real and effective uid and gid, as well as HOME for www-data user
+    if not os.geteuid() == 0:
+        logging.error('You need root privileges, please run it with sudo.')
+        sys.exit(1)
+    pw = pwd.getpwnam('www-data')
+    os.putenv('HOME', pw.pw_dir)
+    os.setregid(pw.pw_gid, pw.pw_gid)
+    os.setreuid(pw.pw_uid, pw.pw_uid)
+    # Make it so
+    logging.info("Running aegis revert   Env: %s", env)
+    build = build_.Build()
+    build.revert(env=env)
+
+
 def initialize():
-    remaining = tornado.options.parse_command_line()
-    # parse_command_line returns the remaining command line arguments
-    logging.warning(remaining)
+    # if branch, revision, version, env don't exist, add them
+    if not aegis.config.get('branch'):
+        define('branch', default=None, help='git branch name', type=str)
+    if not aegis.config.get('revision'):
+        define('revision', default=None, help='git revision hash', type=str)
+    config.initialize(args=sys.argv[1:])
+    #remaining = tornado.options.parse_command_line(sys.argv[1:])
+    #if remaining:
+    #    # parse_command_line returns the remaining command line arguments, print if they exist
+    #    aegis.stdlib.logw(remaining, "REMAINING UNPARSED COMMANDLINE ARGS")
 
 
 def main():
     parser = argparse.ArgumentParser(description='Create your shield.')
-    parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create]')
+    parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create, schema, build, deploy, revert]')
+    parser.add_argument('--branch', metavar='<branch>', type=str, help='git branch name')
+    parser.add_argument('--revision', metavar='<revision>', type=str, help='git revision hash')
+    parser.add_argument('--env', metavar='<env>', type=str, help='primary environment name')
+    parser.add_argument('--version', metavar='<version>', type=str, help='program version tag')
     args = parser.parse_args()
     cmd = args.cmd[0]
     # Do something
     if cmd == 'create':
         return create(parser)
+    elif cmd == 'install':
+        return install(parser)
+    elif cmd == 'schema':
+        return schema(parser)
+    elif cmd == 'build':
+        return build(parser)
+    elif cmd == 'deploy':
+        return deploy(parser)
+    elif cmd == 'revert':
+        return revert(parser)
     else:
         logging.error("NOT IMPLEMENTED... YET")
         return 127
@@ -275,12 +402,13 @@ if __name__ == "__main__":
     initialize()
     retval = main()
     sys.exit(retval)
-elif __name__ == 'aegis.aegis':
+elif __name__ == 'aegis.aegis_':
     # Called from entry point, likely from setup.py installation
     initialize()
     retval = main()
     sys.exit(retval)
 else:
+    # Not entirely sure how it was called
     initialize()
-    stdlib.logw(__name__, "Called by __name__")
-    #sys.exit(126)
+    aegis.stdlib.logw(__name__, "Called by __name__")
+    sys.exit(126)

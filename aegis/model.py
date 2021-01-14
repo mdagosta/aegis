@@ -529,7 +529,7 @@ class Build(aegis.database.Row):
         return db().execute(sql, version, self['build_id'])
 
     def set_previous_version(self, previous_version):
-        sql = "UPDATE build SET previous_version=%s WHERE build_id=%s"
+        sql = "UPDATE build SET previous_version=%s WHERE build_id=%s AND previous_version IS NULL"
         return db().execute(sql, previous_version, self['build_id'])
 
     def set_revision(self, revision):
@@ -540,7 +540,20 @@ class Build(aegis.database.Row):
         sql = "UPDATE build SET build_size=%s WHERE build_id=%s"
         return db().execute(sql, build_size, self['build_id'])
 
+    def set_deployed(self):
+        sql = "UPDATE build SET deploy_dttm=NOW() WHERE build_id=%s"
+        return db().execute(sql, self['build_id'])
+
+    def set_reverted(self):
+        sql = "UPDATE build SET revert_dttm=NOW() WHERE build_id=%s"
+        return db().execute(sql, self['build_id'])
+
     @classmethod
     def get_live_build(cls):
-        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NOT NULL"
+        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL ORDER BY deploy_dttm DESC LIMIT 1"
         return db().get(sql, cls=cls)
+
+    @classmethod
+    def get_version(cls, version):
+        sql = "SELECT * FROM build WHERE version=%s"
+        return db().get(sql, version, cls=cls)

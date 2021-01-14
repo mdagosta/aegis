@@ -35,7 +35,7 @@ setuptools.setup (
     ],
     entry_points={
         'console_scripts': [
-            "aegis = aegis.aegis:main",
+            "aegis = aegis.aegis_:main",
         ],
     },
     install_requires = [

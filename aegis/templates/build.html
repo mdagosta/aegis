@@ -18,14 +18,20 @@
         </tr>
 
         {% for build in builds %}
-        <tr>
+        <tr {% if build['build_id'] == live_build['build_id'] %} class="w3-pale-yellow"{% end %}>
             <td>{{build['build_id']}}</td>
             <td>{{build['branch']}}</td>
             <td><a target="_blank" href="https://{{options.git_repo.replace(':', '/')}}/commit{% if options.git_repo.startswith('bitbucket') %}s{% end %}/{{build['revision']}}">{{build['revision'][0:8]}}</a></td>
             <td>{{build['version'] or ''}}</td>
             <td><a href="/aegis/build/{{build['build_id']}}">{% if build['build_exit_status'] %}ERROR {{build['build_exit_status']}}{% elif build['build_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a></td>
-            <td>{% if build['build_exit_status'] == 0 %}<input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="deploy_{{build['build_id']}}" value="Deploy"/>{% end %}</td>
-            <td>{% if build.get('previous_version') %}<input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="revert_{{build['build_id']}}" value="Revert"/>{% end %}</td>
+            <td>{% if build['build_exit_status'] == 0 %}    {% if not build['deploy_dttm'] %}<input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="deploy_{{build['build_id']}}" value="Deploy"/>{% else %}     <a href="/aegis/build/{{build['build_id']}}?build_step=deploy">{% if build['deploy_exit_status'] %}ERROR {{build['deploy_exit_status']}}{% elif build['deploy_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a>  {% end %} {% end %}</td>
+
+            <td>{% if build['revert_dttm'] %}
+                <a href="/aegis/build/{{build['build_id']}}?build_step=revert">
+                    {% if build['revert_exit_status'] %}ERROR {{build['revert_exit_status']}}
+                    {% elif build['revert_exit_status'] == 0 %}SUCCESS
+                    {% else %}RUNNING{% end %}</a>
+                </a>{% else %}{% if build.get('previous_version') %}<input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="revert_{{build['build_id']}}" value="Revert"/>{% end %}{% end %}</td>
             <td>{% if build['build_size'] %}{{"%4.2f MB" % (build['build_size'] / 1024 / 1024)}}{% end %}</td>
         </tr>
         {% end %}

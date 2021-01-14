@@ -752,6 +752,7 @@ class AegisBuildForm(AegisWeb):
             self.tmpl['build'] = aegis.model.Build.get_id(build_id)
         else:
             self.tmpl['build'] = {}
+        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
         return self.render_path("build_form.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -800,6 +801,8 @@ class AegisBuildForm(AegisWeb):
                 return
             if self.build_exec("git checkout %s" % (refspec), cwd=self.src_repo):
                 return
+            if self.build_exec("git pull --commit --ff", cwd=self.src_repo):
+                return
             if build['revision'] == 'HEAD':
                 commit_hash, stderr, exit_status = aegis.stdlib.shell('git rev-parse HEAD', cwd=self.src_repo)
                 self.build.set_revision(commit_hash)
@@ -836,9 +839,11 @@ class AegisBuildForm(AegisWeb):
                     return
                 if self.build_exec("nice yarn run %s --cache-folder /srv/www/.cache/yarn" % options.env, cwd=self.build_dir):
                     return
-                self.build_size = os.path.getsize(os.path.join(self.build_dir, options.build_output_file % {'tag': self.next_tag}))
-                if self.build_size:
-                    self.build.set_build_size(self.build_size)
+                build_output_file = os.path.join(self.build_dir, options.build_output_file % {'tag': self.next_tag})
+                if os.path.exists(build_output_file):
+                    build_size = os.path.getsize(build_output_file)
+                    if build_size:
+                        self.build.set_build_size(build_size)
             # Rsync the files to the servers if it's configured
             rsync_hosts = [rh for rh in aegis.config.get('rsync_hosts') if rh != self.host]
             for rsync_host in rsync_hosts:
@@ -920,6 +925,7 @@ class AegisBuild(AegisWeb):
     def get(self, *args):
         self.enforce_admin()
         self.tmpl['builds'] = aegis.model.Build.scan()
+        self.tmpl['live_build'] = aegis.model.Build.get_live_build()
         return self.render_path("build.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -934,6 +940,13 @@ class AegisBuild(AegisWeb):
                 work_data = {'hostname': deploy_host, 'env': aegis.config.get('env'), 'build_id': build_id}
                 hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
                 hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+            # Set the previous version so we know what to revert back to, and mark it deployed
+            build = aegis.model.Build.get_id(build_id)
+            live_build = aegis.model.Build.get_live_build()
+            if live_build:
+                build.set_previous_version(build['version'])
+                build = aegis.model.Build.get_id(build['build_id'])
+            build.set_deployed()
             return self.redirect('/aegis/build')
         build_id = [aegis.stdlib.validate_int(k.replace('revert_', '')) for k in self.request.args.keys() if k.startswith('revert_')][0]
         if build_id:

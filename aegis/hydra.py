@@ -9,6 +9,7 @@ import datetime
 import json
 import logging
 import random
+import os
 import signal
 import socket
 import sys
@@ -188,38 +189,36 @@ class HydraHead(HydraThread):
             # Environment Settings
             self.logw(socket.gethostname(), "HOSTNAME MATCH")
             self.logw(aegis.config.get('env'), "ENV MATCH")
-            build = aegis.model.Build.get_id(work_data['build_id'])
+            self.build = aegis.model.Build.get_id(work_data['build_id'])
             app_dir = os.path.join(options.deploy_dir, options.program_name)
-            build_dir = os.path.join(app_dir, build['version'])
+            build_dir = os.path.join(app_dir, self.build['version'])
             live_symlink = os.path.join(app_dir, aegis.config.get('env'))
             self.start_t = time.time()
             self.output_tx = ''
             self.username, stderr, exit_status = aegis.stdlib.shell('whoami')
             self.host = socket.gethostname()
             # What to restart
-            supervisor_status, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
-            self.logw(supervisor_status, 'super status')
-            processes = [ss for ss in supervisor_status if ss.endswith(aegis.config.get('env'))]
+            processes, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
+            self.logw(processes, 'processes')
+            processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+aegis.config.get('env'))]
             self.logw(processes, "PROCESSES")
             self.logw(build_dir, "BUILD DIR")
             self.logw(live_symlink, "LIVE SYMLINK")
-            # Set the previous version so we know what to revert back to
-            live_build = aegis.model.Build.get_live_build()
-            if live_build:
-                self.logw(live_build, "LIVE BUILD")
-                build.set_previous_version(build['version'])
-                build = aegis.model.Build.get_id(build['build_id'])
             # Remove and re-link
-            if self.deploy_exec("rm %s" % live_symlink):
+            if self.deploy_exec("rm %s" % live_symlink, cwd=app_dir):
                 logging.warning("ERROR RM")
-            if self.deploy_exec("ln -s %s %s" % (build_dir, live_symlink)):
+                return True, 1
+            if self.deploy_exec("ln -s %s %s" % (build_dir, live_symlink), cwd=app_dir):
                 logging.warning("ERROR LN")
-            # Mark deployed and restart processes
-            build.set_deploy_dttm()
+                return True, 1
+            # Restart processes
             for process in processes:
-                if self.deploy_exec("sudo /usr/bin/supervisorctl restart %s" % (process)):
+                self.logw(process, "RESTART")
+                if self.deploy_exec("sudo /usr/bin/supervisorctl restart %s" % (process), cwd=app_dir):
                     self.logw(process, "ERROR RESTARTING PROCESS")
-                    break
+                    return True, 1
+
+            self.deploy_done_exec()
         return True, 1
 
 

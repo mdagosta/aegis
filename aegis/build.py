@@ -178,7 +178,7 @@ class Build:
 
     def new_version(self):
         self.branch = self.build['branch']
-        self.section = '%s' % self.branch
+        self.section = aegis.config.get('env')
         self.config = configparser.ConfigParser()
         self.src_repo_app = os.path.join(self.src_repo, options.program_name)
         self.version_file = os.path.join(self.src_repo_app, 'version.cfg')
@@ -211,7 +211,7 @@ class Build:
         return '%s.%s.%s' % (x, y, z)
 
     def write_py_version(self):
-        self.config.set(aegis.config.get('env'), 'version', self.next_tag)
+        self.config.set(self.section, 'version', self.next_tag)
         fd = open(self.version_file, 'w')
         self.config.write(fd)
         fd.close()

@@ -21,8 +21,9 @@ import aegis.model
 
 
 class Build:
-    def __init__(self):
+    def __init__(self, write_custom_versions_fn=None):
         self.logw = aegis.stdlib.logw
+        self.write_custom_versions_fn = write_custom_versions_fn
 
 
     # Shell output handling
@@ -33,11 +34,12 @@ class Build:
             exec_output += '\n%s' % stdout
         if stderr:
             exec_output += "\n%s" % stderr
+        exec_output += "\n"
         if sys.stdout.isatty():
             if exit_status:
-                logging.error(exec_output)
+                logging.error(exec_output.rstrip())
             else:
-                logging.info(exec_output)
+                logging.info(exec_output.rstrip())
         self.output_tx += exec_output
         if output_tx_field == 'build_output_tx':
             self.build.set_build_output(self.output_tx)
@@ -56,9 +58,9 @@ class Build:
         exit_line = "\n  [ Exit %s   (%4.2f sec) ]" % (exit_status, exec_t)
         if sys.stdout.isatty():
             if exit_status:
-                logging.error(exit_line)
+                logging.error(exit_line.rstrip())
             else:
-                logging.info(exit_line)
+                logging.info(exit_line.rstrip())
         self.output_tx += exit_line
         if output_tx_field == 'build_output_tx':
             self.build.set_build_output(self.output_tx, exit_status)
@@ -151,7 +153,7 @@ class Build:
                 return
             # Set up and run yarn if it's installed
             self.yarn, stderr, exit_status = aegis.stdlib.shell('which yarn', cwd=self.src_dir)
-            if not self.yarn:
+            if self.yarn:
                 if self.build_exec("nice yarn install", cwd=self.build_dir):
                     return
                 if self.build_exec("nice yarn run %s --cache-folder /srv/www/.cache/yarn" % options.env, cwd=self.build_dir):
@@ -178,7 +180,8 @@ class Build:
         self.branch = self.build['branch']
         self.section = '%s' % self.branch
         self.config = configparser.ConfigParser()
-        self.version_file = os.path.join(self.src_repo, options.program_name, 'version.cfg')
+        self.src_repo_app = os.path.join(self.src_repo, options.program_name)
+        self.version_file = os.path.join(self.src_repo_app, 'version.cfg')
         self.config.read(self.version_file)
         try:
             self.version = self.str_version(self.config.get(self.section, 'version'))
@@ -189,7 +192,7 @@ class Build:
         self.tag = '%s-%s' % (self.branch, self.version_str(*self.version))
         self.next_tag = '%s-%s' % (self.branch, self.version_str(*self.next_version))
         self.write_py_version()
-        self.write_custom_version()
+        self.version_files += self.write_custom_versions_fn(self.next_tag, self.src_repo_app)
 
     def incr_version(self, x, y, z):
         if z < 99:
@@ -213,9 +216,6 @@ class Build:
         self.config.write(fd)
         fd.close()
         self.version_files = [self.version_file]
-
-    def write_custom_version(self):
-        pass
 
 
     def deploy(self, version, env=None, output_tx_field='deploy_output_tx'):

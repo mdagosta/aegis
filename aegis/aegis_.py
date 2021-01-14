@@ -32,7 +32,15 @@ elif sys.argv[0] == 'virtualenv/bin/aegis':
     src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
     sys.path.insert(0, src_dir)
     import config
-
+elif sys.argv[0] == '/usr/local/bin/aegis':
+    repo_dir = os.getcwd()
+    if os.path.exists(os.path.join(repo_dir, '.git')):
+        src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+        sys.path.insert(0, src_dir)
+        import config
+    else:
+        logging.error("Can't detect your app dir. Be in the source root, next to .git dir.")
+        sys.exit(1)
 
 
 # Create a new spinoff of aegis
@@ -174,9 +182,9 @@ def build(parser):
     args = parser.parse_args()
     build_args = {'branch': args.branch, 'revision': args.revision}
     if not aegis.config.get('env') or not(build_args['branch'] or build_args['revision']):
-        aegis.stdlib.logw(aegis.config.get('env'), "ENV")
-        aegis.stdlib.logw(build_args, "BUILD ARGS")
         logging.error("aegis build requires --env and one of --branch or --revision")
+        aegis.stdlib.loge(aegis.config.get('env'), "ENV")
+        aegis.stdlib.loge(build_args, "BUILD ARGS")
         sys.exit(1)
     # Require sudo to build, set real and effective uid and gid, as well as HOME for www-data user
     if not os.geteuid() == 0:
@@ -188,7 +196,7 @@ def build(parser):
     os.setreuid(pw.pw_uid, pw.pw_uid)
     # Set up build
     logging.info("Running aegis build   Env: %s   Branch: %s   Revision: %s", aegis.config.get('env'), build_args['branch'], build_args['revision'])
-    new_build = build_.Build()
+    new_build = build_.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
     build_row = new_build.create(build_args)
     if build_row.get('error'):
         logging.error(build_row['error'])
@@ -202,7 +210,6 @@ def build(parser):
         logging.info("Build Success. Version: %s" % build_row['version'])
         logging.info("Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version']))
     sys.exit(exit_status)
-
 
 
 def deploy(parser):
@@ -227,8 +234,6 @@ def deploy(parser):
     logging.info("Running aegis deploy   Version: %s   Env: %s", version, env)
     build = build_.Build()
     build.deploy(version, env=env)
-
-
 
 
 

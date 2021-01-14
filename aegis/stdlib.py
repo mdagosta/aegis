@@ -38,6 +38,10 @@ def logw(var, msg=''):
     caller = get_caller()
     logging.warning('%s %s %s %s', cstr(caller, 'yellow'), msg, type(var), pprint.pformat(var))
 
+def loge(var, msg=''):
+    caller = get_caller()
+    logging.error('%s %s %s %s', cstr(caller, 'red'), msg, type(var), pprint.pformat(var))
+
 def logline(*args):
     caller = get_caller()
     msg = '%s %s' % (cstr(caller, 'yellow'), args[0])

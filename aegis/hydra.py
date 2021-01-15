@@ -24,6 +24,7 @@ from tornado.options import define, options
 # Project Imports
 import aegis.stdlib
 import aegis.model
+import aegis.build
 
 
 define('hydra_id', default=0, type=int)
@@ -118,6 +119,7 @@ class HydraHead(HydraThread):
     def __init__(self, hydra_head_id, *args, **kwargs):
         self.hydra_head_id = hydra_head_id
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
+        self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
 
 
@@ -147,20 +149,28 @@ class HydraHead(HydraThread):
                             continue
                         self.iter_cnt += 1
                         work_fn = getattr(self, hydra_type['hydra_type_name'])
-                        # Do the work
-                        hydra_queue.incr_try_cnt()
-                        hydra_queue.start()
-                        result, work_cnt = work_fn(hydra_queue, hydra_type)
-                        #self.logw(result, "RESULT")
-                        #self.logw(work_cnt, "WORK CNT")
-                        if result:
-                            hydra_queue.complete()
+                        # Allow queue items to specify that they should run in a specific host and environment.
+                        # If that's not present, or it matches the current host, run the queue. Otherwise simply unclaim and another process will claim it.
+                        work_data = None
+                        if hydra_queue['work_data']:
+                            work_data = json.loads(hydra_queue['work_data'])
+                        if not work_data or (work_data.get('hostname') == self.hostname and work_data.get('env') == aegis.config.get('env')):
+                            # Do the work
+                            hydra_queue.incr_try_cnt()
+                            hydra_queue.start()
+                            result, work_cnt = work_fn(hydra_queue, hydra_type)
+                            #self.logw(result, "RESULT")
+                            #self.logw(work_cnt, "WORK CNT")
+                            if result:
+                                hydra_queue.complete()
+                            else:
+                                logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
+                                continue
+                            # Worker accounting
+                            logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
+                            self.processed_cnt += work_cnt
                         else:
-                            logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
-                            continue
-                        # Worker accounting
-                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
-                        self.processed_cnt += work_cnt
+                            hydra_queue.unclaim()
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
                         logging.exception(ex)
@@ -186,40 +196,14 @@ class HydraHead(HydraThread):
         work_data = json.loads(hydra_queue['work_data'])
         self.logw(work_data, "WORK DATA")
         if work_data.get('hostname') == socket.gethostname() and work_data.get('env') == aegis.config.get('env'):
-            # Environment Settings
-            self.logw(socket.gethostname(), "HOSTNAME MATCH")
-            self.logw(aegis.config.get('env'), "ENV MATCH")
-            self.build = aegis.model.Build.get_id(work_data['build_id'])
-            app_dir = os.path.join(options.deploy_dir, options.program_name)
-            build_dir = os.path.join(app_dir, self.build['version'])
-            live_symlink = os.path.join(app_dir, aegis.config.get('env'))
-            self.start_t = time.time()
-            self.output_tx = ''
-            self.username, stderr, exit_status = aegis.stdlib.shell('whoami')
-            self.host = socket.gethostname()
-            # What to restart
-            processes, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
-            self.logw(processes, 'processes')
-            processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+aegis.config.get('env'))]
-            self.logw(processes, "PROCESSES")
-            self.logw(build_dir, "BUILD DIR")
-            self.logw(live_symlink, "LIVE SYMLINK")
-            # Remove and re-link
-            if self.deploy_exec("rm %s" % live_symlink, cwd=app_dir):
-                logging.warning("ERROR RM")
-                return True, 1
-            if self.deploy_exec("ln -s %s %s" % (build_dir, live_symlink), cwd=app_dir):
-                logging.warning("ERROR LN")
-                return True, 1
-            # Restart processes
-            for process in processes:
-                self.logw(process, "RESTART")
-                if self.deploy_exec("sudo /usr/bin/supervisorctl restart %s" % (process), cwd=app_dir):
-                    self.logw(process, "ERROR RESTARTING PROCESS")
-                    return True, 1
-
-            self.deploy_done_exec()
-        return True, 1
+            build_row = aegis.model.Build.get_id(work_data['build_id'])
+            build = aegis.build.Build()
+            exit_status = build.deploy(build_row['version'], env=work_data.get('env'))
+            self.logw(exit_status, "EXIT STATUS")
+            return True, 1
+        else:
+            # unclaim it, process 0
+            return False, 0
 
 
     def deploy_exec(self, cmd, cwd, env=None):

@@ -183,11 +183,17 @@ class Build:
         self.src_repo_app = os.path.join(self.src_repo, options.program_name)
         self.version_file = os.path.join(self.src_repo_app, 'version.cfg')
         self.config.read(self.version_file)
+        # Use the version from the branch to determine the version numbers
         try:
-            self.version = self.str_version(self.config.get(self.section, 'version'))
+            self.version = self.str_version(self.config.get(self.branch, 'version'))
+        except configparser.NoSectionError as ex:
+            self.config.add_section(self.branch)
+            self.version = [0, 0, 0]
+        # Make sure there's an entry for the environment too
+        try:
+            env_section = self.config.get(self.section, 'version')
         except configparser.NoSectionError as ex:
             self.config.add_section(self.section)
-            self.version = [0, 0, 0]
         self.next_version = self.incr_version(*self.version)
         self.tag = '%s-%s' % (self.branch, self.version_str(*self.version))
         self.next_tag = '%s-%s' % (self.branch, self.version_str(*self.next_version))
@@ -212,6 +218,7 @@ class Build:
 
     def write_py_version(self):
         self.config.set(self.section, 'version', self.next_tag)
+        self.config.set(self.branch, 'version', self.next_tag)
         fd = open(self.version_file, 'w')
         self.config.write(fd)
         fd.close()

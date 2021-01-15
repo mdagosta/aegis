@@ -541,11 +541,11 @@ class Build(aegis.database.Row):
         return db().execute(sql, build_size, self['build_id'])
 
     def set_deployed(self):
-        sql = "UPDATE build SET deploy_dttm=NOW() WHERE build_id=%s"
+        sql = "UPDATE build SET deploy_dttm=NOW() WHERE build_id=%s AND deploy_dttm IS NULL"
         return db().execute(sql, self['build_id'])
 
     def set_reverted(self):
-        sql = "UPDATE build SET revert_dttm=NOW() WHERE build_id=%s"
+        sql = "UPDATE build SET revert_dttm=NOW() WHERE build_id=%s AND revert_dttm IS NULL"
         return db().execute(sql, self['build_id'])
 
     @classmethod

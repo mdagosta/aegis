@@ -154,7 +154,12 @@ class HydraHead(HydraThread):
                         work_data = None
                         if hydra_queue['work_data']:
                             work_data = json.loads(hydra_queue['work_data'])
-                        if not work_data or (work_data.get('hostname') == self.hostname and work_data.get('env') == aegis.config.get('env')):
+                        process = True
+                        if work_data and work_data.get('hostname') and work_data['hostname'] != self.hostname:
+                            process = False
+                        if work_data and work_data.get('env') and work_data['env'] != aegis.config.get('env'):
+                            process = False
+                        if process:
                             # Do the work
                             hydra_queue.incr_try_cnt()
                             hydra_queue.start()

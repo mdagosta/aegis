@@ -774,7 +774,7 @@ class AegisBuildForm(AegisWeb):
         build_id = aegis.model.Build.insert_columns(**build)
         build_row = aegis.model.Build.get_id(build_id)
         # Magic to bind config.write_custom_versions onto the build, to also create the react version
-        new_build = aegis.build.Build()
+        new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
         self.do_build(new_build, build_row)
         self.redirect('/aegis/build')
 

@@ -198,7 +198,8 @@ class Build:
         self.tag = '%s-%s' % (self.branch, self.version_str(*self.version))
         self.next_tag = '%s-%s' % (self.branch, self.version_str(*self.next_version))
         self.write_py_version()
-        self.version_files += self.write_custom_versions_fn(self.next_tag, self.src_repo_app)
+        if self.write_custom_versions_fn:
+            self.version_files += self.write_custom_versions_fn(self.next_tag, self.src_repo_app)
 
     def incr_version(self, x, y, z):
         if z < 99:

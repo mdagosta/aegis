@@ -163,8 +163,9 @@ class HydraHead(HydraThread):
                             # Do the work
                             hydra_queue.incr_try_cnt()
                             hydra_queue.start()
+                            logging.warning("CALLING WORK_FN")
                             result, work_cnt = work_fn(hydra_queue, hydra_type)
-                            #self.logw(result, "RESULT")
+                            self.logw(result, "RESULT")
                             #self.logw(work_cnt, "WORK CNT")
                             if result:
                                 hydra_queue.complete()
@@ -199,16 +200,13 @@ class HydraHead(HydraThread):
         #self.logw(hydra_queue, "deploy_build HYDRA QUEUE")
         # host-specific by putting hostname: key in the work_data JSON
         work_data = json.loads(hydra_queue['work_data'])
-        self.logw(work_data, "WORK DATA")
-        if work_data.get('hostname') == socket.gethostname() and work_data.get('env') == aegis.config.get('env'):
-            build_row = aegis.model.Build.get_id(work_data['build_id'])
-            build = aegis.build.Build()
-            exit_status = build.deploy(build_row['version'], env=work_data.get('env'))
-            self.logw(exit_status, "EXIT STATUS")
-            return True, 1
-        else:
-            # unclaim it, process 0
-            return False, 0
+        self.logw(work_data, "DEPLOY BUILD WORK DATA")
+        build_row = aegis.model.Build.get_id(work_data['build_id'])
+        build = aegis.build.Build()
+        logging.warning("CALLING DEPLOY NOW")
+        exit_status = build.deploy(build_row['version'], env=work_data.get('env'))
+        self.logw(exit_status, "EXIT STATUS")
+        return True, 1
 
 
     def deploy_exec(self, cmd, cwd, env=None):

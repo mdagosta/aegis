@@ -247,6 +247,7 @@ class Build:
             return
         # Restart processes
         for process in processes:
+            self.logw(process, "RESTARTING PROCESS")
             if self.shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), output_tx_field=output_tx_field, cwd=app_dir):
                 self.logw(process, "ERROR RESTARTING PROCESS")
                 return

@@ -16,7 +16,7 @@ from tornado.options import define, options
 
 # Project Imports
 import aegis.stdlib
-import aegis.build as build_
+import aegis.build
 
 # Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
 venv = os.environ.get('VIRTUAL_ENV')
@@ -196,7 +196,7 @@ def build(parser):
     os.setreuid(pw.pw_uid, pw.pw_uid)
     # Set up build
     logging.info("Running aegis build   Env: %s   Branch: %s   Revision: %s", aegis.config.get('env'), build_args['branch'], build_args['revision'])
-    new_build = build_.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
+    new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
     build_row = new_build.create(build_args)
     if build_row.get('error'):
         logging.error(build_row['error'])
@@ -232,7 +232,7 @@ def deploy(parser):
     os.setreuid(pw.pw_uid, pw.pw_uid)
     # Make it so
     logging.info("Running aegis deploy   Version: %s   Env: %s", version, env)
-    build = build_.Build()
+    build = aegis.build.Build()
     build.deploy(version, env=env)
 
 

@@ -776,6 +776,7 @@ class AegisBuildForm(AegisWeb):
         # Magic to bind config.write_custom_versions onto the build, to also create the react version
         new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
         self.do_build(new_build, build_row)
+        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
         self.redirect('/aegis/build')
 
     @threadpool.in_thread_pool
@@ -799,6 +800,7 @@ class AegisBuild(AegisWeb):
 
     @tornado.web.authenticated
     def post(self, *args):
+        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
         self.enforce_admin()
         # DEPLOY
         build_id = [aegis.stdlib.validate_int(k.replace('deploy_', '')) for k in self.request.args.keys() if k.startswith('deploy_')][0]

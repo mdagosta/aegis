@@ -35,7 +35,8 @@ class Build:
         if stderr:
             exec_output += "\n%s" % stderr
         exec_output += "\n"
-        if sys.stdout.isatty():
+        # Since build.py is new, it's worth logging in all situations for a while until it gets annoying.
+        if True or sys.stdout.isatty():
             if exit_status:
                 logging.error(exec_output.rstrip())
             else:
@@ -56,7 +57,8 @@ class Build:
         end_t = time.time()
         exec_t = end_t - self.start_t
         exit_line = "\n  [ Exit %s   (%4.2f sec) ]" % (exit_status, exec_t)
-        if sys.stdout.isatty():
+        # Since build.py is new, it's worth logging in all situations for a while until it gets annoying.
+        if True or sys.stdout.isatty():
             if exit_status:
                 logging.error(exit_line.rstrip())
             else:
@@ -86,7 +88,6 @@ class Build:
     # Create a new build
     def create(self, build_args):
         if not (build_args.get('branch') or build_args.get('revision')):
-            aegis.stdlib.logw(build_args, "BUILD ARGS")
             return {'error': "aegis.build.Build.create(build_args) must have 'env' and one of 'branch' or 'revision'"}
         if not build_args['revision']:
             build_args['revision'] = 'HEAD'
@@ -166,7 +167,7 @@ class Build:
             # Rsync the files to the servers if it's configured
             rsync_hosts = [rh for rh in aegis.config.get('deploy_hosts') if rh != self.host]
             for rsync_host in rsync_hosts:
-                cmd = "rsync -q --password-file=/etc/rsync.password -avzhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
+                cmd = "nice rsync -q --password-file=/etc/rsync.password -avzhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
                 if self.build_exec(cmd, cwd=self.build_dir):
                     return
         except Exception as ex:
@@ -246,11 +247,22 @@ class Build:
         if self.shell_exec("ln -s %s %s" % (build_dir, live_symlink), output_tx_field=output_tx_field, cwd=app_dir):
             return
         # Restart processes
+        import __main__
         for process in processes:
-            self.logw(process, "RESTARTING PROCESS")
+            # Due to subprocess.Popen automatically receiving the SIGTERM from supervisor, we can't restart hydra from within supervisor.
+            # https://stackoverflow.com/questions/52763508/python-prevent-child-threads-from-being-affected-from-sigint-signal
+            # Instead, allow Hydra to use its quitting flag to stop and let supervisor restart.
+            main_is_hydra = (__main__.__file__.endswith('hydra.py') or __main__.__file__.endswith('batch.py'))
+            proc_is_hydra = (process.startswith('hydra') or process.startswith('batch'))
+            if main_is_hydra and proc_is_hydra:
+                logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
+                continue
+            # Restart processes one-by-one from supervisorctl
             if self.shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), output_tx_field=output_tx_field, cwd=app_dir):
                 self.logw(process, "ERROR RESTARTING PROCESS")
                 return
+            time.sleep(0.33)
+
         # Set the previous version so we know what to revert back to, and mark it deployed
         self.build = aegis.model.Build.get_id(self.build['build_id'])
         live_build = aegis.model.Build.get_live_build()

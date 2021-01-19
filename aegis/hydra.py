@@ -33,8 +33,8 @@ define('hydra_sleep', default=1, type=int)
 
 class HydraThread(threading.Thread):
 
-    # quitting is at the class level to synchronize the threads in the process
-    quitting = False
+    # quitting uses threading.Event() at the class level to synchronize flags between threads
+    quitting = threading.Event()
     filename = __file__
 
 
@@ -76,7 +76,7 @@ class HydraThread(threading.Thread):
         signal.signal(signal.SIGHUP, self.signal_reset)
         # Main thread is used only as a control thread... monitors quitting variable, and sleep gets interrupted by signal. And that's it!
         while threading.active_count() > 1:
-            if HydraThread.quitting:
+            if HydraThread.quitting.is_set():
                 logging.warning("aegis/hydra.py waiting %ss for threads to finish... %s active" % (options.hydra_sleep, threading.active_count()))
                 threads = threading.enumerate()
                 if len(threads) > 1:
@@ -105,7 +105,7 @@ class HydraThread(threading.Thread):
     @staticmethod
     def signal_stop(signal, frm):
         logging.warning('SIGINT or SIGTERM received (%s). Quitting now...', signal)
-        HydraThread.quitting = True
+        HydraThread.quitting.set()
 
 
     @staticmethod
@@ -126,13 +126,13 @@ class HydraHead(HydraThread):
     def process(self):
         logging.info("Spawning %s", self.name)
         try:
-            while(not HydraThread.quitting):
+            while(not HydraThread.quitting.is_set()):
                 if self.hydra_head_id == 0:
                     queue_items = aegis.model.HydraQueue.scan_work_priority()
                 else:
                     queue_items = aegis.model.HydraQueue.scan_work()
                 for hydra_queue in queue_items:
-                    if HydraThread.quitting: break
+                    if HydraThread.quitting.is_set(): break
                     try:
                         # Fetch rows from database queue and claim items before processing
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
@@ -163,9 +163,7 @@ class HydraHead(HydraThread):
                             # Do the work
                             hydra_queue.incr_try_cnt()
                             hydra_queue.start()
-                            logging.warning("CALLING WORK_FN")
                             result, work_cnt = work_fn(hydra_queue, hydra_type)
-                            self.logw(result, "RESULT")
                             #self.logw(work_cnt, "WORK CNT")
                             if result:
                                 hydra_queue.complete()
@@ -200,31 +198,15 @@ class HydraHead(HydraThread):
         #self.logw(hydra_queue, "deploy_build HYDRA QUEUE")
         # host-specific by putting hostname: key in the work_data JSON
         work_data = json.loads(hydra_queue['work_data'])
-        self.logw(work_data, "DEPLOY BUILD WORK DATA")
         build_row = aegis.model.Build.get_id(work_data['build_id'])
+        logging.warning("Hydra Deploy Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        logging.warning("CALLING DEPLOY NOW")
         exit_status = build.deploy(build_row['version'], env=work_data.get('env'))
-        self.logw(exit_status, "EXIT STATUS")
+        # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
+        logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
+        HydraThread.quitting.set()
         return True, 1
 
-
-    def deploy_exec(self, cmd, cwd, env=None):
-        self.output_tx += "\n%s@%s:%s> %s\n" % (self.username, self.host, cwd, cmd)
-        stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=cwd, env=env)
-        self.output_tx += stdout
-        self.output_tx += "\n%s" % stderr
-        self.build.set_deploy_output(self.output_tx)
-        self.build = aegis.model.Build.get_id(self.build['build_id'])
-        if exit_status:
-            self.deploy_done_exec(exit_status)
-        return exit_status
-
-    def deploy_done_exec(self, exit_status=0):
-        end_t = time.time()
-        exec_t = end_t - self.start_t
-        self.output_tx += "\n  [ Exit %s   (%4.2f sec) ]" % (exit_status, exec_t)
-        self.build.set_deploy_output(self.output_tx, exit_status)
 
     def revert_build(self, hydra_queue, hydra_type):
         self.logw(hydra_queue, "revert_build HYDRA QUEUE")
@@ -243,6 +225,7 @@ class Hydra(HydraThread):
         HydraThread.__init__(self, name=self.thread_name)
         self.num_heads = 3
         self.hydra_head_cls = HydraHead
+
 
 
     def spawn_heads(self):
@@ -265,12 +248,12 @@ class Hydra(HydraThread):
             aegis.model.HydraType.clear_running()
         try:
             self.spawn_heads()
-            while(not HydraThread.quitting):
+            while(not HydraThread.quitting.is_set()):
                 self.iter_cnt += 1
                 try:
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan():
-                        if HydraThread.quitting: break
+                        if HydraThread.quitting.is_set(): break
                         # Check if the task is runnable
                         runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
                         if runnable:

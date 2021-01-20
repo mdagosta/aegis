@@ -229,11 +229,14 @@ class Build:
 
     def deploy(self, version, env=None, output_tx_field='deploy_output_tx'):
         # Environment Settings
-        self.build = aegis.model.Build.get_version(version)
-        self.build = aegis.model.Build.get_id(self.build['build_id'])
+        deploy_build = aegis.model.Build.get_version(version)
+        deploy_build = aegis.model.Build.get_id(deploy_build['build_id'])
         app_dir = os.path.join(options.deploy_dir, options.program_name)
-        build_dir = os.path.join(app_dir, self.build['version'])
+        build_dir = os.path.join(app_dir, deploy_build['version'])
         live_symlink = os.path.join(app_dir, aegis.config.get('env'))
+        # Set self.build for where to record output if it's deploy, but don't overwrite in the revert case
+        if output_tx_field == 'deploy_output_tx':
+            self.build = deploy_build
         self.start_t = time.time()
         self.output_tx = ''
         self.username, stderr, exit_status = aegis.stdlib.shell('whoami')
@@ -263,13 +266,14 @@ class Build:
                 return
             time.sleep(0.33)
 
-        # Set the previous version so we know what to revert back to, and mark it deployed
-        self.build = aegis.model.Build.get_id(self.build['build_id'])
-        live_build = aegis.model.Build.get_live_build()
-        if live_build:
-            self.build.set_previous_version(live_build['version'])
+        # Set the previous version so we know what to revert back to, and mark it deployed, if this isn't happening to revert a build
+        if output_tx_field == 'deploy_output_tx':
             self.build = aegis.model.Build.get_id(self.build['build_id'])
-        self.build.set_deployed()
+            live_build = aegis.model.Build.get_live_build()
+            if live_build:
+                self.build.set_previous_version(live_build['version'])
+                self.build = aegis.model.Build.get_id(self.build['build_id'])
+            self.build.set_deployed()
         return self.done_exec(output_tx_field)
 
 

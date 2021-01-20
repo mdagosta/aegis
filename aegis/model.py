@@ -548,6 +548,10 @@ class Build(aegis.database.Row):
         sql = "UPDATE build SET revert_dttm=NOW() WHERE build_id=%s AND revert_dttm IS NULL"
         return db().execute(sql, self['build_id'])
 
+    def set_soft_deleted(self):
+        sql = "UPDATE build SET delete_dttm=NOW() WHERE build_id=%s"
+        return db().execute(sql, self['build_id'])
+
     @classmethod
     def get_live_build(cls):
         sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL ORDER BY deploy_dttm DESC LIMIT 1"

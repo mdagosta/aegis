@@ -770,31 +770,21 @@ class AegisBuildForm(AegisWeb):
             build['revision'] = 'HEAD'
         if self.tmpl['errors']:
             return self.render_path("build_form.html", **self.tmpl)
-        # Create build row and run it on the threadpool
+        # Create build row and add it to run on Hydra
         build_id = aegis.model.Build.insert_columns(**build)
-        build_row = aegis.model.Build.get_id(build_id)
-        # Magic to bind config.write_custom_versions onto the build, to also create the react version
-        new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
-        self.do_build(new_build, build_row)
-        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
+        hydra_type = aegis.model.HydraType.get_name('build_build')
+        hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()")}
+        work_data = {'hostname': options.build_host, 'env': aegis.config.get('env'), 'build_id': build_id}
+        hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
+        hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
         self.redirect('/aegis/build')
-
-    @threadpool.in_thread_pool
-    def do_build(self, new_build, build_row):
-        exit_status = new_build.build_git_venv_yarn(build_row)
-        build_row = aegis.model.Build.get_id(build_row['build_id'])
-        if exit_status:
-            logging.error("Build Failed. Version: %s" % build_row['version'])
-        else:
-            logging.info("Build Success. Version: %s" % build_row['version'])
-            logging.info("Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version']))
 
 
 class AegisBuild(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        self.tmpl['builds'] = aegis.model.Build.scan()
+        self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if not b['delete_dttm']]
         self.tmpl['live_build'] = aegis.model.Build.get_live_build()
         return self.render_path("build.html", **self.tmpl)
 
@@ -803,27 +793,39 @@ class AegisBuild(AegisWeb):
         self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
         self.enforce_admin()
         # DEPLOY
-        build_id = [aegis.stdlib.validate_int(k.replace('deploy_', '')) for k in self.request.args.keys() if k.startswith('deploy_')][0]
-        if build_id:
-            hydra_type = aegis.model.HydraType.get_name('deploy_build')
-            # Put an item on the work queue to signal each host to deploy
-            for deploy_host in options.deploy_hosts:
-                hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()")}
-                work_data = {'hostname': deploy_host, 'env': aegis.config.get('env'), 'build_id': build_id}
-                hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-                hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
-            return self.redirect('/aegis/build')
+        build_keys = [k for k in self.request.args.keys() if k.startswith('deploy_')]
+        if build_keys:
+            build_id = [aegis.stdlib.validate_int(k.replace('deploy_', '')) for k in build_keys][0]
+            if build_id:
+                hydra_type = aegis.model.HydraType.get_name('deploy_build')
+                # Put an item on the work queue to signal each host to deploy
+                for deploy_host in options.deploy_hosts:
+                    hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()")}
+                    work_data = {'hostname': deploy_host, 'env': aegis.config.get('env'), 'build_id': build_id}
+                    hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
+                    hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+                return self.redirect('/aegis/build')
         # REVERT
-        build_id = [aegis.stdlib.validate_int(k.replace('revert_', '')) for k in self.request.args.keys() if k.startswith('revert_')][0]
-        if build_id:
-            hydra_type = aegis.model.HydraType.get_name('revert_build')
-            # Put an item on the work queue to signal each host to deploy
-            for deploy_host in options.deploy_hosts:
-                hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()")}
-                work_data = {'hostname': deploy_host, 'env': aegis.config.get('env'), 'build_id': build_id}
-                hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-                hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
-            return self.redirect('/aegis/build')
+        revert_keys = [k for k in self.request.args.keys() if k.startswith('revert_')]
+        if revert_keys:
+            build_id = [aegis.stdlib.validate_int(k.replace('revert_', '')) for k in revert_keys][0]
+            if build_id:
+                hydra_type = aegis.model.HydraType.get_name('revert_build')
+                # Put an item on the work queue to signal each host to deploy
+                for deploy_host in options.deploy_hosts:
+                    hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()")}
+                    work_data = {'hostname': deploy_host, 'env': aegis.config.get('env'), 'build_id': build_id}
+                    hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
+                    hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+                return self.redirect('/aegis/build')
+        # DELETE
+        delete_keys = [k for k in self.request.args.keys() if k.startswith('delete_')]
+        if delete_keys:
+            build_id = [aegis.stdlib.validate_int(k.replace('delete_', '')) for k in delete_keys][0]
+            if build_id:
+                build = aegis.model.Build.get_id(build_id)
+                build.set_soft_deleted()
+                return self.redirect('/aegis/build')
 
 
 class AegisHome(AegisWeb):
@@ -837,6 +839,7 @@ handler_urls = [
     (r'^/aegis/build/add\W*$', AegisBuildForm),
     (r'^/aegis/build/(\d+)\W*$', AegisBuildForm),
     (r'^/aegis/build\W*$', AegisBuild),
+    (r'^/aegis/hydra/queue\W*$', AegisHydraQueue),
     (r'^/aegis/hydra/add\W*$', AegisHydraForm),
     (r'^/aegis/hydra/(\d+)\W*$', AegisHydraForm),
     (r'^/aegis/hydra\W*$', AegisHydra),

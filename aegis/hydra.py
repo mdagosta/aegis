@@ -25,7 +25,7 @@ from tornado.options import define, options
 import aegis.stdlib
 import aegis.model
 import aegis.build
-
+import config
 
 define('hydra_id', default=0, type=int)
 define('hydra_sleep', default=1, type=int)
@@ -194,8 +194,21 @@ class HydraHead(HydraThread):
         return '%s %s %s %s' % (self.name, hydra_type['hydra_type_name'], ("%d" % work_cnt).rjust(8), msg)
 
 
+    def build_build(self, hydra_queue, hydra_type):
+        work_data = json.loads(hydra_queue['work_data'])
+        build_row = aegis.model.Build.get_id(work_data['build_id'])
+        # Magic to bind config.write_custom_versions onto the build, to also create the react version
+        new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
+        exit_status = new_build.build_git_venv_yarn(build_row)
+        if exit_status:
+            logging.error("Build Failed. Version: %s" % build_row['version'])
+        else:
+            logging.info("Build Success. Version: %s" % build_row['version'])
+            logging.info("Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version']))
+        return True, 1
+
+
     def deploy_build(self, hydra_queue, hydra_type):
-        #self.logw(hydra_queue, "deploy_build HYDRA QUEUE")
         # host-specific by putting hostname: key in the work_data JSON
         work_data = json.loads(hydra_queue['work_data'])
         build_row = aegis.model.Build.get_id(work_data['build_id'])
@@ -209,12 +222,16 @@ class HydraHead(HydraThread):
 
 
     def revert_build(self, hydra_queue, hydra_type):
-        self.logw(hydra_queue, "revert_build HYDRA QUEUE")
-        self.logw(hydra_type, "revert_build HYDRA TYPE")
-        # Do a supervisor stop, then start
         # host-specific by putting hostname: key in the work_data JSON
-        # capture output onto build deploy_output
-        # This is mostly calling the deploy_build() tho
+        work_data = json.loads(hydra_queue['work_data'])
+        build_row = aegis.model.Build.get_id(work_data['build_id'])
+        logging.warning("Hydra Revert Build: %s" % work_data['build_id'])
+        build = aegis.build.Build()
+        exit_status = build.revert(env=work_data.get('env'))
+        # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
+        logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
+        HydraThread.quitting.set()
+        return True, 1
 
 
 class Hydra(HydraThread):

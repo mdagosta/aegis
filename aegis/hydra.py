@@ -128,9 +128,9 @@ class HydraHead(HydraThread):
         try:
             while(not HydraThread.quitting.is_set()):
                 if self.hydra_head_id == 0:
-                    queue_items = aegis.model.HydraQueue.scan_work_priority()
+                    queue_items = aegis.model.HydraQueue.scan_work_priority(hostname=self.hostname, env=aegis.config.get('env'))
                 else:
-                    queue_items = aegis.model.HydraQueue.scan_work()
+                    queue_items = aegis.model.HydraQueue.scan_work(hostname=self.hostname, env=aegis.config.get('env'))
                 for hydra_queue in queue_items:
                     if HydraThread.quitting.is_set(): break
                     try:
@@ -138,7 +138,7 @@ class HydraHead(HydraThread):
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
                         claimed = hydra_queue.claim()
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
-                        self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name']))
+                        self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s  HOST: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
                         if not claimed: continue
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
                         if not hydra_type:
@@ -154,27 +154,19 @@ class HydraHead(HydraThread):
                         work_data = None
                         if hydra_queue['work_data']:
                             work_data = json.loads(hydra_queue['work_data'])
-                        process = True
-                        if work_data and work_data.get('hostname') and work_data['hostname'] != self.hostname:
-                            process = False
-                        if work_data and work_data.get('env') and work_data['env'] != aegis.config.get('env'):
-                            process = False
-                        if process:
-                            # Do the work
-                            hydra_queue.incr_try_cnt()
-                            hydra_queue.start()
-                            result, work_cnt = work_fn(hydra_queue, hydra_type)
-                            #self.logw(work_cnt, "WORK CNT")
-                            if result:
-                                hydra_queue.complete()
-                            else:
-                                logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
-                                continue
-                            # Worker accounting
-                            logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
-                            self.processed_cnt += work_cnt
+                        # Do the work
+                        hydra_queue.incr_try_cnt()
+                        hydra_queue.start()
+                        result, work_cnt = work_fn(hydra_queue, hydra_type)
+                        #self.logw(work_cnt, "WORK CNT")
+                        if result:
+                            hydra_queue.complete()
                         else:
-                            hydra_queue.unclaim()
+                            logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
+                            continue
+                        # Worker accounting
+                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
+                        self.processed_cnt += work_cnt
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
                         logging.exception(ex)
@@ -198,8 +190,8 @@ class HydraHead(HydraThread):
         work_data = json.loads(hydra_queue['work_data'])
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         # Magic to bind config.write_custom_versions onto the build, to also create the react version
-        new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
-        exit_status = new_build.build_git_venv_yarn(build_row)
+        new_build = aegis.build.Build()
+        exit_status = new_build.build_exec(build_row)
         if exit_status:
             logging.error("Build Failed. Version: %s" % build_row['version'])
         else:
@@ -214,7 +206,7 @@ class HydraHead(HydraThread):
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         logging.warning("Hydra Deploy Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        exit_status = build.deploy(build_row['version'], env=work_data.get('env'))
+        exit_status = build.deploy(build_row['version'], env=build_row['env'], user=work_data.get('user'))
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
         HydraThread.quitting.set()
@@ -227,10 +219,23 @@ class HydraHead(HydraThread):
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         logging.warning("Hydra Revert Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        exit_status = build.revert(env=work_data.get('env'))
+        exit_status = build.revert(env=build_row['env'], user=work_data['user'])
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
         HydraThread.quitting.set()
+        return True, 1
+
+
+    def clean_build(self, hydra_queue, hydra_type):
+        # Delete any builds that are undeployed or deleted and older than a week.
+        # Delete any builds that are deployed but are not live or previous, and over two weeks old.
+        dead_builds = aegis.model.Build.scan_dead_builds()
+        for dead_build in dead_builds:
+            self.logw(dead_build['build_id'], "DEAD BUILD - should clean it up")
+        stale_builds = aegis.model.Build.scan_stale_builds()
+        for stale_build in stale_builds:
+            logging.error("STALE BUILDS need to be handled by my recent BY ENV or else we could delete in-use old ones")
+            self.logw(stale_build['build_id'], "STALE BUILD - should clean it up")
         return True, 1
 
 

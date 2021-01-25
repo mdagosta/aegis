@@ -3,6 +3,7 @@ CREATE TABLE build (
   branch VARCHAR(100) NOT NULL,
   revision VARCHAR(100) NOT NULL,
   version VARCHAR(100) DEFAULT NULL,
+  env VARCHAR(20) NOT NULL,
   build_output_tx MEDIUMTEXT DEFAULT NULL,
   build_exit_status INTEGER DEFAULT NULL,
   build_exec_sec DECIMAL DEFAULT NULL,

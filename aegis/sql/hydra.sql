@@ -23,6 +23,8 @@ CREATE TABLE hydra_queue (
   hydra_queue_id int NOT NULL AUTO_INCREMENT,
   hydra_type_id bigint NOT NULL,
   priority_ndx tinyint NOT NULL DEFAULT '0',           -- Lower number = higher priority
+  work_host varchar(100) DEFAULT NULL,                 -- If specified only select this queue item on that zone
+  work_env varchar(20) DEFAULT NULL,                   -- If specified only select this queue item on that environment
   work_data mediumtext COLLATE utf8mb4_unicode_ci,     -- JSON string describing the work-specific data
   work_dttm datetime NOT NULL,                         -- When the work is scheduled to be done
   start_dttm datetime DEFAULT NULL,                    -- When the work actually started

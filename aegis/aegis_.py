@@ -180,7 +180,7 @@ def schema(parser):
 def build(parser):
     # Argument Handling
     args = parser.parse_args()
-    build_args = {'branch': args.branch, 'revision': args.revision}
+    build_args = {'branch': args.branch, 'revision': args.revision, 'env': aegis.config.get('env')}
     if not aegis.config.get('env') or not(build_args['branch'] or build_args['revision']):
         logging.error("aegis build requires --env and one of --branch or --revision")
         aegis.stdlib.loge(aegis.config.get('env'), "ENV")
@@ -196,13 +196,13 @@ def build(parser):
     os.setreuid(pw.pw_uid, pw.pw_uid)
     # Set up build
     logging.info("Running aegis build   Env: %s   Branch: %s   Revision: %s", aegis.config.get('env'), build_args['branch'], build_args['revision'])
-    new_build = aegis.build.Build(write_custom_versions_fn=getattr(config, 'write_custom_versions', None))
+    new_build = aegis.build.Build()
     build_row = new_build.create(build_args)
     if build_row.get('error'):
         logging.error(build_row['error'])
         sys.exit(1)
     # Running build itself
-    exit_status = new_build.build_git_venv_yarn(build_row)
+    exit_status = new_build.build_exec(build_row)
     build_row = aegis.model.Build.get_id(build_row['build_id'])
     if exit_status:
         logging.error("Build Failed. Version: %s" % build_row['version'])
@@ -233,14 +233,13 @@ def deploy(parser):
     # Make it so
     logging.info("Running aegis deploy   Version: %s   Env: %s", version, env)
     build = aegis.build.Build()
-    build.deploy(version, env=env)
-
-
-
+    deploy_msg = None
+    while not deploy_msg:
+        deploy_msg = input(aegis.stdlib.cstr('Type in release notes for the deploy notification:\n', 'white'))
+    build.deploy(version, env=env, deploy_msg=deploy_msg)
 
     # This could produce a diff and then ask
     # Could also record the diff (!!)
-
 
     # This is a separate deploy program here, which we can reference at least in concept for producing diffs
 
@@ -358,7 +357,7 @@ def revert(parser):
     os.setreuid(pw.pw_uid, pw.pw_uid)
     # Make it so
     logging.info("Running aegis revert   Env: %s", env)
-    build = build_.Build()
+    build = aegis.build.Build()
     build.revert(env=env)
 
 

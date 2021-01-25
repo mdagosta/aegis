@@ -379,10 +379,10 @@ class HydraType(aegis.database.Row):
 class HydraQueue(aegis.database.Row):
     table_name = 'hydra_queue'
     id_column = 'hydra_queue_id'
-    data_columns = ('hydra_type_id', 'priority_ndx', 'work_data', 'work_dttm', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')
+    data_columns = ('hydra_type_id', 'priority_ndx', 'work_host', 'work_env', 'work_data', 'work_dttm', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')
 
     @classmethod
-    def scan_work_priority(cls, limit=10):
+    def scan_work_priority(cls, limit=10, hostname=None, env=None):
         sql = """
         SELECT hydra_queue.*,
                hydra_type.hydra_type_name,
@@ -394,12 +394,14 @@ class HydraQueue(aegis.database.Row):
            AND hydra_queue.finish_dttm IS NULL
            AND hydra_queue.delete_dttm IS NULL
            AND hydra_type.status <> 'paused'
+           AND hydra_queue.work_host=%s
+           AND hydra_queue.work_env=%s
       ORDER BY hydra_queue.priority_ndx ASC
          LIMIT %s"""
-        return db().query(sql, limit, cls=cls)
+        return db().query(sql, hostname, env, limit, cls=cls)
 
     @classmethod
-    def scan_work(cls, limit=10):
+    def scan_work(cls, limit=10, hostname=None, env=None):
         sql = """
         SELECT hydra_queue.*,
                hydra_type.hydra_type_name,
@@ -417,16 +419,19 @@ class HydraQueue(aegis.database.Row):
 
     @classmethod
     def scan(cls, limit=100):
+        # XXX TODO using work_host, work_env
         sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY create_dttm ASC LIMIT %s"
         return db().query(sql, limit, cls=cls)
 
     @classmethod
     def scan_work_type(cls, hydra_type_id):
+        # XXX TODO using work_host, work_env
         sql = "SELECT * FROM hydra_queue WHERE work_dttm <= NOW() AND claimed_dttm IS NULL AND finish_dttm IS NULL AND delete_dttm IS NULL AND hydra_type_id=%s"
         return db().query(sql, hydra_type_id, cls=cls)
 
     @classmethod
     def scan_existing(cls, hydra_type_id, data):
+        # XXX TODO using work_host, work_env
         sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND hydra_type_id=%s AND work_data=%s"
         return db().query(sql, hydra_type_id, data, cls=cls)
 
@@ -512,20 +517,30 @@ class Build(aegis.database.Row):
         sql = "SELECT * FROM build ORDER BY build_id DESC"
         return db().query(sql, cls=cls)
 
-    def set_build_output(self, output_tx, exit_status=None):
-        sql = "UPDATE build SET build_output_tx=%s, build_exit_status=%s WHERE build_id=%s"
-        return db().execute(sql, output_tx, exit_status, self['build_id'])
-
-    def set_deploy_output(self, output_tx, exit_status=None):
-        sql = "UPDATE build SET deploy_output_tx=%s, deploy_exit_status=%s WHERE build_id=%s"
-        return db().execute(sql, output_tx, exit_status, self['build_id'])
-
-    def set_revert_output(self, output_tx, exit_status=None):
-        sql = "UPDATE build SET revert_output_tx=%s, revert_exit_status=%s WHERE build_id=%s"
+    def set_output(self, build_step, output_tx, exit_status=None):
+        # We have to be super explicit because MySQL CONCAT returns NULL if any param is NULL, even though Postgres ignores NULL and concatenates the other arguments
+        if build_step == 'build':
+            if self['build_output_tx'] is not None:
+                sql = "UPDATE build SET build_output_tx=CONCAT(build_output_tx, %s), build_exit_status=%s WHERE build_id=%s AND build_output_tx IS NOT NULL"
+            else:
+                sql = "UPDATE build SET build_output_tx=%s, build_exit_status=%s WHERE build_id=%s AND build_output_tx IS NULL"
+        elif build_step == 'deploy':
+            if self['deploy_output_tx'] is not None:
+                sql = "UPDATE build SET deploy_output_tx=CONCAT(deploy_output_tx, %s), deploy_exit_status=%s WHERE build_id=%s AND deploy_output_tx IS NOT NULL"
+            else:
+                sql = "UPDATE build SET deploy_output_tx=%s, deploy_exit_status=%s WHERE build_id=%s AND deploy_output_tx IS NULL"
+        elif build_step == 'revert':
+            if self['revert_output_tx'] is not None:
+                sql = "UPDATE build SET revert_output_tx=CONCAT(revert_output_tx, %s), revert_exit_status=%s WHERE build_id=%s AND revert_output_tx IS NOT NULL"
+            else:
+                sql = "UPDATE build SET revert_output_tx=%s, revert_exit_status=%s WHERE build_id=%s AND revert_output_tx IS NULL"
+        else:
+            aegis.stdlib.logw(build_step, "BUILD_STEP NOT IN LIST")
+            return
         return db().execute(sql, output_tx, exit_status, self['build_id'])
 
     def set_version(self, version):
-        sql = "UPDATE build SET version=%s WHERE build_id=%s"
+        sql = "UPDATE build SET version=%s WHERE build_id=%s AND version IS NULL"
         return db().execute(sql, version, self['build_id'])
 
     def set_previous_version(self, previous_version):
@@ -533,11 +548,11 @@ class Build(aegis.database.Row):
         return db().execute(sql, previous_version, self['build_id'])
 
     def set_revision(self, revision):
-        sql = "UPDATE build SET revision=%s WHERE build_id=%s"
+        sql = "UPDATE build SET revision=%s WHERE build_id=%s AND revision IS NULL OR revision = 'HEAD'"
         return db().execute(sql, revision, self['build_id'])
 
     def set_build_size(self, build_size):
-        sql = "UPDATE build SET build_size=%s WHERE build_id=%s"
+        sql = "UPDATE build SET build_size=%s WHERE build_id=%s AND build_size IS NULL"
         return db().execute(sql, build_size, self['build_id'])
 
     def set_deployed(self):
@@ -549,15 +564,29 @@ class Build(aegis.database.Row):
         return db().execute(sql, self['build_id'])
 
     def set_soft_deleted(self):
-        sql = "UPDATE build SET delete_dttm=NOW() WHERE build_id=%s"
+        sql = "UPDATE build SET delete_dttm=NOW() WHERE build_id=%s AND delete_dttm IS NULL"
         return db().execute(sql, self['build_id'])
 
+    def set_build_exec_sec(self, build_exec_sec):
+        sql = "UPDATE build SET build_exec_sec=%s WHERE build_id=%s AND build_exec_sec IS NULL"
+        return db().execute(sql, build_exec_sec, self['build_id'])
+
     @classmethod
-    def get_live_build(cls):
-        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL ORDER BY deploy_dttm DESC LIMIT 1"
-        return db().get(sql, cls=cls)
+    def get_live_build(cls, env):
+        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL AND env=%s ORDER BY deploy_dttm DESC LIMIT 1"
+        return db().get(sql, env, cls=cls)
 
     @classmethod
     def get_version(cls, version):
         sql = "SELECT * FROM build WHERE version=%s"
         return db().get(sql, version, cls=cls)
+
+    @classmethod
+    def scan_dead_builds(cls):
+        sql = "SELECT * FROM build WHERE delete_dttm IS NOT NULL OR (deploy_dttm IS NULL AND create_dttm < NOW() - INTERVAL 1 WEEK)"
+        return db().query(sql, cls=cls)
+
+    @classmethod
+    def scan_stale_builds(cls):
+        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+        return db().query(sql, cls=cls)

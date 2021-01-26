@@ -390,12 +390,12 @@ class HydraQueue(aegis.database.Row):
           FROM hydra_queue
           JOIN hydra_type USING (hydra_type_id)
          WHERE hydra_queue.work_dttm <= NOW()
+           AND (hydra_queue.work_host=%s OR hydra_queue.work_host IS NULL)
+           AND hydra_queue.work_env=%s
            AND hydra_queue.claimed_dttm IS NULL
            AND hydra_queue.finish_dttm IS NULL
            AND hydra_queue.delete_dttm IS NULL
            AND hydra_type.status <> 'paused'
-           AND hydra_queue.work_host=%s
-           AND hydra_queue.work_env=%s
       ORDER BY hydra_queue.priority_ndx ASC
          LIMIT %s"""
         return db().query(sql, hostname, env, limit, cls=cls)
@@ -409,13 +409,15 @@ class HydraQueue(aegis.database.Row):
           FROM hydra_queue
           JOIN hydra_type USING (hydra_type_id)
          WHERE hydra_queue.work_dttm <= NOW()
+           AND (hydra_queue.work_host=%s OR hydra_queue.work_host IS NULL)
+           AND hydra_queue.work_env=%s
            AND hydra_queue.claimed_dttm IS NULL
            AND hydra_queue.finish_dttm IS NULL
            AND hydra_queue.delete_dttm IS NULL
            AND hydra_type.status <> 'paused'
       ORDER BY hydra_queue.work_dttm ASC
          LIMIT %s"""
-        return db().query(sql, limit, cls=cls)
+        return db().query(sql, hostname, env, limit, cls=cls)
 
     @classmethod
     def scan(cls, limit=100):

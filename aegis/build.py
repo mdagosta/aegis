@@ -105,7 +105,7 @@ class Build:
             if self.yarn:
                 if self._shell_exec("nice yarn install", cwd=self.build_dir, build_step='build'):
                     return
-                if self._shell_exec("nice yarn run %s --cache-folder /srv/www/.cache/yarn" % options.env, cwd=self.build_dir, build_step='build'):
+                if self._shell_exec("nice yarn run %s --cache-folder /srv/www/.cache/yarn" % aegis.config.get('env'), cwd=self.build_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
@@ -129,13 +129,13 @@ class Build:
         return self._done_exec('build', 0)
 
 
-    def deploy(self, version, env=None, build_step='deploy', deploy_msg='', user=None):
+    def deploy(self, version, env, build_step='deploy', deploy_msg='', user=None):
         # Environment Settings
         deploy_build = aegis.model.Build.get_version(version)
         deploy_build = aegis.model.Build.get_id(deploy_build['build_id'])
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, deploy_build['version'])
-        live_symlink = os.path.join(app_dir, aegis.config.get('env'))
+        live_symlink = os.path.join(app_dir, env)
         # Set self.build_row for where to record output if it's deploy, but don't overwrite in the revert case
         if build_step == 'deploy':
             self.build_row = deploy_build
@@ -163,7 +163,7 @@ class Build:
                 requests.post(channel, json={"text": notification_body})
         # What to restart
         processes, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
-        processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+aegis.config.get('env'))]
+        processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+env)]
         # Remove and re-link
         if self._shell_exec("rm -f %s" % live_symlink, build_step=build_step, cwd=app_dir):
             return
@@ -231,7 +231,7 @@ class Build:
         end_t = time.time()
         exec_t = end_t - self.start_t
         self.build_row.set_build_exec_sec(exec_t)
-        exit_line = "\n  [ Exit %s   (%4.2f sec) ]" % (exit_status, exec_t)
+        exit_line = "\n  [ Exit %s   (%4.2f sec) ]\n" % (exit_status, exec_t)
         if exit_status:
             logging.error(exit_line.rstrip())
         else:

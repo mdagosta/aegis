@@ -24,7 +24,7 @@ import aegis.model
 # TODO
 # - deploy, revert, and delete on web should have a confirm screen, with user message for deploy notifications
 # - hydra clean build: started but needs sorting and action-taking
-
+# - multiple-notification of deploy needs to be sorted out into aegis_ and hydra clients
 
 class Build:
     def __init__(self, user=None):
@@ -143,6 +143,7 @@ class Build:
         self.username, stderr, exit_status = aegis.stdlib.shell('whoami')
         self.host = socket.gethostname()
         # Set the previous version so we know what to revert back to, and mark it deployed, if this isn't happening to revert a build
+        ## TODO notifications need to be moved into the clients, but it's attached to a lot
         if build_step == 'deploy':
             self.build_row = aegis.model.Build.get_id(self.build_row['build_id'])
             live_build = aegis.model.Build.get_live_build(self.build_row['env'])

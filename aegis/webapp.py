@@ -12,7 +12,6 @@ import logging
 import os
 import socket
 import sys
-import threadpool
 import time
 import traceback
 import urllib

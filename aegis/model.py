@@ -391,7 +391,7 @@ class HydraQueue(aegis.database.Row):
           JOIN hydra_type USING (hydra_type_id)
          WHERE hydra_queue.work_dttm <= NOW()
            AND (hydra_queue.work_host=%s OR hydra_queue.work_host IS NULL)
-           AND hydra_queue.work_env=%s
+           AND (hydra_queue.work_env=%s OR hydra_queue.work_env IS NULL)
            AND hydra_queue.claimed_dttm IS NULL
            AND hydra_queue.finish_dttm IS NULL
            AND hydra_queue.delete_dttm IS NULL
@@ -410,7 +410,7 @@ class HydraQueue(aegis.database.Row):
           JOIN hydra_type USING (hydra_type_id)
          WHERE hydra_queue.work_dttm <= NOW()
            AND (hydra_queue.work_host=%s OR hydra_queue.work_host IS NULL)
-           AND hydra_queue.work_env=%s
+           AND (hydra_queue.work_env=%s OR hydra_queue.work_env IS NULL)
            AND hydra_queue.claimed_dttm IS NULL
            AND hydra_queue.finish_dttm IS NULL
            AND hydra_queue.delete_dttm IS NULL

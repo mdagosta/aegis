@@ -15,6 +15,7 @@
             <th>Work Data</th>
             <th>Try Count</th>
             <th>Error Count</th>
+            <th>Functions</th>
         </tr>
 
         {% for hydra_queue in hydra_queues %}
@@ -37,6 +38,7 @@
             <td><input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
             <td>{{hydra_type['next_run_sql']}}</td>
             #}
+            <td><input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/></td>
         </tr>
         {% end %}
 

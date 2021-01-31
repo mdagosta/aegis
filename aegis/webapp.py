@@ -643,6 +643,15 @@ class AegisHydraQueue(AegisWeb):
         self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
         return self.render_path("hydra_queue.html", **self.tmpl)
 
+    @tornado.web.authenticated
+    def post(self, *args):
+        self.enforce_admin()
+        run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
+        if run_ids:
+            hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0])
+            hydra_queue.run_now()
+        return self.redirect('/aegis/hydra/queue')
+
 
 class AegisReportForm(AegisWeb):
 

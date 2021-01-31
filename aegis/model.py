@@ -499,6 +499,10 @@ class HydraQueue(aegis.database.Row):
             sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 5 MINUTE"
         return db().query(sql, cls=cls)
 
+    def run_now(self):
+        sql = "UPDATE hydra_queue SET work_dttm=NOW(), claimed_dttm=NULL WHERE hydra_queue_id=%s"
+        return db().execute(sql, self['hydra_queue_id'])
+
 
 class ReportType(aegis.database.Row):
     table_name = 'report_type'

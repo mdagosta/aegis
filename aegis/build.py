@@ -185,7 +185,6 @@ class Build:
             if self._shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), build_step=build_step, cwd=app_dir):
                 self.logw(process, "ERROR RESTARTING PROCESS")
                 return
-            time.sleep(0.33)
         return self._done_exec(build_step, 0)
 
 

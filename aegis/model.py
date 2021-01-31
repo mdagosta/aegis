@@ -328,7 +328,7 @@ class HydraType(aegis.database.Row):
         return db().query(sql, cls=cls)
 
     def run_now(self):
-        sql = "UPDATE hydra_type SET next_run_dttm=NOW(), status='live' WHERE hydra_type_id=%s"
+        sql = "UPDATE hydra_type SET next_run_dttm=NOW(), status='live', claimed_dttm=NULL WHERE hydra_type_id=%s"
         return db().execute(sql, self['hydra_type_id'])
 
     def set_status(self, status):
@@ -375,7 +375,6 @@ class HydraType(aegis.database.Row):
 
     @staticmethod
     def clear_claims():
-        aegis.stdlib.logw(db(), "DB")
         if type(db()) is aegis.database.PostgresConnection:
             sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '5 MINUTE' AND status='live'"
         elif type(db()) is aegis.database.MysqlConnection:

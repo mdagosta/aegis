@@ -280,7 +280,7 @@ class Hydra(HydraThread):
                         runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
                         if runnable:
                             claimed = hydra_type.claim()
-                            self.logw(claimed, "CLAIMED HYDRA TYPE: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
+                            #self.logw(claimed, "CLAIMED HYDRA TYPE: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
                             if not claimed: continue
                             # Set up a hydra_queue row to represent the work and re-schedule the batch's next run
                             hydra_queue = {}

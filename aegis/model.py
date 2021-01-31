@@ -503,6 +503,10 @@ class HydraQueue(aegis.database.Row):
         sql = "UPDATE hydra_queue SET work_dttm=NOW(), claimed_dttm=NULL WHERE hydra_queue_id=%s"
         return db().execute(sql, self['hydra_queue_id'])
 
+    def singleton(self):
+        sql = "SELECT * FROM hydra_queue WHERE hydra_type_id=%s AND hydra_queue_id <> %s AND claimed_dttm IS NOT NULL AND finish_dttm IS NULL AND delete_dttm IS NULL"
+        return db().query(sql, self['hydra_type_id'], self['hydra_queue_id'])
+
 
 class ReportType(aegis.database.Row):
     table_name = 'report_type'

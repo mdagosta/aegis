@@ -649,7 +649,8 @@ class AegisHydraQueue(AegisWeb):
         run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
         if run_ids:
             hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0])
-            hydra_queue.run_now()
+            if hydra_queue:
+                hydra_queue.run_now()
         return self.redirect('/aegis/hydra/queue')
 
 

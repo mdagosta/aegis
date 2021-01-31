@@ -163,6 +163,7 @@ class HydraHead(HydraThread):
                             hydra_queue.complete()
                         else:
                             logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
+                            hydra_queue.unclaim()
                             continue
                         # Worker accounting
                         logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))

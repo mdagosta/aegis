@@ -138,7 +138,7 @@ class HydraHead(HydraThread):
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
                         claimed = hydra_queue.claim()
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
-                        self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s  HOST: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
+                        #self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s  HOST: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
                         if not claimed: continue
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
                         if not hydra_type:
@@ -289,13 +289,13 @@ class Hydra(HydraThread):
                             hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
                             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
                             hydra_type.schedule_next()
-                            self.logw("SCHEDULED NEXT: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
+                            #self.logw("SCHEDULED NEXT: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
                             _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
-                            logging.warning("%s queue up %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
+                            #logging.warning("%s queue up %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
                             # Clean out queue then sleep depending on how much work there is to do
                             purged_completed = aegis.model.HydraQueue.purge_completed()
-                            if purged_completed:
-                                logging.warning("%s queue purge deleted %s hydra_queue" % (self.thread_name, purged_completed))
+                            #if purged_completed:
+                            #    logging.warning("%s queue purge deleted %s hydra_queue" % (self.thread_name, purged_completed))
                             # Log if there are expired queue items in the past...
                             past_items = aegis.model.HydraQueue.past_items()
                             if past_items and len(past_items):

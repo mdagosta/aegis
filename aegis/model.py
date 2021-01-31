@@ -359,7 +359,10 @@ class HydraType(aegis.database.Row):
 
     @staticmethod
     def clear_running():
-        sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL 45 MINUTE"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL '45 MINUTE'"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL 45 MINUTE"
         return db().execute(sql)
 
     def claim(self):
@@ -372,7 +375,11 @@ class HydraType(aegis.database.Row):
 
     @staticmethod
     def clear_claims():
-        sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 5 MINUTE AND status='live'"
+        aegis.stdlib.logw(db(), "DB")
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '5 MINUTE' AND status='live'"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 5 MINUTE AND status='live'"
         return db().execute(sql)
 
 
@@ -452,7 +459,10 @@ class HydraQueue(aegis.database.Row):
 
     def incr_error_cnt(self):
         self['error_cnt'] += 1
-        sql = 'UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=work_dttm + INTERVAL 1 MINUTE WHERE hydra_queue_id=%s'
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=work_dttm + INTERVAL '1 MINUTE' WHERE hydra_queue_id=%s"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=work_dttm + INTERVAL 1 MINUTE WHERE hydra_queue_id=%s"
         return db().execute(sql, self['hydra_queue_id'])
 
     def start(self):
@@ -476,12 +486,18 @@ class HydraQueue(aegis.database.Row):
 
     @staticmethod
     def clear_claims():
-        sql = 'UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 15 MINUTE AND finish_dttm IS NULL'
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '15 MINUTE' AND finish_dttm IS NULL"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL 15 MINUTE AND finish_dttm IS NULL"
         return db().execute(sql)
 
     @classmethod
     def past_items(cls):
-        sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 5 MINUTE"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '5 MINUTE'"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 5 MINUTE"
         return db().query(sql, cls=cls)
 
 

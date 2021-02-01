@@ -45,15 +45,13 @@ elif sys.argv[0] == '/usr/local/bin/aegis':
 
 # Create a new spinoff of aegis
 def create(parser):
-    parser.add_argument('--appname', metavar='<appname>', type=str, nargs=1, help='Name for the forked copy')
-    parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='Domain for the forked copy')
     args = parser.parse_args()
     if not args.appname or not args.domain:
         logging.error("aegis create requires --appname and --domain")
         sys.exit()
     app_name = args.appname[0]
     domain = args.domain[0]
-    stdlib.logw("AEGIS CREATE  %s  %s" % (app_name, domain))
+    aegis.stdlib.logw("AEGIS CREATE  %s  %s" % (app_name, domain))
     aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     src_dir = os.path.dirname(aegis_dir)
     template_vars = {'app_name': app_name, 'aegis_domain': domain}
@@ -367,20 +365,22 @@ def initialize():
         define('branch', default=None, help='git branch name', type=str)
     if not aegis.config.get('revision'):
         define('revision', default=None, help='git revision hash', type=str)
-    config.initialize(args=sys.argv[1:])
-    #remaining = tornado.options.parse_command_line(sys.argv[1:])
-    #if remaining:
-    #    # parse_command_line returns the remaining command line arguments, print if they exist
-    #    aegis.stdlib.logw(remaining, "REMAINING UNPARSED COMMANDLINE ARGS")
+    try:
+        config.initialize(args=sys.argv[1:])
+    except Exception as ex:
+        # No config, such as during aegis create shell command
+        remaining = tornado.options.parse_command_line()
 
 
 def main():
     parser = argparse.ArgumentParser(description='Create your shield.')
-    parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create, schema, build, deploy, revert]')
+    parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create, install, schema, build, deploy, revert]')
     parser.add_argument('--branch', metavar='<branch>', type=str, help='git branch name')
     parser.add_argument('--revision', metavar='<revision>', type=str, help='git revision hash')
     parser.add_argument('--env', metavar='<env>', type=str, help='primary environment name')
     parser.add_argument('--version', metavar='<version>', type=str, help='program version tag')
+    parser.add_argument('--appname', metavar='<appname>', type=str, nargs=1, help='code name for application')
+    parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='domain to create application')
     args = parser.parse_args()
     cmd = args.cmd[0]
     # Do something
@@ -402,7 +402,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # Called from repository checkout, for example ./aegis/aegis.py
+    # Called from repository checkout, for example ./aegis/aegis_.py
     initialize()
     retval = main()
     sys.exit(retval)

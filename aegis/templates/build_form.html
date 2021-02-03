@@ -1,5 +1,9 @@
 {% extends frame.html %}
 
+{% block head %}
+<meta http-equiv="refresh" content="8" />
+{% end %}
+
 {% block body %}
 <div class="w3-container w3-blue" style="margin-top: 32px;">
     <h3>{% if build %}View{% else %}New{% end %} {{build_step.capitalize()}} {% if build %}{{build['build_id']}}{% end %}</h3>

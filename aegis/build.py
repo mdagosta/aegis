@@ -105,7 +105,7 @@ class Build:
             if self.yarn:
                 if self._shell_exec("nice yarn install", cwd=self.build_dir, build_step='build'):
                     return
-                if self._shell_exec("nice yarn run %s --cache-folder /srv/www/.cache/yarn" % aegis.config.get('env'), cwd=self.build_dir, build_step='build'):
+                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=self.build_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:

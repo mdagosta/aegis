@@ -96,6 +96,13 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.cookie_set('session', self.tmpl['session_ck'])
             else:
                 self.cookie_clear('session')
+        # Cookie Debug
+        if aegis.config.get('cookie_debug'):
+            cookies = []
+            if hasattr(self, "_new_cookie"):
+                for cookie in self._new_cookie.values():
+                    cookies.append("Set-Cookie: %s" % cookie.OutputString(None))
+            self.logw(cookies, "HTTP Reponse Set-Cookie Header")
         super(AegisHandler, self).finish(chunk)
 
     def setup_user(self):
@@ -208,14 +215,17 @@ class AegisHandler(tornado.web.RequestHandler):
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
 
+
     def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
         if not cookie_duration:
             cookie_durations = aegis.config.get('cookie_durations')
             if not cookie_durations:
-                cookie_durations = {'user': 3650, 'session': None, 'auth': 14}
+                cookie_durations = {'user': 3650, 'session': None, 'auth': 90}
             cookie_duration = cookie_durations[name]
         cookie_flags = {'httponly': True, 'secure': True}
+        if options.hostname == 'localhost':
+            cookie_flags['secure'] = False
         cookie_val = self.cookie_encode(value)
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
@@ -224,7 +234,7 @@ class AegisHandler(tornado.web.RequestHandler):
         if not cookie_duration:
             cookie_durations = aegis.config.get('cookie_durations')
             if not cookie_durations:
-                cookie_durations = {'user': 3650, 'session': 30, 'auth': 14}
+                cookie_durations = {'user': 3650, 'session': 30, 'auth': 90}
             cookie_duration = cookie_durations[name]
         cookie_val = self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration)
         cookie_val = tornado.escape.to_basestring(cookie_val)
@@ -413,6 +423,7 @@ class JsonRestApi(AegisHandler):
                 json_req = json.loads(self.request.body.decode("utf-8"))
                 return json_req or {}
             except json.decoder.JSONDecodeError:
+                #return None  ??
                 raise tornado.web.HTTPError(401, 'Bad JSON Value')
         else:
             return dict(self.request.arguments)

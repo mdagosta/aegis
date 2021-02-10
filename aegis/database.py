@@ -510,7 +510,7 @@ class Row(dict):
         return cls.table_name
 
     @classmethod
-    def logw(cls, msg, value, row_id):
+    def logw(cls, msg, value, row_id=''):
         logging.warning("%s: %s %s", msg, value, row_id)
 
     @classmethod

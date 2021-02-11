@@ -260,6 +260,9 @@ class AegisHandler(tornado.web.RequestHandler):
         # Cookie can't change mid-request so we can just cache the value on the handler
         if hasattr(self, '_member_id') and hasattr(self, '_member_auth_id') and hasattr(self, '_member_auth'):
             return (self._member_id, self._member_auth_id, self._member_auth)
+        # No cookie, no authie
+        if not self.cookie_get("auth"):
+            return None
         # Default is to only have a member_id. Alternately member_id|member_auth_id|magic_token
         self._member_id = aegis.stdlib.validate_int(self.cookie_get("auth"))
         if self._member_id:

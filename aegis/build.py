@@ -103,9 +103,14 @@ class Build:
             # Set up and run yarn if it's installed
             self.yarn, stderr, exit_status = aegis.stdlib.shell('which yarn', cwd=self.src_dir)
             if self.yarn:
-                if self._shell_exec("nice yarn install", cwd=self.build_dir, build_step='build'):
+                yarn_dir = aegis.config.get('yarn_dir')
+                if yarn_dir:
+                    yarn_dir = os.path.join(self.build_dir, yarn_dir)
+                else:
+                    yarn_dir = self.build_dir
+                if self._shell_exec("nice yarn install", cwd=yarn_dir, build_step='build'):
                     return
-                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=self.build_dir, build_step='build'):
+                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:

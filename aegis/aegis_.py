@@ -17,6 +17,7 @@ from tornado.options import define, options
 # Project Imports
 import aegis.stdlib
 import aegis.build
+import aegis.config
 
 # Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
 venv = os.environ.get('VIRTUAL_ENV')
@@ -365,10 +366,13 @@ def initialize():
         define('branch', default=None, help='git branch name', type=str)
     if not aegis.config.get('revision'):
         define('revision', default=None, help='git revision hash', type=str)
+    if not aegis.config.get('version'):
+        define('version', default=None, help='git version name', type=str)
     try:
         config.initialize(args=sys.argv[1:])
     except Exception as ex:
         # No config, such as during aegis create shell command
+        logging.exception(ex)
         remaining = tornado.options.parse_command_line()
 
 

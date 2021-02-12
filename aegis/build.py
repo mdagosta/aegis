@@ -3,7 +3,6 @@
 # Mainly a web interface to do a build. Command line backup/repair.
 
 # Python Imports
-import configparser
 import logging
 import os
 import requests
@@ -19,6 +18,7 @@ from tornado.options import define, options
 # Project Imports
 import aegis.stdlib
 import aegis.model
+import aegis.config
 
 
 # TODO
@@ -86,7 +86,7 @@ class Build:
             app_dir = os.path.join(options.deploy_dir, options.program_name)
             self.build_dir = os.path.join(app_dir, self.next_tag)
             if os.path.exists(self.build_dir):
-                if self._shell_exec("rm -rf %s" % build_dir, cwd=app_dir, build_step='build'):
+                if self._shell_exec("rm -rf %s" % self.build_dir, cwd=app_dir, build_step='build'):
                     return
             if self._shell_exec("git clone %s %s" % (self.src_repo, self.build_dir), cwd=app_dir, build_step='build'):
                 return
@@ -256,7 +256,7 @@ class Build:
         else:
             version_num = [0, 0, 0]
         x, y, z = version_num
-        current_tag = '%s-%s.%s.%s' % (version_name, x, y, str(z).rjust(2, '0'))  # rjust to do z versions like .03 so they sort alphanumerically
+        #current_tag = '%s-%s.%s.%s' % (version_name, x, y, str(z).rjust(2, '0'))  # rjust to do z versions like .03 so they sort alphanumerically
         next_version = self._incr_version(*version_num)
         x, y, z = next_version
         self.next_tag = '%s-%s.%s.%s' % (version_name, x, y, str(z).rjust(2, '0'))

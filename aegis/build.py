@@ -181,8 +181,8 @@ class Build:
             # Due to subprocess.Popen automatically receiving the SIGTERM from supervisor, we can't restart hydra from within supervisor.
             # https://stackoverflow.com/questions/52763508/python-prevent-child-threads-from-being-affected-from-sigint-signal
             # Instead, allow Hydra to use its quitting flag to stop and let supervisor restart.
-            main_is_hydra = (__main__.__file__.endswith('hydra.py') or __main__.__file__.endswith('batch.py'))
-            proc_is_hydra = (process.startswith('hydra') or process.startswith('batch'))
+            main_is_hydra = __main__.__file__.endswith('%s.py' % options.deploy_hydra_name)
+            proc_is_hydra = process.startswith(options.deploy_hydra_name)
             if main_is_hydra and proc_is_hydra:
                 logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
                 continue

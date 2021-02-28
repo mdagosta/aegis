@@ -138,6 +138,10 @@ class AegisHandler(tornado.web.RequestHandler):
         if user:
             self.tmpl['user']['user_id'] = user['user_id']
 
+    def enforce_admin(self):
+        if not self.is_super_admin():
+            raise tornado.web.HTTPError(403)
+
     def user_is_robot(self):
         # If this fails so early that setup_user() doesn't run, just parse the user_agent here
         if not self.tmpl.get('user_agent_obj'):
@@ -552,10 +556,6 @@ class AegisWeb(AegisHandler):
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
         self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
         self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
-
-    def enforce_admin(self):
-        if not self.is_super_admin():
-            raise tornado.web.HTTPError(403)
 
     def get_template_path(self):
         return self.tmpl.get('template_dir')

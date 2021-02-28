@@ -4,7 +4,6 @@
 # Python Imports
 import calendar
 import datetime
-import dateutil
 import decimal
 import functools
 import hashlib
@@ -20,6 +19,9 @@ import shlex
 import string
 import subprocess
 import xml
+
+# Extern Imports
+import dateutil.parser
 
 
 def absdir(path):

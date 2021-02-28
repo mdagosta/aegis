@@ -3,7 +3,6 @@
 # Mainly a web interface to do a build. Command line backup/repair.
 
 # Python Imports
-import configparser
 import logging
 import os
 import requests
@@ -19,6 +18,7 @@ from tornado.options import define, options
 # Project Imports
 import aegis.stdlib
 import aegis.model
+import aegis.config
 
 
 # TODO
@@ -86,7 +86,7 @@ class Build:
             app_dir = os.path.join(options.deploy_dir, options.program_name)
             self.build_dir = os.path.join(app_dir, self.next_tag)
             if os.path.exists(self.build_dir):
-                if self._shell_exec("rm -rf %s" % build_dir, cwd=app_dir, build_step='build'):
+                if self._shell_exec("rm -rf %s" % self.build_dir, cwd=app_dir, build_step='build'):
                     return
             if self._shell_exec("git clone %s %s" % (self.src_repo, self.build_dir), cwd=app_dir, build_step='build'):
                 return
@@ -103,9 +103,14 @@ class Build:
             # Set up and run yarn if it's installed
             self.yarn, stderr, exit_status = aegis.stdlib.shell('which yarn', cwd=self.src_dir)
             if self.yarn:
-                if self._shell_exec("nice yarn install", cwd=self.build_dir, build_step='build'):
+                yarn_dir = aegis.config.get('yarn_dir')
+                if yarn_dir:
+                    yarn_dir = os.path.join(self.build_dir, yarn_dir)
+                else:
+                    yarn_dir = self.build_dir
+                if self._shell_exec("nice yarn install", cwd=yarn_dir, build_step='build'):
                     return
-                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=self.build_dir, build_step='build'):
+                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
@@ -176,8 +181,8 @@ class Build:
             # Due to subprocess.Popen automatically receiving the SIGTERM from supervisor, we can't restart hydra from within supervisor.
             # https://stackoverflow.com/questions/52763508/python-prevent-child-threads-from-being-affected-from-sigint-signal
             # Instead, allow Hydra to use its quitting flag to stop and let supervisor restart.
-            main_is_hydra = (__main__.__file__.endswith('hydra.py') or __main__.__file__.endswith('batch.py'))
-            proc_is_hydra = (process.startswith('hydra') or process.startswith('batch'))
+            main_is_hydra = __main__.__file__.endswith('%s.py' % options.deploy_hydra_name)
+            proc_is_hydra = process.startswith(options.deploy_hydra_name)
             if main_is_hydra and proc_is_hydra:
                 logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
                 continue
@@ -251,7 +256,7 @@ class Build:
         else:
             version_num = [0, 0, 0]
         x, y, z = version_num
-        current_tag = '%s-%s.%s.%s' % (version_name, x, y, str(z).rjust(2, '0'))  # rjust to do z versions like .03 so they sort alphanumerically
+        #current_tag = '%s-%s.%s.%s' % (version_name, x, y, str(z).rjust(2, '0'))  # rjust to do z versions like .03 so they sort alphanumerically
         next_version = self._incr_version(*version_num)
         x, y, z = next_version
         self.next_tag = '%s-%s.%s.%s' % (version_name, x, y, str(z).rjust(2, '0'))

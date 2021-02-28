@@ -119,8 +119,11 @@ class PostgresConnection(object):
         self._db = None
         self._db_args = args
         self._autocommit = autocommit
+        self._txn = None
         try:
             self._connect(autocommit=autocommit)
+            if not autocommit:
+                self._cursor()
         except Exception:
             logging.error("Cannot connect to PostgreSQL: %s", self.hostname, exc_info=True)
 
@@ -156,10 +159,16 @@ class PostgresConnection(object):
         self._db.autocommit = autocommit
 
     def _cursor(self):
-        """ Reconnect if disconnected. Then return a cursor. """
+        # Connect if not connected.
         if self._db is None:
             self._connect(self._autocommit)
-        return self._db.cursor()
+        # If auto-commit then return a new cursor immediately.
+        if self._autocommit:
+            return self._db.cursor()
+        # The connection is single-use when doing a transaction via autocommit=False. That's the cursor to use until we commit the transaction.
+        if not self._txn:
+            self._txn = self._db.cursor()
+        return self._txn
 
     def __del__(self):
         self.close()
@@ -172,37 +181,26 @@ class PostgresConnection(object):
     def commit(self):
         if getattr(self, "_db", None) is not None:
             self._db.commit()
+            self._txn = None
 
     def rollback(self):
         if getattr(self, "_db", None) is not None:
             self._db.rollback()
+            self._txn = None
 
     def _execute(self, cursor, query, parameters, **kwargs):
-        do_commit = kwargs.get('do_commit', True)
         try:
             cursor.execute(query, parameters)
-            if do_commit:
-                self.commit()
             return
-        #except psycopg2.ProgrammingError as ex:
-        #    logging.error("Hello Bug Creator. Please Fix Your Code - close connection/rollback")
-        #    logging.exception(ex)
-        #    self.close()
-        #    raise
-        #except psycopg2.OperationalError as ex:
-        #    logging.error("Error connecting to PostgreSQL - close connection/rollback")
-        #    logging.exception(ex)
-        #    self.close()
-        #    raise
         except psycopg2.Error as ex:
             logging.error("General Error at PostgreSQL - close connection/rollback")
             logging.exception(ex)
             self.close()
             raise
 
+
     def query(self, query, *parameters, **kwargs):
         """ Returns a row list for the given query and parameters."""
-        kwargs['do_commit'] = False
         cursor = self._cursor()
         try:
             self._execute(cursor, query, parameters, **kwargs)
@@ -216,7 +214,8 @@ class PostgresConnection(object):
                 return (rows, column_names)
             return rows
         finally:
-            cursor.close()
+            if not self._txn:
+                cursor.close()
 
     def get(self, query, *parameters, **kwargs):
         """ Returns the first row returned for the given query."""
@@ -229,24 +228,17 @@ class PostgresConnection(object):
             return rows[0]
 
     def execute(self, query, *parameters, **kwargs):
-        # If cursor exists, it's probably one of several in a transaction. Don't automatically commit.
-        kwargs['do_commit'] = not 'cursor' in kwargs
+        # If it's an INSERT, return the lastrowid. Otherwise return the rowcount.
         if query.startswith('INSERT'):
             return self.execute_lastrowid(query, *parameters, **kwargs)
         else:
             return self.execute_rowcount(query, *parameters, **kwargs)
 
     def execute_lastrowid(self, query, *parameters, **kwargs):
-        """ Executes the given query, returning the lastrowid from the query."""
-        # Use existing cursor without committing, or create cursor and use existing do_commit flag or default to True
-        if kwargs.get('cursor'):
-            cursor = kwargs['cursor']
-            do_commit = False
-        else:
-            cursor = self._cursor()
-            do_commit = kwargs.get('do_commit', True)
+        # Executes the given query, returning the lastrowid from the query.
+        cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters, do_commit=do_commit)
+            self._execute(cursor, query, parameters)
             if cursor.rowcount > 0:
                 try:
                     return cursor.fetchone()[0]
@@ -254,23 +246,17 @@ class PostgresConnection(object):
                     logging.error("No Results even though cursor says rowcount > 0. Probably left out '... RETURNING row_id'")
                     return None
         finally:
-            if do_commit:
+            if not self._txn:
                 cursor.close()
 
     def execute_rowcount(self, query, *parameters, **kwargs):
-        """ Executes the given query, returning the rowcount from the query."""
-        # Use existing cursor without committing, or create cursor and use existing do_commit flag or default to True
-        if kwargs.get('cursor'):
-            cursor = kwargs['cursor']
-            do_commit = False
-        else:
-            cursor = self._cursor()
-            do_commit = kwargs.get('do_commit', True)
+        # Executes the given query, returning the rowcount from the query.
+        cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters, do_commit=do_commit)
+            self._execute(cursor, query, parameters)
             return cursor.rowcount
         finally:
-            if do_commit:
+            if not self._txn:
                 cursor.close()
 
     # Commenting until they can be properly tested for use with commit() and rollback()
@@ -524,7 +510,7 @@ class Row(dict):
         return cls.table_name
 
     @classmethod
-    def logw(cls, msg, value, row_id):
+    def logw(cls, msg, value, row_id=''):
         logging.warning("%s: %s %s", msg, value, row_id)
 
     @classmethod
@@ -548,7 +534,7 @@ class Row(dict):
         return items
 
     @classmethod
-    def get_id(cls, column_id_val, member_id=None):
+    def get_id(cls, column_id_val, member_id=None, dbconn=None):
         if not column_id_val:
             return None
         sql = 'SELECT * FROM %s WHERE %s=%%s'
@@ -557,7 +543,9 @@ class Row(dict):
             sql = sql + ' AND member_id=%%s'
             args.append(int(member_id))
         sql = sql % (cls._table_name(), cls.id_column)
-        val = db().get(sql, *args, cls=cls)
+        if not dbconn:
+            dbconn = db()
+        val = dbconn.get(sql, *args, cls=cls)
         return val
 
     @classmethod

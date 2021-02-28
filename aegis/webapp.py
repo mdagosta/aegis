@@ -96,6 +96,13 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.cookie_set('session', self.tmpl['session_ck'])
             else:
                 self.cookie_clear('session')
+        # Cookie Debug
+        if aegis.config.get('cookie_debug'):
+            cookies = []
+            if hasattr(self, "_new_cookie"):
+                for cookie in self._new_cookie.values():
+                    cookies.append("Set-Cookie: %s" % cookie.OutputString(None))
+            self.logw(cookies, "HTTP Reponse Set-Cookie Header")
         super(AegisHandler, self).finish(chunk)
 
     def setup_user(self):
@@ -212,14 +219,17 @@ class AegisHandler(tornado.web.RequestHandler):
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
 
+
     def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
         if not cookie_duration:
             cookie_durations = aegis.config.get('cookie_durations')
             if not cookie_durations:
-                cookie_durations = {'user': 3650, 'session': None, 'auth': 14}
+                cookie_durations = {'user': 3650, 'session': None, 'auth': 90}
             cookie_duration = cookie_durations[name]
         cookie_flags = {'httponly': True, 'secure': True}
+        if options.hostname == 'localhost':
+            cookie_flags['secure'] = False
         cookie_val = self.cookie_encode(value)
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
@@ -228,7 +238,7 @@ class AegisHandler(tornado.web.RequestHandler):
         if not cookie_duration:
             cookie_durations = aegis.config.get('cookie_durations')
             if not cookie_durations:
-                cookie_durations = {'user': 3650, 'session': 30, 'auth': 14}
+                cookie_durations = {'user': 3650, 'session': 30, 'auth': 90}
             cookie_duration = cookie_durations[name]
         cookie_val = self.get_secure_cookie(self.cookie_name(name), max_age_days=cookie_duration)
         cookie_val = tornado.escape.to_basestring(cookie_val)
@@ -254,6 +264,14 @@ class AegisHandler(tornado.web.RequestHandler):
         # Cookie can't change mid-request so we can just cache the value on the handler
         if hasattr(self, '_member_id') and hasattr(self, '_member_auth_id') and hasattr(self, '_member_auth'):
             return (self._member_id, self._member_auth_id, self._member_auth)
+        # No cookie, no authie
+        if not self.cookie_get("auth"):
+            return None
+        # Default is to only have a member_id. Alternately member_id|member_auth_id|magic_token
+        self._member_id = aegis.stdlib.validate_int(self.cookie_get("auth"))
+        if self._member_id:
+            return self._member_id
+        # Unpack and check the auth and token
         member_id, member_auth_id, magic_token = self.cookie_get("auth").split('|')
         member_id = aegis.stdlib.validate_int(member_id)
         member_auth_id = aegis.stdlib.validate_int(member_auth_id)
@@ -417,6 +435,7 @@ class JsonRestApi(AegisHandler):
                 json_req = json.loads(self.request.body.decode("utf-8"))
                 return json_req or {}
             except json.decoder.JSONDecodeError:
+                #return None  ??
                 raise tornado.web.HTTPError(401, 'Bad JSON Value')
         else:
             return dict(self.request.arguments)
@@ -781,7 +800,7 @@ class AegisBuildForm(AegisWeb):
         build_id = aegis.model.Build.insert_columns(**build)
         hydra_type = aegis.model.HydraType.get_name('build_build')
         hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
-                       'work_host': options.build_host, 'work_env': aegis.config.get('env')}
+                       'work_host': aegis.config.get('build_host'), 'work_env': aegis.config.get('env')}
         work_data = {'build_id': build_id, 'user': self.get_member_email()}
         hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
         hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)

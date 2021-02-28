@@ -73,7 +73,7 @@ def db(use_schema=None, autocommit=True):
     if not hasattr(dbconns, 'databases'):
         dbconns.databases = {}
     if pgsql_available:
-        # Autocommit==False will be its own short-lived connection, not cached, so we don't end up with transactions open from other cursors.
+        # Autocommit==False will be its own short-lived connection, not cached or pooled, so we don't end up with transactions open from other cursors.
         if not autocommit:
             return PostgresConnection.connect(autocommit=False)
         # Autocommit==True we can cache the database connection and let autocommit handle cursor-transaction-safety

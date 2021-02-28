@@ -20,6 +20,7 @@ import urllib
 import requests
 from tornado.options import options
 import tornado.web
+from tornado.platform.asyncio import AsyncIOMainLoop
 import user_agents
 import zlib
 
@@ -565,6 +566,19 @@ class WebApplication(AegisApplication, tornado.web.Application):
         else:
             http_server.listen(port)  # bind all (0.0.0.0:*)
         tornado.ioloop.IOLoop.instance().start()
+
+    @staticmethod
+    def start_asyncio(application):
+        host = options.host
+        port = options.port
+        AsyncIOMainLoop().install()
+        http_server = tornado.httpserver.HTTPServer(application, xheaders=True, no_keep_alive=True)
+        logging.info('listening on %s:%s' % (host, port))
+        if host:
+            http_server.bind(port, address=host)
+        else:
+            http_server.bind(port)  # bind all (0.0.0.0:*)
+        http_server.start()
 
 
 ### Aegis Web Admin

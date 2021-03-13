@@ -287,7 +287,9 @@ def validate_ip_address(value):
 
 email_validator = None
 def validate_email(value):
-    email_validator = EmailValidator()
+    global email_validator
+    if not email_validator:
+        email_validator = EmailValidator()
     if value is None:
         return None
     if type(value) is not str:

@@ -22,9 +22,7 @@ import aegis.config
 
 
 # TODO
-# - deploy, revert, and delete on web should have a confirm screen, with user message for deploy notifications
 # - hydra clean build: started but needs sorting and action-taking
-# - multiple-notification of deploy needs to be sorted out into aegis_ and hydra clients
 
 class Build:
     def __init__(self, user=None):

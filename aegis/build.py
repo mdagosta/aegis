@@ -134,7 +134,7 @@ class Build:
         return self._done_exec('build', 0)
 
 
-    def deploy(self, version, env, build_step='deploy', deploy_msg=''):
+    def deploy(self, version, env, build_step='deploy'):
         # Environment Settings
         deploy_build = aegis.model.Build.get_version(version)
         deploy_build = aegis.model.Build.get_id(deploy_build['build_id'])

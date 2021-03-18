@@ -134,7 +134,7 @@ class Build:
         return self._done_exec('build', 0)
 
 
-    def deploy(self, version, env, build_step='deploy', deploy_msg='', user=None):
+    def deploy(self, version, env, build_step='deploy', deploy_msg=''):
         # Environment Settings
         deploy_build = aegis.model.Build.get_version(version)
         deploy_build = aegis.model.Build.get_id(deploy_build['build_id'])
@@ -147,41 +147,24 @@ class Build:
         self.start_t = time.time()
         self.username, stderr, exit_status = aegis.stdlib.shell('whoami')
         self.host = socket.gethostname()
-        # Set the previous version so we know what to revert back to, and mark it deployed, if this isn't happening to revert a build
-        ## TODO notifications need to be moved into the clients, but it's attached to a lot
-        if build_step == 'deploy':
-            self.build_row = aegis.model.Build.get_id(self.build_row['build_id'])
-            live_build = aegis.model.Build.get_live_build(self.build_row['env'])
-            if live_build:
-                self.build_row.set_previous_version(live_build['version'])
-                self.build_row = aegis.model.Build.get_id(self.build_row['build_id'])
-            self.build_row.set_deployed()
-            # Send notifications
-            commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (self.build_row['previous_version'], self.build_row['version']), cwd=build_dir)
-            commits = commits.splitlines()
-            notification_body = "Release Notes by %s:  %s\n\n" % (user or os.getenv('SUDO_USER'), deploy_msg)
-            notification_body += "Release Version: %s\n\n" % self.build_row['version']
-            notification_body += "React Size: %s\n\n" % self.build_row['build_size']
-            notification_body += "Release Commits:\n"
-            for commit in commits:
-                notification_body += "%s\n" % commit
-            for channel in options.build_notification_channels:
-                requests.post(channel, json={"text": notification_body})
-        # What to restart
+        # What to restart, considering that we don't want to restart hydra from within hydra
+        import __main__
+        main_is_hydra = __main__.__file__.endswith('%s.py' % options.deploy_hydra_name)
         processes, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
         processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+env)]
+        num_procs = 1 if main_is_hydra else 0
+        if len(processes) == num_procs:
+            aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
         # Remove and re-link
         if self._shell_exec("rm -f %s" % live_symlink, build_step=build_step, cwd=app_dir):
             return
         if self._shell_exec("ln -s %s %s" % (build_dir, live_symlink), build_step=build_step, cwd=app_dir):
             return
         # Restart processes
-        import __main__
         for process in processes:
             # Due to subprocess.Popen automatically receiving the SIGTERM from supervisor, we can't restart hydra from within supervisor.
             # https://stackoverflow.com/questions/52763508/python-prevent-child-threads-from-being-affected-from-sigint-signal
             # Instead, allow Hydra to use its quitting flag to stop and let supervisor restart.
-            main_is_hydra = __main__.__file__.endswith('%s.py' % options.deploy_hydra_name)
             proc_is_hydra = process.startswith(options.deploy_hydra_name)
             if main_is_hydra and proc_is_hydra:
                 logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
@@ -193,23 +176,14 @@ class Build:
         return self._done_exec(build_step, 0)
 
 
-    def revert(self, env, user=None):
+    def revert(self, build_row):
         self.start_t = time.time()
-        build_step = 'revert'
-        self.build_row = aegis.model.Build.get_live_build(env)
-        if not self.build_row:
-            logging.error("There is currently no live build.")
-            sys.exit(1)
+        self.build_row = build_row
         if not self.build_row['previous_version']:
-            logging.error("Current live build doesn't have a previous_version to revert to.")
-            return self._done_exec(build_step, 1)
-        # Mark the build reverted, then run the deploy on the previous_version
-        self.build_row.set_reverted()
-        # Send notifications
-        notification_body = "USER: %s  REVERT BUILD TO %s\n\n" % (user or os.getenv('SUDO_USER'), self.build_row['previous_version'])
-        for channel in options.build_notification_channels:
-            requests.post(channel, json={"text": notification_body})
-        return self.deploy(self.build_row['previous_version'], env=env, build_step=build_step)
+            logging.error("There is no previous version to revert to.")
+            sys.exit(1)
+        # Deploy the previous version, using self.build_row as the place to record it
+        return self.deploy(self.build_row['previous_version'], build_row['env'], 'revert')
 
 
     # Shell execution with structured logging and database output handling.
@@ -230,6 +204,7 @@ class Build:
         if exit_status:
             self._done_exec(build_step, exit_status)
         return exit_status
+
 
     # Do the final summary writes after the build step is done.
     def _done_exec(self, build_step, exit_status):
@@ -271,3 +246,44 @@ class Build:
             return x, y+1, z
         y = 0
         return x+1, y, z
+
+
+    # Get the commits between two versions
+    @classmethod
+    def commit_diff(cls, build_row):
+        app_dir = os.path.join(options.deploy_dir, options.program_name)
+        build_dir = os.path.join(app_dir, build_row['version'])
+        live_build = aegis.model.Build.get_live_build(build_row['env'])
+        commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (live_build['version'], build_row['version']), cwd=build_dir)
+        commits = commits.splitlines()
+        return commits
+
+
+    # Set previous version and send notifications
+    @classmethod
+    def start_deploy(cls, build_row, user):
+        # Set the previous version so we know what to revert back to, and mark it deployed, if this isn't happening to revert a build
+        live_build = aegis.model.Build.get_live_build(build_row['env'])
+        if live_build:
+            build_row.set_previous_version(live_build['version'])
+            build_row = aegis.model.Build.get_id(build_row['build_id'])
+        build_row.set_deployed()
+        # Set notifications
+        commits = cls.commit_diff(build_row)
+        notification_body = "Release Notes by %s:  %s\n\n" % (user, build_row['deploy_message'])
+        notification_body += "Release Version: %s\n\n" % build_row['version']
+        notification_body += "React Size: %s\n\n" % build_row['build_size']
+        notification_body += "Release Commits:\n"
+        for commit in commits:
+            notification_body += "%s\n" % commit
+        for channel in options.build_notification_channels:
+            requests.post(channel, json={"text": notification_body})
+
+
+    # Set to use previous version and send notifications
+    @classmethod
+    def start_revert(cls, build_row, user):
+        notification_body = "REVERT BUILD TO: %s   USER: %s   MESSAGE: %s\n\n" % (build_row['previous_version'], user, build_row['revert_message'])
+        for channel in options.build_notification_channels:
+            requests.post(channel, json={"text": notification_body})
+        build_row.set_reverted()

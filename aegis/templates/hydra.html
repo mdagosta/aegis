@@ -1,8 +1,9 @@
 {% extends frame.html %}
 
 {% block body %}
-<h1 style="margin-top: 1em;">Hydra <a href="/aegis/hydra/queue" class="w3-text-blue">Queue</a>   <a href="/aegis/hydra/add" class="w3-right w3-btn w3-blue w3-large">+ New Work Type</a></h1>
+<h1 style="margin-top: 1em;">Hydra     <a href="/admin/hydra/add" class="w3-right w3-btn w3-blue w3-large">+ New Work Type</a></h1>
 
+<h4><a href="/admin/hydra/queue" class="w3-text-blue">Queue</a></h4>
 {% if hydra_types %}
 <form action="{{request.uri}}" method="POST">
   {% raw xsrf_form_html() %}

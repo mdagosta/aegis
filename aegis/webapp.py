@@ -106,6 +106,13 @@ class AegisHandler(tornado.web.RequestHandler):
             self.logw(cookies, "HTTP Reponse Set-Cookie Header")
         super(AegisHandler, self).finish(chunk)
 
+    def debug_request(self):
+        req_str = str(self.request).rstrip(')') + ', headers={'
+        for header in sorted(self.request.headers.items()):
+            req_str += "'%s': '%s', " % header
+        req_str = "%s})" % req_str.rstrip(', ')
+        logging.warning(req_str)
+
     def setup_user(self):
         # Set up user-cookie tracking system, based on user-agent
         if not self.tmpl['user_agent']:
@@ -583,26 +590,39 @@ class WebApplication(AegisApplication, tornado.web.Application):
 
 ### Aegis Web Admin
 
+
 class AegisWeb(AegisHandler):
     def prepare(self):
         super(AegisWeb, self).prepare()
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
+        self.tmpl['home_link'] = '/admin'
         self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
         self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
 
     def get_template_path(self):
         return self.tmpl.get('template_dir')
 
+
+class AegisHome(AegisWeb):
+    @tornado.web.authenticated    # Could do something like @aegis.webapp.admin_only which also sends for login but then rejects if not admin
+    def get(self, *args):
+        self.enforce_admin()
+        return self.render_path("index.html", **self.tmpl)
+
+
 class AegisHydraForm(AegisWeb):
     @tornado.web.authenticated
     def get(self, hydra_type_id=None, *args):
         self.enforce_admin()
+        self.tmpl['page_title'] = 'Hydra'
+        self.tmpl['home_link'] = '/admin/hydra'
         self.tmpl['errors'] = {}
         hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
         if hydra_type_id:
             self.tmpl['hydra_type'] = aegis.model.HydraType.get_id(hydra_type_id)
         else:
             self.tmpl['hydra_type'] = {}
+        self.tmpl['home_link'] = '/admin/hydra'
         return self.render_path("hydra_form.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -631,7 +651,7 @@ class AegisHydraForm(AegisWeb):
             hydra_type_id = aegis.model.HydraType.insert_columns(**hydra_type)
             hydra_type_row = aegis.model.HydraType.get_id(hydra_type_id)
             hydra_type_row.set_status('paused')
-        return self.redirect('/aegis/hydra')
+        return self.redirect('/admin/hydra')
 
 
 class AegisHydra(AegisWeb):
@@ -639,6 +659,7 @@ class AegisHydra(AegisWeb):
     def get(self, *args):
         self.enforce_admin()
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
+        self.tmpl['home_link'] = '/admin/hydra'
         return self.render_path("hydra.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -673,6 +694,8 @@ class AegisHydraQueue(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
+        self.tmpl['page_title'] = 'Hydra'
+        self.tmpl['home_link'] = '/admin/hydra'
         self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
         return self.render_path("hydra_queue.html", **self.tmpl)
 
@@ -684,7 +707,7 @@ class AegisHydraQueue(AegisWeb):
             hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0])
             if hydra_queue:
                 hydra_queue.run_now()
-        return self.redirect('/aegis/hydra/queue')
+        return self.redirect('/admin/hydra/queue')
 
 
 class AegisReportForm(AegisWeb):
@@ -782,50 +805,12 @@ class AegisReport(AegisWeb):
             return self.render_path("reports.html", **self.tmpl)
 
 
-class AegisBuildForm(AegisWeb):
-    @tornado.web.authenticated
-    def get(self, build_id=None, *args):
-        self.enforce_admin()
-        self.tmpl['errors'] = {}
-        build_id = aegis.stdlib.validate_int(build_id)
-        if build_id:
-            self.tmpl['build'] = aegis.model.Build.get_id(build_id)
-        else:
-            self.tmpl['build'] = {}
-        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
-        return self.render_path("build_form.html", **self.tmpl)
-
-    @tornado.web.authenticated
-    def post(self, build_id=None, *args):
-        self.enforce_admin()
-        # Validate Input
-        self.tmpl['errors'] = {}
-        self.tmpl['build'] = build = {}
-        build['branch'] = self.request.args.get('branch')
-        build['revision'] = self.request.args.get('revision')
-        if not build['branch']:
-            self.tmpl['errors']['branch'] = '** required (string)'
-        if not build['revision']:
-            build['revision'] = 'HEAD'
-        if self.tmpl['errors']:
-            return self.render_path("build_form.html", **self.tmpl)
-        build['env'] = aegis.config.get('env')
-        # Create build row and add it to run on Hydra
-        build_id = aegis.model.Build.insert_columns(**build)
-        hydra_type = aegis.model.HydraType.get_name('build_build')
-        hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
-                       'work_host': aegis.config.get('build_host'), 'work_env': aegis.config.get('env')}
-        work_data = {'build_id': build_id, 'user': self.get_member_email()}
-        hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-        hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
-        self.redirect('/aegis/build')
-
-
 class AegisBuild(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
         self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if not b['delete_dttm']]
+        self.tmpl['home_link'] = '/admin/build'
         self.tmpl['live_build'] = aegis.model.Build.get_live_build(aegis.config.get('env'))
         return self.render_path("build.html", **self.tmpl)
 
@@ -877,24 +862,144 @@ class AegisBuild(AegisWeb):
                 return self.redirect('/aegis/build')
 
 
-class AegisHome(AegisWeb):
-    @tornado.web.authenticated    # Could do something like @aegis.webapp.admin_only which also sends for login but then rejects if not admin
+class AegisBuildForm(AegisWeb):
+    @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        return self.render_path("index.html", **self.tmpl)
+        self.tmpl['page_title'] = 'Build'
+        self.tmpl['errors'] = {}
+        self.tmpl['build'] = {}
+        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
+        self.tmpl['home_link'] = '/admin/build'
+        return self.render_path("build_form.html", **self.tmpl)
+
+    @tornado.web.authenticated
+    def post(self, *args):
+        self.enforce_admin()
+        # Validate Input
+        self.tmpl['errors'] = {}
+        self.tmpl['build'] = build = {}
+        build['branch'] = self.request.args.get('branch')
+        build['revision'] = self.request.args.get('revision')
+        if not build['branch']:
+            self.tmpl['errors']['branch'] = '** required (string)'
+        if self.tmpl['errors']:
+            return self.render_path("build_form.html", **self.tmpl)
+        if not build['revision']:
+            build['revision'] = 'HEAD'
+        build['env'] = aegis.config.get('env')
+        # Create build row and add it to run on Hydra
+        build_id = aegis.model.Build.insert_columns(**build)
+        hydra_type = aegis.model.HydraType.get_name('build_build')
+        hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
+                       'work_host': aegis.config.get('build_host'), 'work_env': aegis.config.get('env')}
+        work_data = {'build_id': build_id, 'user': self.get_member_email()}
+        hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
+        hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+        self.redirect('/admin/build')
+
+
+class AegisBuildView(AegisWeb):
+    @tornado.web.authenticated
+    def get(self, build_id, *args):
+        self.tmpl['page_title'] = 'Build'
+        self.tmpl['home_link'] = '/admin/build'
+        self.enforce_admin()
+        self.tmpl['errors'] = {}
+        build_id = aegis.stdlib.validate_int(build_id)
+        if build_id:
+            self.tmpl['build'] = aegis.model.Build.get_id(build_id)
+        else:
+            self.tmpl['build'] = {}
+        self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
+        return self.render_path("build_view.html", **self.tmpl)
+
+    @tornado.web.authenticated
+    def post(self, build_id, *args):
+        self.enforce_admin()
+        # Validate Input
+        self.tmpl['errors'] = {}
+        self.tmpl['build'] = build = {}
+        build['branch'] = self.request.args.get('branch')
+        build['revision'] = self.request.args.get('revision')
+        if not build['branch']:
+            self.tmpl['errors']['branch'] = '** required (string)'
+        if not build['revision']:
+            build['revision'] = 'HEAD'
+        if self.tmpl['errors']:
+            return self.render_path("build_form.html", **self.tmpl)
+        build['env'] = aegis.config.get('env')
+        # Create build row and add it to run on Hydra
+        build_id = aegis.model.Build.insert_columns(**build)
+        hydra_type = aegis.model.HydraType.get_name('build_build')
+        hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
+                       'work_host': aegis.config.get('build_host'), 'work_env': aegis.config.get('env')}
+        work_data = {'build_id': build_id, 'user': self.get_member_email()}
+        hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
+        hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+        self.redirect('/admin/build')
+
+
+class AegisBuildConfirm(AegisWeb):
+    @tornado.web.authenticated
+    def get(self, build_id, build_step, *args):
+        self.enforce_admin()
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_step'] = build_step
+        self.tmpl['errors'] = {}
+        return self.screen()
+
+    @tornado.web.authenticated
+    def post(self, build_id, build_step, *args):
+        self.enforce_admin()
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_step'] = build_step
+        self.tmpl['errors'] = {}
+        # Validate Input
+        message = self.request.args.get('message')
+        if not message:
+            self.tmpl['errors']['message'] = '** required (string)'
+            return self.screen()
+        # Save the user message and start the deploy/revert
+        self.tmpl['build_row'].set_message(message, build_step)
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        if build_step == 'deploy':
+            aegis.build.Build.start_deploy(self.tmpl['build_row'], self.get_member_email())
+        elif build_step == 'revert':
+            aegis.build.Build.start_revert(self.tmpl['build_row'], self.get_member_email())
+        # Set output to '' so the web can see that it's started
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_row'].set_output(build_step, '')
+        hydra_type = aegis.model.HydraType.get_name('%s_build' % build_step)
+        # Put an item on the work queue to signal each host to deploy
+        for deploy_host in options.deploy_hosts:
+            hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
+                           'work_host': deploy_host, 'work_env': aegis.config.get('env')}
+            work_data = {'build_id': build_id, 'user': self.get_member_email()}
+            hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
+            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+        return self.redirect('/admin/build')
+
+    def screen(self):
+        self.tmpl['home_link'] = '/admin/build'
+        self.tmpl['page_title'] = 'Build'
+        self.tmpl['commits'] = aegis.build.Build.commit_diff(self.tmpl['build_row'])
+        self.tmpl['live_build'] = aegis.model.Build.get_live_build(self.tmpl['build_row']['env'])
+        return self.render_path("build_confirm.html", **self.tmpl)
 
 
 handler_urls = [
-    (r'^/aegis/build/add\W*$', AegisBuildForm),
-    (r'^/aegis/build/(\d+)\W*$', AegisBuildForm),
-    (r'^/aegis/build\W*$', AegisBuild),
-    (r'^/aegis/hydra/queue\W*$', AegisHydraQueue),
-    (r'^/aegis/hydra/add\W*$', AegisHydraForm),
-    (r'^/aegis/hydra/(\d+)\W*$', AegisHydraForm),
-    (r'^/aegis/hydra\W*$', AegisHydra),
-    (r'^/aegis/report/form/(\d+)\W*$', AegisReportForm),
-    (r'^/aegis/report/form\W*$', AegisReportForm),
-    (r'^/aegis/report/(\d+)\W*$', AegisReport),
-    (r'^/aegis/report\W*$', AegisReport),
-    (r'^/aegis\W*$', AegisHome),
+    (r'^/admin/build/(\d+)/(deploy|revert)\W*$', AegisBuildConfirm),
+    (r'^/admin/build/(\d+)\W*$', AegisBuildView),
+    (r'^/admin/build/add\W*$', AegisBuildForm),
+    (r'^/admin/build\W*$', AegisBuild),
+    (r'^/admin/hydra/queue\W*$', AegisHydraQueue),
+    (r'^/admin/hydra/add\W*$', AegisHydraForm),
+    (r'^/admin/hydra/(\d+)\W*$', AegisHydraForm),
+    (r'^/admin/hydra\W*$', AegisHydra),
+    (r'^/admin/report/form/(\d+)\W*$', AegisReportForm),
+    (r'^/admin/report/form\W*$', AegisReportForm),
+    (r'^/admin/report/(\d+)\W*$', AegisReport),
+    (r'^/admin/report\W*$', AegisReport),
+    (r'^/admin\W*$', AegisHome),
 ]

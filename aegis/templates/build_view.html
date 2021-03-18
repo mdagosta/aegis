@@ -1,0 +1,30 @@
+{% extends frame.html %}
+
+{% block head %}
+<meta http-equiv="refresh" content="8" />
+{% end %}
+
+{% block body %}
+<div class="w3-container w3-blue" style="margin-top: 32px;">
+    <h3>{% if build %}View{% else %}New{% end %} {{build_step.capitalize()}} {% if build %}{{build['build_id']}}{% end %}</h3>
+</div>
+
+<form id="build_redeploy" class="w3-card w3-padding" action="/aegis/build?build_step=deploy" method="POST">
+    {% raw xsrf_form_html() %}
+    <p><label><b>Branch {{build['branch']}}</b></label></p>
+
+    <p><label><b>Revision {{build['revision']}}</b></label></p>
+
+    <p><label><b>Version {{build['version']}}</b></label></p>
+
+    <p><label><b>Exit Status {% if build_step == 'build' %}{{build['build_exit_status']}}{% elif build_step == 'deploy' %}{{build['deploy_exit_status']}}{% elif build_step == 'revert' %}{{build['revert_exit_status']}} {% end %}</b></label></p>
+
+    <input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="deploy_{{build['build_id']}}" value="Re-Deploy"/>
+
+    <p><label><b>{{build_step.capitalize()}} Output</b></label></p>
+    <pre class="w3-panel w3-pale-yellow w3-border w3-border-yellow w3-medium" style="overflow-x: scroll">{% if build_step == 'build' %}{{build['build_output_tx']}}{% elif build_step == 'deploy' %}{{build['deploy_output_tx']}}{% elif build_step == 'revert' %}{{build['revert_output_tx']}} {% end %}</pre>
+
+</form>
+
+
+{% end %}

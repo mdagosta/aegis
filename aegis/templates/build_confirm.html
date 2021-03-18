@@ -1,0 +1,47 @@
+{% extends frame.html %}
+
+{% block body %}
+<div class="w3-container w3-blue" style="margin-top: 32px;">
+    <h3>{{build_step.capitalize()}} Build {{build_row['build_id']}}</h3>
+</div>
+
+<form id="build_confirm" class="w3-card w3-padding" action="{{request.path}}" method="POST">
+    {% raw xsrf_form_html() %}
+
+    <p class="w3-medium">
+        {% if build_step == 'deploy' %}
+        Live version now: <br/>
+        {{live_build['version']}} <br/>
+        Deploying version: <br/>
+        {{build_row['version']}} <br/>
+        {% elif build_step == 'revert' %}
+        Live version now: <br/>
+        {{build_row['version']}} <br/>
+        Deploying version: <br/>
+        {{build_row['previous_version']}} <br/>
+        {% end %}
+    </p>
+    
+    <p>
+        <label><b>{{build_step.capitalize()}} Message</b> {% if errors.get('message') %}<br/><span class="w3-text-red">{{errors['message']}}</span>{% end %}</label>
+        <input class="w3-input {% if errors.get('message') %}w3-border w3-border-red{% end %}" type="text" name="message" value="" placeholder="[required]" />
+    </p>
+
+    <div class="w3-center w3-padding">
+        <input type="submit" class="w3-button w3-blue w3-center" value="Confirm {{build_step.capitalize()}}"/>
+        <br/><br/><a class="w3-right w3-text-blue" href="/admin/build">Cancel</a>
+    </div>
+    <br/>
+</form>
+
+<p>
+    <label><b>Difference Between Versions</b></label>
+    <ul class="w3-medium">
+        {% for commit in commits %}
+        <li>{{commit}}</li>
+        {% end %}
+    </ul>
+</p>
+
+
+{% end %}

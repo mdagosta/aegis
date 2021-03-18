@@ -188,6 +188,11 @@ class HydraHead(HydraThread):
 
 
     def build_build(self, hydra_queue, hydra_type):
+        # Singleton check - if someone else claimed a different hydra_queue of the same hydra_type, hydra_queue needs to unclaim and stop
+        singleton = hydra_queue.singleton()
+        if singleton:
+            logging.error("build_build already running")
+            return True, 0
         work_data = json.loads(hydra_queue['work_data'])
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         # Magic to bind config.write_custom_versions onto the build, to also create the react version
@@ -207,7 +212,7 @@ class HydraHead(HydraThread):
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         logging.warning("Hydra Deploy Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        exit_status = build.deploy(build_row['version'], env=build_row['env'], user=work_data.get('user'))
+        exit_status = build.deploy(build_row['version'], env=build_row['env'])
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
         HydraThread.quitting.set()
@@ -216,11 +221,12 @@ class HydraHead(HydraThread):
 
     def revert_build(self, hydra_queue, hydra_type):
         # host-specific by putting hostname: key in the work_data JSON
+        self.logw(hydra_queue, "HYDRA QUEUE")
         work_data = json.loads(hydra_queue['work_data'])
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         logging.warning("Hydra Revert Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        exit_status = build.revert(env=build_row['env'], user=work_data['user'])
+        exit_status = build.revert(build_row)
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
         HydraThread.quitting.set()

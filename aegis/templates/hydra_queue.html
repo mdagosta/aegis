@@ -1,7 +1,7 @@
 {% extends frame.html %}
 
 {% block body %}
-<h1 style="margin-top: 1em;">Hydra <a href="/aegis/hydra/queue" class="w3-text-blue">Queue</a></h1>
+<h1 style="margin-top: 1em;">Hydra Queue</h1>
 
 {% if hydra_queues %}
 <form action="{{request.uri}}" method="POST">
@@ -9,12 +9,13 @@
     <table class="w3-table-all w3-responsive">
         <tr>
             <th>ID</th>
-            <th>Work Type</th>
-            <th>Priority</th>
+            <th>Type</th>
+            <th>Env</th>
+            <th>Host</th>
             <th>Work Dttm</th>
             <th>Work Data</th>
-            <th>Try Count</th>
-            <th>Error Count</th>
+            <th>Tries</th>
+            <th>Errors</th>
             <th>Functions</th>
         </tr>
 
@@ -22,7 +23,8 @@
         <tr>
             <td>{{hydra_queue['hydra_queue_id']}}</td>
             <td>{{hydra_queue['hydra_type_name']}}</td>
-            <td>{{hydra_queue['priority_ndx']}}</td>
+            <td>{{hydra_queue['work_env']}}</td>
+            <td>{{hydra_queue['work_host']}}</td>
             <td>{{hydra_queue['work_dttm']}}</td>
             <td>{{hydra_queue['work_data']}}</td>
             <td>{{hydra_queue['try_cnt']}}</td>

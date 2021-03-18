@@ -580,6 +580,10 @@ class Build(aegis.database.Row):
         sql = "UPDATE build SET build_size=%s WHERE build_id=%s AND build_size IS NULL"
         return db().execute(sql, build_size, self['build_id'])
 
+    def set_message(self, message, build_step):
+        sql = "UPDATE build SET " + build_step + "_message=%s WHERE build_id=%s AND " + build_step + "_message IS NULL"
+        return db().execute(sql, message, self['build_id'])
+
     def set_deployed(self):
         sql = "UPDATE build SET deploy_dttm=NOW() WHERE build_id=%s AND deploy_dttm IS NULL"
         return db().execute(sql, self['build_id'])

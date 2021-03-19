@@ -11,7 +11,10 @@
     <label><b>Branch:</b> {{build['branch']}}</label><br/>
     <label><b>Revision:</b> {{build['revision']}}</label><br/>
     <label><b>Version:</b> {{build['version']}}</label><br/>
-    <label><b>Exit Status:</b> {% if build_step == 'build' %}{{build['build_exit_status']}}{% elif build_step == 'deploy' %}{{build['deploy_exit_status']}}{% elif build_step == 'revert' %}{{build['revert_exit_status']}} {% end %}</label>
+    <label><b>Exit Status:</b> {% if build_step == 'build' %}{{build['build_exit_status']}}{% elif build_step == 'deploy' %}{{build['deploy_exit_status']}}{% elif build_step == 'revert' %}{{build['revert_exit_status']}} {% end %}</label><br/>
+    <label><b>Created:</b> {{build['create_dttm']}}</label><br/>
+    <label><b>Deployed:</b> {{build['deploy_dttm'] or ''}}</label><br/>
+    <label><b>Reverted:</b> {{build['revert_dttm'] or ''}}</label><br/>
 </p>
 
 <p><label><b>{{build_step.capitalize()}} Output</b></label></p>

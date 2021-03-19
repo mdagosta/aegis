@@ -22,13 +22,13 @@
         {% for build in builds %}
         <tr {% if live_build and build['build_id'] == live_build['build_id'] %} class="w3-pale-yellow"{% end %}>
             <td nowrap="nowrap">{{build['version']}}</td>
-            <td><a href="/admin/build/{{build['build_id']}}">{% if build['build_exit_status'] %}ERROR {{build['build_exit_status']}}{% elif build['build_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a></td>
+            <td><a href="/admin/build/{{build['build_id']}}">{% if build['build_exit_status'] %}ERROR {{build['build_exit_status']}}{% elif build['build_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a> <br/><span class="w3-small">{{build['create_dttm']}}</span></td>
 
             <td>{% if build['build_exit_status'] == 0 %}
                 {% if build['deploy_output_tx'] is None %}
                 <a href="/admin/build/{{build['build_id']}}/deploy" class="w3-button w3-blue w3-center w3-medium w3-padding-small">Deploy</a>
                 {% else %}
-                <a href="/admin/build/{{build['build_id']}}?build_step=deploy">{% if build['deploy_exit_status'] %}ERROR {{build['deploy_exit_status']}}{% elif build['deploy_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a>
+                <a href="/admin/build/{{build['build_id']}}?build_step=deploy">{% if build['deploy_exit_status'] %}ERROR {{build['deploy_exit_status']}}{% elif build['deploy_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a> <br/><span class="w3-small">{{build['deploy_dttm']}}</span>
                 {% end %}
                 {% end %}
             </td>
@@ -39,7 +39,7 @@
                     {% if build['revert_exit_status'] %}ERROR {{build['revert_exit_status']}}
                     {% elif build['revert_exit_status'] == 0 %}SUCCESS
                     {% else %}RUNNING{% end %}
-                </a>
+                </a> <br/><span class="w3-small">{{build['revert_dttm']}}</span>
                 {% else %}
                 {% if live_build and build.get('previous_version') and build['build_id'] == live_build['build_id'] %}<a href="/admin/build/{{build['build_id']}}/revert" class="w3-button w3-blue w3-center w3-medium w3-padding-small">Revert</a>{% end %}
                 {% end %}</td>

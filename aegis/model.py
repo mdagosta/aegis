@@ -616,6 +616,11 @@ class Build(aegis.database.Row):
         return db().query(sql, cls=cls)
 
     @classmethod
-    def scan_stale_builds(cls):
-        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+    def scan_stale_builds(cls, env):
+        sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+        return db().query(sql, env, cls=cls)
+
+    @classmethod
+    def deployed_envs(cls):
+        sql = "SELECT DISTINCT env FROM build WHERE delete_dttm IS NULL"
         return db().query(sql, cls=cls)

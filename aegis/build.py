@@ -6,6 +6,7 @@
 import logging
 import os
 import requests
+import shutil
 import socket
 import sys
 import time
@@ -182,6 +183,25 @@ class Build:
             sys.exit(1)
         # Deploy the previous version, using self.build_row as the place to record it
         return self.deploy(self.build_row['previous_version'], build_row['env'], 'revert')
+
+
+    def clean(self, build_row):
+        # Delete all the files from filesystem for this build
+        # ON ALL HOSTS...
+        self.logw(build_row['build_id'], "BUILD ID")
+        app_dir = os.path.join(options.deploy_dir, options.program_name)
+        if build_row['version']:
+            build_dir = os.path.join(app_dir, build_row['version'])
+            if os.path.exists(build_dir):
+                shutil.rmtree(build_dir)
+                self.logw(build_dir, "DELETED BUILD DIR")
+            build_row.set_soft_deleted()
+        elif not build_row['delete_dttm']:
+            self.logw(build_row['build_id'], "BUILD WITH NO VERSION - DOA")
+            build_row.set_soft_deleted()
+        else:
+            self.logw("IS ALL DELETED")
+
 
 
     # Shell execution with structured logging and database output handling.

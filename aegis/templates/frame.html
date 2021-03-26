@@ -1,26 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        {% block title %}<title>Aegis {{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</title>{% end %}
+        {% block title %}<title>{{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</title>{% end %}
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+        <style>
+         @media only screen and (max-device-width: 418px), only screen and (max-width: 418px) {
+             #top-bar {font-size: 14px!important; }
+             #top-bar .w3-bar-item {padding: 5px!important;}
+             #menu-bar {padding: 5px!important;}
+             #menu-bar span {margin: 0 .3em!important;}
+             .w3-large {font-size: 18px!important;}
+             h1 {font-size: 24px!important;}
+             .w3-table-all th:first-child, .w3-table-all td:first-child {padding-left: 8px;}
+             .w3-table-all th, .w3-table-all td {padding-left: 4px; padding-right: 4px;}
+         }
+        </style>
         {% block head %}{% end %}
     </head>
 
     <body class="w3-light-gray w3-large">
         {# Header #}
         <div class="w3-top">
-            <div class="w3-gray w3-large">
+            <div class="w3-gray w3-large" id="top-bar">
                 <div class="w3-bar">
-                    <a href="/aegis" class="w3-bar-item w3-padding-medium" style="text-decoration: none;">Aegis {{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</a>
+                    <a href="{{home_link}}" class="w3-bar-item w3-padding-medium" style="text-decoration: none;">{{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</a>
                     <div class="w3-right w3-bar-item w3-padding-medium">{{get_member_email()}}</div>
                 </div>
             </div>
-            <div class="w3-bar w3-light-gray w3-padding-small w3-card">
-                <span style="margin: 0 1em;"><a href="/aegis/build">Builds</a></span>
-                <span style="margin: 0 1em;"><a href="/aegis/hydra">Hydra</a></span>
-                <span style="margin: 0 1em;"><a href="/aegis/report">Reports</a></span>
+            <div class="w3-bar w3-light-gray w3-padding-small w3-card" id="menu-bar">
+                <span style="margin: 0 1em;"><a href="/admin">Admin</a></span>
+                <span style="margin: 0 1em;"><a href="/admin/build">Builds</a></span>
+                <span style="margin: 0 1em;"><a href="/admin/hydra">Hydra</a></span>
+                <span style="margin: 0 1em;"><a href="/admin/report">Reports</a></span>
             </div>
         </div>
 

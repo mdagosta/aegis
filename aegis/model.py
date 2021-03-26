@@ -580,6 +580,10 @@ class Build(aegis.database.Row):
         sql = "UPDATE build SET build_size=%s WHERE build_id=%s AND build_size IS NULL"
         return db().execute(sql, build_size, self['build_id'])
 
+    def set_message(self, message, build_step):
+        sql = "UPDATE build SET " + build_step + "_message=%s WHERE build_id=%s AND " + build_step + "_message IS NULL"
+        return db().execute(sql, message, self['build_id'])
+
     def set_deployed(self):
         sql = "UPDATE build SET deploy_dttm=NOW() WHERE build_id=%s AND deploy_dttm IS NULL"
         return db().execute(sql, self['build_id'])
@@ -612,8 +616,13 @@ class Build(aegis.database.Row):
         return db().query(sql, cls=cls)
 
     @classmethod
-    def scan_stale_builds(cls):
-        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+    def scan_stale_builds(cls, env):
+        sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+        return db().query(sql, env, cls=cls)
+
+    @classmethod
+    def deployed_envs(cls):
+        sql = "SELECT DISTINCT env FROM build WHERE delete_dttm IS NULL"
         return db().query(sql, cls=cls)
 
 

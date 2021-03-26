@@ -1,20 +1,17 @@
 {% extends frame.html %}
 
 {% block head %}
-<meta http-equiv="refresh" content="8" />
+<meta http-equiv="refresh" content="30" />
 {% end %}
 
 {% block body %}
-<h1 style="margin-top: 1em;">Build    <a href="/aegis/build/add" class="w3-right w3-btn w3-blue w3-large">+ New Build</a></h1>
+<h1 style="margin-top: 1em;">Builds    <a href="/admin/build/add" class="w3-right w3-btn w3-blue w3-large">+ New Build</a></h1>
 
 <form action="{{request.uri}}" method="POST">
     {% raw xsrf_form_html() %}
     <table class="w3-table-all w3-responsive">
         <tr>
-            <th>ID</th>
-            <th>Branch@Revision</th>
             <th>Version</th>
-            <th>Previous</th>
             <th>Build</th>
             <th>Deploy</th>
             <th>Revert</th>
@@ -24,31 +21,28 @@
 
         {% for build in builds %}
         <tr {% if live_build and build['build_id'] == live_build['build_id'] %} class="w3-pale-yellow"{% end %}>
-            <td>{{build['build_id']}}</td>
-            <td>{{build['branch']}}@<a target="_blank" href="https://{{options.git_repo.replace(':', '/')}}/commit{% if options.git_repo.startswith('bitbucket') %}s{% end %}/{{build['revision']}}">{{build['revision'][0:8]}}</a></td>
-            <td>{{build['version']}}</td>
-            {#
-            <td>{% if build['version'] %}<a target="_blank" href="https://{{options.git_repo.replace(':', '/')}}/compare/{{build['previous_version']}}...{{build['version']}}">{{build['version']}}</a>{% end %}</td>
-            #}
-            <td>{% if build['previous_version'] %}<a target="_blank" href="https://{{options.git_repo.replace(':', '/')}}/compare/{{build['previous_version']}}...{{build['version']}}">{{build['previous_version']}}</a>{% end %}</td>
-            <td><a href="/aegis/build/{{build['build_id']}}">{% if build['build_exit_status'] %}ERROR {{build['build_exit_status']}}{% elif build['build_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a></td>
+            <td nowrap="nowrap">{{build['version']}}</td>
+            <td><a href="/admin/build/{{build['build_id']}}">{% if build['build_exit_status'] %}ERROR {{build['build_exit_status']}}{% elif build['build_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a> <br/><span class="w3-small">{{build['create_dttm']}}</span></td>
 
             <td>{% if build['build_exit_status'] == 0 %}
                 {% if build['deploy_output_tx'] is None %}
-                <input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="deploy_{{build['build_id']}}" value="Deploy"/>
+                <a href="/admin/build/{{build['build_id']}}/deploy" class="w3-button w3-blue w3-center w3-medium w3-padding-small">Deploy</a>
                 {% else %}
-                <a href="/aegis/build/{{build['build_id']}}?build_step=deploy">{% if build['deploy_exit_status'] %}ERROR {{build['deploy_exit_status']}}{% elif build['deploy_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a>
+                <a href="/admin/build/{{build['build_id']}}?build_step=deploy">{% if build['deploy_exit_status'] %}ERROR {{build['deploy_exit_status']}}{% elif build['deploy_exit_status'] == 0 %}SUCCESS{% else %}RUNNING{% end %}</a> <br/><span class="w3-small">{{build['deploy_dttm']}}</span>
                 {% end %}
                 {% end %}
             </td>
 
-            <td>{% if build['revert_dttm'] or build['revert_output_tx'] is not None %}
-                <a href="/aegis/build/{{build['build_id']}}?build_step=revert">
+            <td>
+                {% if build['revert_dttm'] or build['revert_output_tx'] is not None %}
+                <a href="/admin/build/{{build['build_id']}}?build_step=revert">
                     {% if build['revert_exit_status'] %}ERROR {{build['revert_exit_status']}}
                     {% elif build['revert_exit_status'] == 0 %}SUCCESS
-                    {% else %}RUNNING{% end %}</a>
-</a>
-{% else %}{% if live_build and build.get('previous_version') and build['build_id'] == live_build['build_id'] %}<input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="revert_{{build['build_id']}}" value="Revert"/>{% end %}{% end %}</td>
+                    {% else %}RUNNING{% end %}
+                </a> <br/><span class="w3-small">{{build['revert_dttm']}}</span>
+                {% else %}
+                {% if live_build and build.get('previous_version') and build['build_id'] == live_build['build_id'] %}<a href="/admin/build/{{build['build_id']}}/revert" class="w3-button w3-blue w3-center w3-medium w3-padding-small">Revert</a>{% end %}
+                {% end %}</td>
             <td>{% if build['build_size'] %}{{"%4.2f MB" % (build['build_size'] / 1024 / 1024)}}{% end %}</td>
             <td>{% if live_build and not build['build_id'] == live_build['build_id'] and not build['deploy_dttm'] %}<input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="delete_{{build['build_id']}}" value="Delete"/>{% end %}</td>
         </tr>

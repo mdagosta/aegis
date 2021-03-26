@@ -1,60 +1,27 @@
 {% extends frame.html %}
 
-{% block head %}
-<meta http-equiv="refresh" content="8" />
-{% end %}
-
 {% block body %}
 <div class="w3-container w3-blue" style="margin-top: 32px;">
-    <h3>{% if build %}View{% else %}New{% end %} {{build_step.capitalize()}} {% if build %}{{build['build_id']}}{% end %}</h3>
+    <h3>New Build</h3>
 </div>
 
-
-{% if build and build.get('build_id') %}
-<input type="hidden" name="build_id" value="{{build['build_id']}}"/>
-{% end %}
-
-{% if not build %}
 <form id="build_add" class="w3-card w3-padding" action="{{request.path}}" method="POST">
     {% raw xsrf_form_html() %}
     <p>
-        <label><b>Branch</b> {% if errors.get('branch') %}<span class="w3-text-red">{{errors['branch']}}</span>{% end %}</label>
-        <input class="w3-input {% if errors.get('branch') %}w3-border w3-border-red{% end %}" type="text" name="branch" value="{{build.get('branch') or ''}}" placeholder="ie 'BA-nick-card-builder' [required]" />
+        <label><b>Branch Name</b> {% if errors.get('branch') %}<br/><span class="w3-text-red">{{errors['branch']}}</span>{% end %}</label>
+        <input class="w3-input {% if errors.get('branch') %}w3-border w3-border-red{% end %}" type="text" name="branch" value="{{build.get('branch') or ''}}" placeholder="[required]" />
     </p>
 
     <p>
-        <label><b>Revision</b> {% if errors.get('revision') %}<span class="w3-text-red">{{errors['revision']}}</span>{% end %}</label>
-        <input class="w3-input {% if errors.get('revision') %}w3-border w3-border-red{% end %}" type="text" name="revision" value="{{build.get('revision') or ''}}" placeholder="git revision aka hash [optional, default HEAD]" />
+        <label><b>Revision Hash</b> {% if errors.get('revision') %}<br/><span class="w3-text-red">{{errors['revision']}}</span>{% end %}</label>
+        <input class="w3-input {% if errors.get('revision') %}w3-border w3-border-red{% end %}" type="text" name="revision" value="{{build.get('revision') or ''}}" placeholder="[optional, default HEAD]" />
     </p>
+
     <div class="w3-center w3-padding">
-        <a class="w3-left w3-text-blue" href="/aegis/build">Back</a>
-        {% if not build %}
         <input type="submit" class="w3-button w3-blue w3-center" value="Add Build"/>
-        {% end %}
+        <br/><br/><a class="w3-right w3-text-blue" href="/admin/build">Cancel</a>
     </div>
     <br/>
-</form>
-
-{% else %}
-
-<form id="build_redeploy" class="w3-card w3-padding" action="/aegis/build?build_step=deploy" method="POST">
-    {% raw xsrf_form_html() %}
-    <p><label><b>Branch {{build['branch']}}</b></label></p>
-
-    <p><label><b>Revision {{build['revision']}}</b></label></p>
-
-    <p><label><b>Version {{build['version']}}</b></label></p>
-
-    <p><label><b>Exit Status {% if build_step == 'build' %}{{build['build_exit_status']}}{% elif build_step == 'deploy' %}{{build['deploy_exit_status']}}{% elif build_step == 'revert' %}{{build['revert_exit_status']}} {% end %}</b></label></p>
-
-    <input type="submit" class="w3-button w3-blue w3-center w3-medium w3-padding-small" name="deploy_{{build['build_id']}}" value="Re-Deploy"/>
-
-    <p><label><b>{{build_step.capitalize()}} Output</b></label></p>
-    <pre class="w3-panel w3-pale-yellow w3-border w3-border-yellow w3-medium" style="overflow-x: scroll">{% if build_step == 'build' %}{{build['build_output_tx']}}{% elif build_step == 'deploy' %}{{build['deploy_output_tx']}}{% elif build_step == 'revert' %}{{build['revert_output_tx']}} {% end %}</pre>
 
 </form>
-
-{% end %}
-
-
 {% end %}

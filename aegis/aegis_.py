@@ -254,110 +254,15 @@ def deploy(parser):
     # Make it so
     logging.info("Running aegis deploy   Version: %s   Env: %s", version, env)
     build = aegis.build.Build()
-    deploy_msg = None
-    while not deploy_msg:
-        deploy_msg = input(aegis.stdlib.cstr('Type in release notes for the deploy notification:\n', 'white'))
-    build.deploy(version, env=env, deploy_msg=deploy_msg)
-
-    # This could produce a diff and then ask
-    # Could also record the diff (!!)
-
-    # This is a separate deploy program here, which we can reference at least in concept for producing diffs
-
-    # Create temp_dir if not exists
-    #if not os.path.exists(temp_dir):
-    #    os.makedirs(temp_dir)
-    ## Run Deploy
-    #files, output = rsync(silent=True)
-    #display(files, output)
-    ## Command line options and directory layout in global scope
-    #define('diff', default=True, help='Show Diffs', type=bool)
-    #define('dry_run', default=True, help='Dry Run - make no changes', type=bool)
-    #config.initialize()
-    #src_dir = os.path.dirname(aegis.stdlib.absdir(__file__))
-    #exclude_file = os.path.join(src_dir, 'etc', 'deploy.excludes')
-    #environments = {'prod': '/srv/www/_prod/' % app_name,
-    #                'dev': '/srv/www/<appname>_dev/' % app_name}
-    #if options.env not in environments:
-    #    logging.error("Environment %s isn't on the deploy list.", options.env)
-    #    sys.exit()
-    #dest_dir = environments[options.env]
-    #temp_dir = '/tmp/%s/deploy' % os.getenv('USER')
-    #logging.info("Running deploy.py   Env: %s   Src: %s   Dest: %s   Dry Run: %s", options.env, src_dir, dest_dir, options.dry_run)
-    ## set up rsync and file list filtering
-    #def rsync(silent=False):
-    #    rsync_opts = '-vzrlDc'
-    #    if options.dry_run:
-    #        rsync_opts += 'n'
-    #    rsync_opts += ' -T %s --delay-updates --exclude-from=%s --delete' % (temp_dir, exclude_file)
-    #    cmd = "rsync %s %s/ %s" % (rsync_opts, src_dir, dest_dir)
-    #    if not silent:
-    #        aegis.stdlib.logw(rsync_opts, 'RSYNC_OPTS:')
-    #        aegis.stdlib.logw(src_dir, 'SRC:')
-    #        aegis.stdlib.logw(dest_dir, 'DEST:')
-    #        aegis.stdlib.logw(cmd, 'CMD:')
-    #    pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-    #    output, error_code = pipe.communicate()
-    #    # filter it down to a simple file list
-    #    files = []
-    #    output = output.decode('utf-8')
-    #    for line in output.splitlines():
-    #        fn = filter_line(line)
-    #        if fn:
-    #            files.append(fn)
-    #    return files, output
-    #regexes = (
-    #    re.compile(r'^building file list ...'),
-    #    re.compile(r'^sent [\d,]+ bytes'),
-    #    re.compile(r'^total size is \d+'),
-    #    )
-    #def filter_line(line):
-    #    if line in ('', './', 'sending incremental file list'):
-    #        return ''
-    #    for regex in regexes:
-    #        if regex.search(line):
-    #            return ''
-    #    return line
-    #def diff_files(src_file, dest_file, colorize=True):
-    #    cmd = "diff -ub %s %s" % (dest_file, src_file)
-    #    pipe = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-    #    output, error_code = pipe.communicate()
-    #    output = output.decode('utf-8')
-    #    cdiff = []
-    #    for line in output.splitlines():
-    #        line = line.strip()
-    #        if not line: continue
-    #        if line.startswith('-'):
-    #            cdiff.append(aegis.stdlib.cstr(line, color='red'))
-    #        elif line.startswith('+') or line.startswith('*'):
-    #            cdiff.append(aegis.stdlib.cstr(line, color='green'))
-    #        else:
-    #            cdiff.append(line)
-    #    cdiff = '\n'.join(cdiff)
-    #    return cdiff
-    #def display(files, output):
-    #    for fn in files:
-    #        #if fn.endswith('/') or ' -> ' in fn:
-    #        if fn.endswith('/'):
-    #            continue
-    #        if fn.startswith('cannot delete'):
-    #            logging.warning(aegis.stdlib.cstr('- %s' % fn, color='magenta'))
-    #            continue
-    #        if fn.startswith('deleting '):
-    #            logging.warning(aegis.stdlib.cstr('- %s' % fn, color='magenta'))
-    #            continue
-    #        # Display useful diff information since this is deploying
-    #        src_file = (src_dir + '/' + fn).strip()   # '/' because of rsync slash oddity
-    #        dest_file = (dest_dir + fn).strip()
-    #        fn_status = fn
-    #        if not os.path.exists(dest_file):
-    #            fn_status += '   [NEW FILE]'
-    #        logging.warning(aegis.stdlib.cstr('+ writing %s ' % fn_status, color='cyan'))
-    #        if os.path.exists(dest_file):
-    #            if options.diff:
-    #                cdiff = diff_files(src_file, dest_file)
-    #                if cdiff:
-    #                    logging.warning(cdiff)
+    message = None
+    while not message:
+        message = input(aegis.stdlib.cstr('Type in release notes for the deploy notification:\n', 'white'))
+    # Save the user message and start the deploy/revert
+    build_row = aegis.model.Build.get_version(version)
+    build_row.set_message(message, 'deploy')
+    build_row = aegis.model.Build.get_version(version)
+    aegis.build.Build.start_deploy(build_row, os.getenv('SUDO_USER'))
+    build.deploy(version, env=env)
 
 
 def revert(parser):
@@ -379,7 +284,17 @@ def revert(parser):
     # Make it so
     logging.info("Running aegis revert   Env: %s", env)
     build = aegis.build.Build()
-    build.revert(env=env)
+    message = None
+    while not message:
+        message = input(aegis.stdlib.cstr('Type in release notes for the deploy notification:\n', 'white'))
+    # Save the user message and start the deploy/revert
+    build_row = aegis.model.Build.get_live_build(env)
+    build_row.set_message(message, 'revert')
+    build_row = aegis.model.Build.get_id(build_row['build_id'])
+    aegis.build.Build.start_revert(build_row, os.getenv('SUDO_USER'))
+    build_row = aegis.model.Build.get_id(build_row['build_id'])
+    build_row.set_output('revert', '')
+    build.revert(build_row)
 
 
 def initialize():

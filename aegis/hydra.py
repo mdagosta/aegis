@@ -187,7 +187,24 @@ class HydraHead(HydraThread):
         return '%s %s %s %s' % (self.name, hydra_type['hydra_type_name'], ("%d" % work_cnt).rjust(8), msg)
 
 
+    def housekeeping(self, hydra_queue, hydra_type):
+        logging.warning("HYDRA HOUSEKEEPING")
+        # enqueue clean_build for each deploy host
+        hydra_type = aegis.model.HydraType.get_name('clean_build')
+        for deploy_host in options.deploy_hosts:
+            self.logw(deploy_host, "DH")
+            hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
+                           'work_host': deploy_host, 'work_env': aegis.config.get('env')}
+            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+
+
+
     def build_build(self, hydra_queue, hydra_type):
+        # Singleton check - if someone else claimed a different hydra_queue of the same hydra_type, hydra_queue needs to unclaim and stop
+        singleton = hydra_queue.singleton()
+        if singleton:
+            logging.error("build_build already running")
+            return True, 0
         work_data = json.loads(hydra_queue['work_data'])
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         # Magic to bind config.write_custom_versions onto the build, to also create the react version
@@ -207,7 +224,7 @@ class HydraHead(HydraThread):
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         logging.warning("Hydra Deploy Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        exit_status = build.deploy(build_row['version'], env=build_row['env'], user=work_data.get('user'))
+        exit_status = build.deploy(build_row['version'], env=build_row['env'])
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
         HydraThread.quitting.set()
@@ -220,7 +237,7 @@ class HydraHead(HydraThread):
         build_row = aegis.model.Build.get_id(work_data['build_id'])
         logging.warning("Hydra Revert Build: %s" % work_data['build_id'])
         build = aegis.build.Build()
-        exit_status = build.revert(env=build_row['env'], user=work_data['user'])
+        exit_status = build.revert(build_row)
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
         HydraThread.quitting.set()
@@ -228,15 +245,25 @@ class HydraHead(HydraThread):
 
 
     def clean_build(self, hydra_queue, hydra_type):
+        # run on every host to clean out builds that are leftover and taking up disk space
+        logging.warning("RUNNING clean_build on %s env %s", hydra_queue['work_host'], hydra_queue['work_env'])
+        build = aegis.build.Build()
         # Delete any builds that are undeployed or deleted and older than a week.
-        # Delete any builds that are deployed but are not live or previous, and over two weeks old.
         dead_builds = aegis.model.Build.scan_dead_builds()
         for dead_build in dead_builds:
             self.logw(dead_build['build_id'], "DEAD BUILD - should clean it up")
-        stale_builds = aegis.model.Build.scan_stale_builds()
-        for stale_build in stale_builds:
-            logging.error("STALE BUILDS need to be handled by my recent BY ENV or else we could delete in-use old ones")
-            self.logw(stale_build['build_id'], "STALE BUILD - should clean it up")
+            build.clean(dead_build)
+        # Keep the 5 most recently deployed builds per environment. Delete the rest.
+        envs = [env['env'] for env in aegis.model.Build.deployed_envs()]
+        self.logw(envs, "ENVS")
+        for env in envs:
+            stale_builds = aegis.model.Build.scan_stale_builds(env)
+            for stale_build in stale_builds[5:]:
+                #logging.error("STALE BUILDS need to be handled by my recent BY ENV or else we could delete in-use old ones")
+                self.logw(env, "STALE ENV")
+                self.logw(stale_build['build_id'], "STALE BUILD - should clean it up")
+                self.logw(stale_build['deploy_dttm'], "DEPLOY DTTM")
+                build.clean(stale_build)
         return True, 1
 
 

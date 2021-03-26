@@ -1,0 +1,22 @@
+{% extends frame.html %}
+
+{% block head %}
+<meta http-equiv="refresh" content="30" />
+{% end %}
+
+{% block body %}
+<h3 style="margin-top: 1em;">View {{build_step.capitalize()}} {{build['build_id']}}</h3>
+{% raw xsrf_form_html() %}
+<p>
+    <label><b>Branch:</b> {{build['branch']}}</label><br/>
+    <label><b>Revision:</b> {{build['revision']}}</label><br/>
+    <label><b>Version:</b> {{build['version']}}</label><br/>
+    <label><b>Exit Status:</b> {% if build_step == 'build' %}{{build['build_exit_status']}}{% elif build_step == 'deploy' %}{{build['deploy_exit_status']}}{% elif build_step == 'revert' %}{{build['revert_exit_status']}} {% end %}</label><br/>
+    <label><b>Created:</b> {{build['create_dttm']}}</label><br/>
+    <label><b>Deployed:</b> {{build['deploy_dttm'] or ''}}</label><br/>
+    <label><b>Reverted:</b> {{build['revert_dttm'] or ''}}</label><br/>
+</p>
+
+<p><label><b>{{build_step.capitalize()}} Output</b></label></p>
+<pre class="w3-panel w3-pale-yellow w3-border w3-border-yellow w3-medium w3-card" style="overflow-x: scroll">{% if build_step == 'build' %}{{build['build_output_tx']}}{% elif build_step == 'deploy' %}{{build['deploy_output_tx']}}{% elif build_step == 'revert' %}{{build['revert_output_tx']}} {% end %}</pre>
+{% end %}

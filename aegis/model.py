@@ -615,3 +615,33 @@ class Build(aegis.database.Row):
     def scan_stale_builds(cls):
         sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
         return db().query(sql, cls=cls)
+
+
+class Cache(aegis.database.Row):
+    table_name = 'cache'
+    id_column = 'cache_id'
+
+    @staticmethod
+    def insert(cache_key, cache_json, cache_expiry):
+        sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s) RETURNING cache_id"
+        return db().execute(sql, cache_key, cache_json, cache_expiry)
+
+    @classmethod
+    def get_key(cls, cache_key):
+        sql = "SELECT * FROM cache WHERE cache_key=%s"
+        return db().get(sql, cache_key, cls=cls)
+
+    @staticmethod
+    def update_key(cache_key, cache_json, cache_expiry):
+        sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s WHERE cache_key=%s"
+        return db().execute(sql, cache_json, cache_expiry, cache_key)
+
+    @staticmethod
+    def del_key(cache_key):
+        sql = "DELETE FROM cache WHERE cache_key=%s"
+        return db().execute(sql, cache_key)
+
+    @staticmethod
+    def purge_expired():
+        sql = "DELETE FROM cache WHERE cache_expiry < NOW()"
+        return db().execute(sql)

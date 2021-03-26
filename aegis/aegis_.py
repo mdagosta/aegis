@@ -26,15 +26,18 @@ if venv:
     repo_dir = os.path.dirname(venv)
     src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
     sys.path.insert(0, src_dir)
+    logging.warning("within virtualenv")
     import config
 elif sys.argv[0] == 'virtualenv/bin/aegis':
     # Running by calling the virtualenv binary directly
     repo_dir = os.getcwd()
     src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
     sys.path.insert(0, src_dir)
+    logging.warning("aegis cmdline")
     import config
 elif sys.argv[0] == '/usr/local/bin/aegis':
     repo_dir = os.getcwd()
+    logging.warning("/usr/local/bin")
     if os.path.exists(os.path.join(repo_dir, '.git')):
         src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
         sys.path.insert(0, src_dir)
@@ -42,6 +45,18 @@ elif sys.argv[0] == '/usr/local/bin/aegis':
     else:
         logging.error("Can't detect your app dir. Be in the source root, next to .git dir.")
         sys.exit(1)
+
+
+### Note to self: aegis create will work better if the core web is web.py so we don't clobber snowballin.py
+# Needs templates dir, etc
+# Prompt y/n to clobber with diff
+#
+
+
+# Also need aegis install, to make system admin faster
+# Should all start with the /aegis stuff
+# Also the sql should all be there for hydra, reports, etc
+
 
 
 # Create a new spinoff of aegis
@@ -61,6 +76,10 @@ def create(parser):
     #if os.path.exists(create_dir):
     #    logging.error("AEGIS     Sorry that directory exists already. Exiting.")
     #    sys.exit(1)
+
+    # If the directory exists prompt the user
+    # You can run aegis create again to produce a new create in your repo. Then you can look at git diff to resolve and differences.
+
     if not os.path.exists(create_dir):
         os.mkdir(create_dir)
     create_etc_dir = os.path.join(create_dir, 'etc')
@@ -71,6 +90,7 @@ def create(parser):
     for entry in os.walk(tmpl_dir):
         basedir, subdirs, files = entry
         rebasedir = create_dir + basedir[basedir.find('aegis/tmpl')+10:]
+        logging.warning(rebasedir)
         if rebasedir.endswith('/aegis'):
             rebasedir = rebasedir[:-6] + '/' + app_name
         if not os.path.exists(rebasedir):
@@ -92,6 +112,8 @@ def create(parser):
                 if filename == 'aegis_prod.conf':
                     rebase_filename = app_name + '_prod.conf'
                 rebasepath = os.path.join(rebasedir, rebase_filename)
+                # XXX TODO diff output between one on filesystem
+                # XXX maybe prompt y/n to overwrite
                 with open(rebasepath, 'w') as writefd:
                     writefd.write(output)
     print ("GREAT SUCCESS!!")
@@ -372,8 +394,7 @@ def initialize():
         config.initialize(args=sys.argv[1:])
     except Exception as ex:
         # No config, such as during aegis create shell command
-        logging.exception(ex)
-        remaining = tornado.options.parse_command_line()
+        remaining = tornado.options.parse_command_line(sys.argv[1:])
 
 
 def main():

@@ -99,6 +99,12 @@ class UserAgent(aegis.database.Row):
         sql = 'UPDATE user_agent SET robot_ind=%s WHERE user_agent_id=%s'
         return db().execute(sql, robot_ind, user_agent_id)
 
+    def set_ua_json(self, ua_json):
+        if self['user_agent_json'] or not ua_json:
+            return
+        sql = "UPDATE user_agent SET user_agent_json=%s WHERE user_agent_id=%s"
+        return db().execute(sql, ua_json, self['user_agent_id'])
+
 
 class User(aegis.database.Row):
     table_name = 'user_' if aegis.config.get('pg_database') else 'user'

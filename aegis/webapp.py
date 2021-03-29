@@ -117,11 +117,20 @@ class AegisHandler(tornado.web.RequestHandler):
         # Set up user-cookie tracking system, based on user-agent
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
-        self.tmpl['user_agent_obj'] = user_agents.parse(self.tmpl['user_agent'])
+        self.tmpl['user_agent_obj'] = ua = user_agents.parse(self.tmpl['user_agent'])
+        ua_json = {'is_mobile': ua.is_mobile, 'is_tablet': ua.is_tablet, 'is_pc': ua.is_pc, 'is_touch': ua.is_touch_capable,
+                   'is_email': ua.is_email_client, 'is_robot': ua.is_bot,
+                   'os_name': ua.get_os(), 'os_family': ua.os.family, 'os_version': ua.os.version_string,
+                   'browser_name': ua.get_browser(), 'browser_family': ua.browser.family, 'browser_version': ua.browser.version_string}
         if not (aegis.config.get('pg_database') or aegis.config.get('mysql_database')):
             return
         self.tmpl['user'] = {}
         user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
+        # if ua_json not set, set it
+        if not user_agent['user_agent_json'] and ua_json:
+            ua_json = json.dumps(ua_json, cls=aegis.stdlib.DateTimeEncoder)
+
+            user_agent.set_ua_json(ua_json)
         if self.user_is_robot():
             self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True)
             user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])

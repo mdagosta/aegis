@@ -113,7 +113,9 @@ class User(aegis.database.Row):
 
     @classmethod
     def insert(cls, user_agent_id):
-        sql = 'INSERT INTO '+cls.table_name+' (user_agent_id) VALUES (%s) RETURNING user_id'
+        sql = 'INSERT INTO '+cls.table_name+' (user_agent_id) VALUES (%s)'
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING user_id'
         return db().execute(sql, user_agent_id)
 
     def set_member_id(self, member_id):

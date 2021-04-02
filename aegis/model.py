@@ -111,13 +111,13 @@ class User(aegis.database.Row):
     table_names = {'pgsql': 'user_', 'mysql': 'user'}
     id_column = 'user_id'
 
-    @staticmethod
-    def insert(user_agent_id):
-        sql = 'INSERT INTO user_ (user_agent_id) VALUES (%s) RETURNING user_id'
+    @classmethod
+    def insert(cls, user_agent_id):
+        sql = 'INSERT INTO '+cls.table_name+' (user_agent_id) VALUES (%s) RETURNING user_id'
         return db().execute(sql, user_agent_id)
 
     def set_member_id(self, member_id):
-        sql = 'UPDATE user_ SET member_id=%s WHERE user_id=%s'
+        sql = 'UPDATE '+self.table_name+' SET member_id=%s WHERE user_id=%s'
         return db().execute(sql, member_id, self['user_id'])
 
 

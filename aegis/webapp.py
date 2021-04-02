@@ -129,7 +129,6 @@ class AegisHandler(tornado.web.RequestHandler):
         # if ua_json not set, set it
         if not user_agent['user_agent_json'] and ua_json:
             ua_json = json.dumps(ua_json, cls=aegis.stdlib.DateTimeEncoder)
-
             user_agent.set_ua_json(ua_json)
         if self.user_is_robot():
             self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True)
@@ -161,6 +160,9 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.cookie_set('user', user_ck)
         if user:
             self.tmpl['user']['user_id'] = user['user_id']
+        # At the end leave the row behind for later user in the request
+        self.tmpl['user_agent_row'] = user_agent
+
 
     def enforce_admin(self):
         if not self.is_super_admin():

@@ -99,19 +99,25 @@ class UserAgent(aegis.database.Row):
         sql = 'UPDATE user_agent SET robot_ind=%s WHERE user_agent_id=%s'
         return db().execute(sql, robot_ind, user_agent_id)
 
+    def set_ua_json(self, ua_json):
+        if self['user_agent_json'] or not ua_json:
+            return
+        sql = "UPDATE user_agent SET user_agent_json=%s WHERE user_agent_id=%s"
+        return db().execute(sql, ua_json, self['user_agent_id'])
+
 
 class User(aegis.database.Row):
     table_name = 'user_' if aegis.config.get('pg_database') else 'user'
     table_names = {'pgsql': 'user_', 'mysql': 'user'}
     id_column = 'user_id'
 
-    @staticmethod
-    def insert(user_agent_id):
-        sql = 'INSERT INTO user_ (user_agent_id) VALUES (%s) RETURNING user_id'
+    @classmethod
+    def insert(cls, user_agent_id):
+        sql = 'INSERT INTO '+cls.table_name+' (user_agent_id) VALUES (%s) RETURNING user_id'
         return db().execute(sql, user_agent_id)
 
     def set_member_id(self, member_id):
-        sql = 'UPDATE user_ SET member_id=%s WHERE user_id=%s'
+        sql = 'UPDATE '+self.table_name+' SET member_id=%s WHERE user_id=%s'
         return db().execute(sql, member_id, self['user_id'])
 
 

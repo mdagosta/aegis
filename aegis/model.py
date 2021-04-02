@@ -464,13 +464,13 @@ class HydraQueue(aegis.database.Row):
         sql = 'UPDATE hydra_queue SET try_cnt=try_cnt+1 WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])
 
-    def incr_error_cnt(self):
+    def incr_error_cnt(self, minutes=1):
         self['error_cnt'] += 1
         if type(db()) is aegis.database.PostgresConnection:
-            sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=work_dttm + INTERVAL '1 MINUTE' WHERE hydra_queue_id=%s"
+            sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=NOW() + INTERVAL '%s MINUTE' WHERE hydra_queue_id=%s"
         elif type(db()) is aegis.database.MysqlConnection:
-            sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=work_dttm + INTERVAL 1 MINUTE WHERE hydra_queue_id=%s"
-        return db().execute(sql, self['hydra_queue_id'])
+            sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=NOW() + INTERVAL %s MINUTE WHERE hydra_queue_id=%s"
+        return db().execute(sql, minutes, self['hydra_queue_id'])
 
     def start(self):
         hydra_type = HydraType.get_id(self['hydra_type_id'])

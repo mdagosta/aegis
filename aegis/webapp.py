@@ -845,7 +845,7 @@ class AegisBuild(AegisWeb):
                     work_data = {'build_id': build_id, 'user': self.get_member_email()}
                     hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
                     hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
-                return self.redirect('/aegis/build')
+                return self.redirect('/admin/build')
         # REVERT
         revert_keys = [k for k in self.request.args.keys() if k.startswith('revert_')]
         if revert_keys:
@@ -862,7 +862,7 @@ class AegisBuild(AegisWeb):
                     work_data = {'build_id': build_id, 'user': self.get_member_email()}
                     hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
                     hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
-                return self.redirect('/aegis/build')
+                return self.redirect('/admin/build')
         # DELETE
         delete_keys = [k for k in self.request.args.keys() if k.startswith('delete_')]
         if delete_keys:

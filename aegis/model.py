@@ -107,7 +107,7 @@ class UserAgent(aegis.database.Row):
 
 
 class User(aegis.database.Row):
-    table_name = 'user_' if aegis.config.get('pg_database') else 'user'
+    table_name = 'user_' if aegis.database.pgsql_available else 'user'
     table_names = {'pgsql': 'user_', 'mysql': 'user'}
     id_column = 'user_id'
 

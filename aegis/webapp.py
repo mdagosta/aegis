@@ -40,25 +40,27 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['logw'] = self.logw = aegis.stdlib.logw
         hostname = self.request.host.split(':')[0]
         self.tmpl['host'] = hostname
-        # Don't allow direct IP address in the Host header
-        if aegis.stdlib.validate_ip_address(self.tmpl['host']):
-            logging.warning("Disallow IP Address in Host Header: %s", self.tmpl['host'])
-            raise tornado.web.HTTPError(400)
-        # Implement *.domain.com to still work on domain.com
-        host_split = hostname.split('.')
-        valid_subdomains = aegis.config.get('valid_subdomains')
-        if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
-            self.tmpl['host'] = '.'.join(host_split[1:])
-        # Ignore hostnames not in config.py. Only use the ones we have specified.
-        if self.tmpl['host'] not in config.hostnames.keys():
-            logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
-            raise tornado.web.HTTPError(404)
+        if aegis.config.get('strict_hostnames'):
+            # Don't allow direct IP address in the Host header
+            if aegis.stdlib.validate_ip_address(self.tmpl['host']):
+                logging.warning("Disallow IP Address in Host Header: %s", self.tmpl['host'])
+                raise tornado.web.HTTPError(400)
+            # Implement *.domain.com to still work on domain.com
+            host_split = hostname.split('.')
+            valid_subdomains = aegis.config.get('valid_subdomains')
+            if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
+                self.tmpl['host'] = '.'.join(host_split[1:])
+            # Ignore hostnames not in config.py. Only use the ones we have specified.
+            if self.tmpl['host'] not in config.hostnames.keys():
+                logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
+                raise tornado.web.HTTPError(404)
         config.apply_hostname(self.tmpl['host'])
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
         self.tmpl['app_name'] = options.app_name
         self.tmpl['env'] = config.get_env()
-        self.tmpl['domain'] = options.domain
+        if aegis.config.get('strict_hostnames'):
+            self.tmpl['domain'] = options.domain
         self.tmpl['referer'] = self.request.headers.get('Referer')
         self.tmpl['user_agent'] = self.request.headers.get('User-Agent')
         self.tmpl['scheme'] = 'https://'
@@ -127,7 +129,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['user'] = {}
         user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
         # if ua_json not set, set it
-        if not user_agent['user_agent_json'] and ua_json:
+        if not user_agent.get('user_agent_json') and ua_json:
             ua_json = json.dumps(ua_json, cls=aegis.stdlib.DateTimeEncoder)
             user_agent.set_ua_json(ua_json)
         if self.user_is_robot():
@@ -136,8 +138,8 @@ class AegisHandler(tornado.web.RequestHandler):
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
         user = None
-        if user_agent['robot_ind']:
-            if not user_agent['robot_user_id']:
+        if user_agent.get('robot_ind'):
+            if not user_agent.get('robot_user_id'):
                 user_id = self.models['User'].insert(user_agent['user_agent_id'])
                 self.models['UserAgent'].set_robot_user_id(user_agent['user_agent_id'], user_id)
                 user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])

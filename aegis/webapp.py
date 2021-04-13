@@ -4,6 +4,10 @@
 # Aegis is your shield to protect you on the Brave New Web
 
 # Python Imports
+import signal
+from functools import partial
+import asyncio
+
 import configparser
 import copy
 import datetime
@@ -570,6 +574,17 @@ class AegisApplication():
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 
+def sig_handler(sig, frame):
+    io_loop = tornado.ioloop.IOLoop.instance()
+
+    def stop_loop():
+        if len(asyncio.Task.all_tasks(io_loop)) == 0:
+            io_loop.stop()
+        else:
+            io_loop.call_later(1, stop_loop)
+
+    io_loop.add_callback_from_signal(stop_loop)
+
 class WebApplication(AegisApplication, tornado.web.Application):
     def __init__(self, **kwargs):
         settings = AegisApplication.__init__(self, **kwargs)
@@ -598,6 +613,8 @@ class WebApplication(AegisApplication, tornado.web.Application):
             http_server.bind(port, address=host)
         else:
             http_server.bind(port)  # bind all (0.0.0.0:*)
+        signal.signal(signal.SIGTERM, partial(sig_handler))
+        signal.signal(signal.SIGINT, partial(sig_handler))
         http_server.start()
 
 

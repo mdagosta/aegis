@@ -641,7 +641,10 @@ class Cache(aegis.database.Row):
     @staticmethod
     def insert(cache_key, cache_json, cache_expiry):
         sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s) RETURNING cache_id"
-        return db().execute(sql, cache_key, cache_json, cache_expiry)
+        try:
+            return db().execute(sql, cache_key, cache_json, cache_expiry)
+        except aegis.database.PgsqlUniqueViolation as ex:
+            logging.warning("Ignoring duplicate key in cache")
 
     @classmethod
     def get_key(cls, cache_key):

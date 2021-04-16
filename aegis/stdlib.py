@@ -21,8 +21,9 @@ import subprocess
 import xml
 
 # Extern Imports
+import bcrypt
 import dateutil.parser
-
+import tornado.util
 
 def absdir(path):
     return os.path.abspath(os.path.dirname(path))
@@ -72,6 +73,28 @@ def md5hex(val=None, encoding=None):
         return hashlib.md5(val).hexdigest()
     else:
         return hashlib.md5().hexdigest()
+
+def bcrypt_salt(log_rounds=14):
+    return bcrypt.gensalt(rounds=log_rounds)
+
+def bcrypt_hashpw(password, salt):
+    result = bcrypt.hashpw(password, salt.encode('utf-8'))
+    return result
+
+def bcrypt_password(password, log_rounds=14):
+    if type(password) is str:
+        password = password.encode('utf-8')
+    salt = tornado.util.unicode_type(bcrypt.gensalt(rounds=log_rounds), 'ascii').encode('utf-8')
+    return bcrypt.hashpw(password, salt)
+
+password_len = 24
+password_chars = string.ascii_letters + string.digits
+def pwgen(pw_len=password_len, pw_chars=password_chars):
+    pw = functools.reduce(lambda x, y: x + random.choice(pw_chars), range(pw_len), '')
+    max_pw = float(pow(len(pw_chars), pw_len))
+    max_pw_int = int(max_pw)
+    max_pw_str = f"{max_pw_int:100,}"
+    return pw, max_pw, max_pw_str
 
 def html_unescape(val):
     return xml.sax.saxutils.unescape(val, {'&quot;': '"'})
@@ -696,17 +719,12 @@ def is_robot(user_agent):
     return bool(RobotValidator.robot_re.search(user_agent) is not None)
 
 
-
-
-
-
-# XXX How does this fit in here?
-def rate_limit(self, key, hostname, delta_sec):
-    """ Return True if should be rate-limited """
+def rate_limit(limit_obj, key, hostname, delta_sec):
+    """ Return True if should be rate-limited. Keep attribute on object passed in. """
     attr_name = '%s-%s' % (key, hostname)
-    if hasattr(self, attr_name):
-        attr = getattr(self, attr_name)
+    if hasattr(limit_obj, attr_name):
+        attr = getattr(limit_obj, attr_name)
         if attr + datetime.timedelta(seconds=delta_sec) > datetime.datetime.now():
             return True
-    setattr(self, attr_name, datetime.datetime.now())
+    setattr(limit_obj, attr_name, datetime.datetime.now())
     return False

@@ -39,6 +39,7 @@ setuptools.setup (
         ],
     },
     install_requires = [
+        'bcrypt == 3.2.0',
         'python-dateutil',
         'requests',
         'tornado == 6.1.0',

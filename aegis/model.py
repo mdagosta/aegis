@@ -35,7 +35,9 @@ class SqlDiff(aegis.database.Row):
 
     @staticmethod
     def insert(sql_diff_name):
-        sql = 'INSERT INTO sql_diff (sql_diff_name) VALUES (%s) RETURNING sql_diff_id'
+        sql = 'INSERT INTO sql_diff (sql_diff_name) VALUES (%s)'
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING sql_diff_id'
         return db().execute(sql, sql_diff_name)
 
     @classmethod
@@ -129,7 +131,9 @@ class Email(aegis.database.Row):
 
     @staticmethod
     def insert(email):
-        sql = "INSERT INTO email (email) VALUES (%s) RETURNING email_id"
+        sql = "INSERT INTO email (email) VALUES (%s)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING email_id'
         return db().execute(sql, email)
 
     @classmethod
@@ -161,7 +165,9 @@ class Member(aegis.database.Row):
 
     @staticmethod
     def insert(email_id):
-        sql = "INSERT INTO member (email_id) VALUES (%s) RETURNING member_id"
+        sql = "INSERT INTO member (email_id) VALUES (%s)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING member_id'
         return db().execute(sql, email_id)
 
     @classmethod
@@ -269,7 +275,9 @@ class EmailTracking(aegis.database.Row):
 
     @staticmethod
     def insert(email_type_id, from_email_id, to_email_id, email_data):
-        sql = "INSERT INTO email_tracking (email_type_id, from_email_id, to_email_id, email_uuid, email_data, send_dttm) VALUES (%s, %s, %s, %s, %s, NOW()) RETURNING email_tracking_id"
+        sql = "INSERT INTO email_tracking (email_type_id, from_email_id, to_email_id, email_uuid, email_data, send_dttm) VALUES (%s, %s, %s, %s, %s, NOW())"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING email_tracking_id'
         return db().execute(sql, email_type_id, from_email_id, to_email_id, uuid.uuid4().hex, email_data)
 
     def mark_sent(self):
@@ -283,7 +291,9 @@ class EmailLink(aegis.database.Row):
 
     @staticmethod
     def insert(email_id):
-        sql = "INSERT INTO email_link (email_id, magic_token) VALUES (%s, %s) RETURNING email_link_id"
+        sql = "INSERT INTO email_link (email_id, magic_token) VALUES (%s, %s)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING email_link_id'
         return db().execute(sql, email_id, aegis.stdlib.magic_token())
 
     def mark_accessed(self):
@@ -316,8 +326,10 @@ class Pageview(aegis.database.Row):
 
     @classmethod
     def insert(cls, user_id, member_id, url_path, url_query, url_tx, request_name):
-      sql = "INSERT INTO pageview (user_id, member_id, url_path, url_query, url_tx, request_name) VALUES (%s, %s, %s, %s, %s, %s) RETURNING pageview_id"
-      return db().execute(sql, user_id, member_id, url_path, url_query, url_tx, request_name)
+        sql = "INSERT INTO pageview (user_id, member_id, url_path, url_query, url_tx, request_name) VALUES (%s, %s, %s, %s, %s, %s)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING pageview_id'
+        return db().execute(sql, user_id, member_id, url_path, url_query, url_tx, request_name)
 
 
 class HydraType(aegis.database.Row):
@@ -522,7 +534,9 @@ class ReportType(aegis.database.Row):
 
     @classmethod
     def insert(cls, report_type_name, report_sql):
-        sql = "INSERT INTO report_type (report_type_name, report_sql) VALUES (%s, %s) RETURNING report_type_id"
+        sql = "INSERT INTO report_type (report_type_name, report_sql) VALUES (%s, %s)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING report_type_id'
         return db().execute(sql, report_type_name, report_sql)
 
     @classmethod
@@ -640,7 +654,9 @@ class Cache(aegis.database.Row):
 
     @staticmethod
     def insert(cache_key, cache_json, cache_expiry):
-        sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s) RETURNING cache_id"
+        sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql += ' RETURNING cache_id'
         try:
             return db().execute(sql, cache_key, cache_json, cache_expiry)
         except aegis.database.PgsqlUniqueViolation as ex:

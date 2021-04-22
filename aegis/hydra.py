@@ -193,7 +193,6 @@ class HydraHead(HydraThread):
         # enqueue clean_build for each deploy host
         hydra_type = aegis.model.HydraType.get_name('clean_build')
         for deploy_host in options.deploy_hosts:
-            self.logw(deploy_host, "DH")
             hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                            'work_host': deploy_host, 'work_env': aegis.config.get('env')}
             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)

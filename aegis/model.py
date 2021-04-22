@@ -634,7 +634,10 @@ class Build(aegis.database.Row):
 
     @classmethod
     def scan_dead_builds(cls):
-        sql = "SELECT * FROM build WHERE delete_dttm IS NOT NULL OR (deploy_dttm IS NULL AND create_dttm < NOW() - INTERVAL 1 WEEK)"
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "SELECT * FROM build WHERE delete_dttm IS NOT NULL OR (deploy_dttm IS NULL AND create_dttm < NOW() - INTERVAL '1 WEEK')"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "SELECT * FROM build WHERE delete_dttm IS NOT NULL OR (deploy_dttm IS NULL AND create_dttm < NOW() - INTERVAL 1 WEEK)"
         return db().query(sql, cls=cls)
 
     @classmethod

@@ -4,12 +4,15 @@
 # Aegis is your shield to protect you on the Brave New Web
 
 # Python Imports
+import asyncio
 import configparser
 import copy
 import datetime
+import functools
 import json
 import logging
 import os
+import signal
 import socket
 import sys
 import time
@@ -20,7 +23,7 @@ import urllib
 import requests
 from tornado.options import options
 import tornado.web
-from tornado.platform.asyncio import AsyncIOMainLoop
+import tornado.platform.asyncio
 import user_agents
 import zlib
 
@@ -40,25 +43,27 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['logw'] = self.logw = aegis.stdlib.logw
         hostname = self.request.host.split(':')[0]
         self.tmpl['host'] = hostname
-        # Don't allow direct IP address in the Host header
-        if aegis.stdlib.validate_ip_address(self.tmpl['host']):
-            logging.warning("Disallow IP Address in Host Header: %s", self.tmpl['host'])
-            raise tornado.web.HTTPError(400)
-        # Implement *.domain.com to still work on domain.com
-        host_split = hostname.split('.')
-        valid_subdomains = aegis.config.get('valid_subdomains')
-        if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
-            self.tmpl['host'] = '.'.join(host_split[1:])
-        # Ignore hostnames not in config.py. Only use the ones we have specified.
-        if self.tmpl['host'] not in config.hostnames.keys():
-            logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
-            raise tornado.web.HTTPError(404)
+        if not aegis.config.get('skip_hostname_check'):
+            # Don't allow direct IP address in the Host header
+            if aegis.stdlib.validate_ip_address(self.tmpl['host']):
+                logging.warning("Disallow IP Address in Host Header: %s", self.tmpl['host'])
+                raise tornado.web.HTTPError(400)
+            # Implement *.domain.com to still work on domain.com
+            host_split = hostname.split('.')
+            valid_subdomains = aegis.config.get('valid_subdomains')
+            if len(host_split) > 2 and valid_subdomains and host_split[0] not in valid_subdomains:
+                self.tmpl['host'] = '.'.join(host_split[1:])
+            # Ignore hostnames not in config.py. Only use the ones we have specified.
+            if self.tmpl['host'] not in config.hostnames.keys():
+                logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
+                raise tornado.web.HTTPError(404)
         config.apply_hostname(self.tmpl['host'])
+        if not aegis.config.get('skip_hostname_check'):
+            self.tmpl['domain'] = options.domain
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
         self.tmpl['app_name'] = options.app_name
         self.tmpl['env'] = config.get_env()
-        self.tmpl['domain'] = options.domain
         self.tmpl['referer'] = self.request.headers.get('Referer')
         self.tmpl['user_agent'] = self.request.headers.get('User-Agent')
         self.tmpl['scheme'] = 'https://'
@@ -568,6 +573,20 @@ class AegisApplication():
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
 
 
+def sig_handler(sig, frame):
+    io_loop = tornado.ioloop.IOLoop.instance()
+
+    def stop_loop():
+        logging.warning("STOPPING")
+        if len(asyncio.Task.all_tasks(io_loop)) == 0:
+            io_loop.stop()
+        else:
+            io_loop.call_later(1, stop_loop)
+
+    logging.warning("ADDING CALLBACK")
+    io_loop.add_callback_from_signal(stop_loop)
+
+
 class WebApplication(AegisApplication, tornado.web.Application):
     def __init__(self, **kwargs):
         settings = AegisApplication.__init__(self, **kwargs)
@@ -589,15 +608,16 @@ class WebApplication(AegisApplication, tornado.web.Application):
     def start_asyncio(application):
         host = options.host
         port = options.port
-        AsyncIOMainLoop().install()
+        tornado.platform.asyncio.AsyncIOMainLoop().install()
         http_server = tornado.httpserver.HTTPServer(application, xheaders=True, no_keep_alive=True)
         logging.info('listening on %s:%s' % (host, port))
         if host:
             http_server.bind(port, address=host)
         else:
             http_server.bind(port)  # bind all (0.0.0.0:*)
+        signal.signal(signal.SIGTERM, functools.partial(sig_handler))
+        signal.signal(signal.SIGINT, functools.partial(sig_handler))
         http_server.start()
-
 
 ### Aegis Web Admin
 

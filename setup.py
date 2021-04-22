@@ -24,7 +24,7 @@ setuptools.setup (
     long_description = 'A combination of tools and framework, Aegis has multiple different uses. You can import it and use the thoroughly made and tested functions. You can use it as a natural extension for the tornado web framework. And you can use it to quickly create a new web application with the structure already built-in, and follow along.',
     author = "Michael D'Agosta",
     author_email = 'mdagosta@codebug.com',
-    url = 'https://bitbucket.org/mdagosta/aegis',
+    url = 'https://github.com/mdagosta/aegis',
     python_requires='>=3.6',
     packages = ['aegis'],
     package_data = {'aegis': ['templates/*', 'sql/*']},

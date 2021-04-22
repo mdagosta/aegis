@@ -888,7 +888,7 @@ class AegisBuild(AegisWeb):
             if build_id:
                 build = aegis.model.Build.get_id(build_id)
                 build.set_soft_deleted()
-                return self.redirect('/aegis/build')
+                return self.redirect('/admin/build')
 
 
 class AegisBuildForm(AegisWeb):

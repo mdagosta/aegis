@@ -245,6 +245,11 @@ class HydraHead(HydraThread):
 
 
     def clean_build(self, hydra_queue, hydra_type):
+        # Singleton check - if someone else claimed a different hydra_queue of the same hydra_type, hydra_queue needs to unclaim and stop
+        singleton = hydra_queue.singleton()
+        if singleton:
+            logging.error("clean_build already running")
+            return True, 0
         # run on every host to clean out builds that are leftover and taking up disk space
         logging.warning("RUNNING clean_build on %s env %s", hydra_queue['work_host'], hydra_queue['work_env'])
         build = aegis.build.Build()

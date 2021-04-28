@@ -295,7 +295,7 @@ def validate_decimal(value):
     if type(value) in (float, int):
         return decimal.Decimal(value)
     try:
-        value = decimal.Decimal(re.sub(r'[^\d.]', '', value))
+        value = decimal.Decimal(re.sub(r'[^\d.-]', '', value.strip()))
     except decimal.InvalidOperation:
         return None
     return value

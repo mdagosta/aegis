@@ -121,6 +121,7 @@ class HydraHead(HydraThread):
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
         self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
+        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan()])
 
 
     def process(self):
@@ -140,6 +141,7 @@ class HydraHead(HydraThread):
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
                         #self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s  HOST: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
                         if not claimed: continue
+                        start_t = time.time()
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
                         if not hydra_type:
                             logging.error("Missing hydra type for hydra_type_id: %s", hydra_type)
@@ -158,7 +160,8 @@ class HydraHead(HydraThread):
                         hydra_queue.incr_try_cnt()
                         hydra_queue.start()
                         result, work_cnt = work_fn(hydra_queue, hydra_type)
-                        #self.logw(work_cnt, "WORK CNT")
+                        end_t = time.time()
+                        exec_t_ms = (end_t - start_t) * 1000
                         if result:
                             hydra_queue.complete()
                         else:
@@ -167,7 +170,7 @@ class HydraHead(HydraThread):
                             hydra_queue.unclaim()
                             continue
                         # Worker accounting
-                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
+                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE IN %.3f ms" % exec_t_ms))
                         self.processed_cnt += work_cnt
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
@@ -185,7 +188,9 @@ class HydraHead(HydraThread):
 
 
     def log_line(self, hydra_type, work_cnt=0, msg=''):
-        return '%s %s %s %s' % (self.name, hydra_type['hydra_type_name'], ("%d" % work_cnt).rjust(8), msg)
+        line = '%s %s %s %s' % (self.name, format(hydra_type['hydra_type_name'], str(self.hydra_type_maxlen)), ("%d" % work_cnt).rjust(8), msg)
+        #self.logw(line, "LINE")
+        return line
 
 
     def housekeeping(self, hydra_queue, hydra_type):

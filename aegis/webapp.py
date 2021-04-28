@@ -577,13 +577,11 @@ def sig_handler(sig, frame):
     io_loop = tornado.ioloop.IOLoop.instance()
 
     def stop_loop():
-        logging.warning("STOPPING")
         if len(asyncio.Task.all_tasks(io_loop)) == 0:
             io_loop.stop()
         else:
             io_loop.call_later(1, stop_loop)
 
-    logging.warning("ADDING CALLBACK")
     io_loop.add_callback_from_signal(stop_loop)
 
 
@@ -890,7 +888,7 @@ class AegisBuild(AegisWeb):
             if build_id:
                 build = aegis.model.Build.get_id(build_id)
                 build.set_soft_deleted()
-                return self.redirect('/aegis/build')
+                return self.redirect('/admin/build')
 
 
 class AegisBuildForm(AegisWeb):

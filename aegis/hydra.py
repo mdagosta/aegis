@@ -340,8 +340,13 @@ class Hydra(HydraThread):
                                 logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
                                     logging.error("Stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
-                                    #logging.error("Unclaiming stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
-                                    #past_item.unclaim()
+                            # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.
+                            past_items = aegis.model.HydraType.past_items()
+                            if past_items and len(past_items):
+                                logging.error("HydraType has %s stuck items", len(past_items))
+                                for past_item in past_items:
+                                    logging.error("Unclaiming stuck hydra_type_id: %s", past_item['hydra_type_name'])
+                                    past_item.unclaim()
 
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")

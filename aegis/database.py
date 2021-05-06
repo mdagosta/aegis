@@ -194,7 +194,9 @@ class PostgresConnection(object):
 
     def _execute(self, cursor, query, parameters, **kwargs):
         try:
+            aegis.stdlib.incr_start(aegis.stdlib.get_timer(self), 'database')
             cursor.execute(query, parameters)
+            aegis.stdlib.incr_stop(aegis.stdlib.get_timer(self), 'database')
             return
         except PgsqlUniqueViolation as ex:
             # UniqueViolation doesn't need to close connection, it needs to be handled in application

@@ -18,12 +18,14 @@ import re
 import shlex
 import string
 import subprocess
+import time
 import xml
 
 # Extern Imports
 import bcrypt
 import dateutil.parser
 import tornado.util
+
 
 def absdir(path):
     return os.path.abspath(os.path.dirname(path))
@@ -728,3 +730,67 @@ def rate_limit(limit_obj, key, hostname, delta_sec):
             return True
     setattr(limit_obj, attr_name, datetime.datetime.now())
     return False
+
+
+def get_timer(obj=None):
+    # Optional object that sets the timer on the object given so it doesn't have to crawl the stack each call
+    if obj and hasattr(obj, '_timer_obj'):
+        return obj._timer_obj
+    frame = inspect.currentframe()
+    f_self = frame.f_locals.get('self')
+    while not f_self or not hasattr(f_self, '_timers'):
+        frame = frame.f_back
+        if not frame:
+            return None
+        f_self = frame.f_locals.get('self')
+        if hasattr(f_self, '_timers'):
+            if obj:
+                obj._timer_obj = f_self
+            return f_self
+
+# Timer System for by-hand tracking _timings on any object
+def timer_start(obj, timer_name):
+    if not obj:
+        return {}
+    # Initialize _timers on obj
+    if not hasattr(obj, '_timers'):
+        setattr(obj, '_timers', {})
+    # Don't overwrite if it's already been set
+    start_name = '_%s_start_ts' % timer_name
+    if not obj._timers.get(start_name):
+        obj._timers[start_name] =  time.time()
+
+def timer_stop(obj, timer_name):
+    if not obj:
+        return {}
+    start_name = '_%s_start_ts' % timer_name
+    stop_name = '_%s_stop_ts' % timer_name
+    exec_name = '_%s_exec_s' % timer_name
+    # Don't overwrite if it's already been set, and compute execution time
+    if not obj._timers.get(stop_name):
+        obj._timers[stop_name] = time.time()
+        obj._timers[exec_name] = obj._timers[stop_name] - obj._timers[start_name]
+
+def incr_start(obj, timer_name):
+    if not obj:
+        return {}
+    # Initialize _timers on obj
+    if not hasattr(obj, '_timers'):
+        setattr(obj, '_timers', {})
+    # Do overwrite the previous so we can add up the times
+    start_name = '_%s_start_ts' % timer_name
+    obj._timers[start_name] =  time.time()
+
+def incr_stop(obj, timer_name):
+    if not obj:
+        return {}
+    start_name = '_%s_start_ts' % timer_name
+    stop_name = '_%s_stop_ts' % timer_name
+    exec_name = '_%s_exec_s' % timer_name
+    cnt_name = '_%s_cnt' % timer_name
+    # Do overwrite the previous so we can add up the times.
+    obj._timers[stop_name] = time.time()
+    obj._timers.setdefault(exec_name, 0.0)
+    obj._timers.setdefault(cnt_name, 0)
+    obj._timers[exec_name] += obj._timers[stop_name] - obj._timers[start_name]
+    obj._timers[cnt_name] += 1

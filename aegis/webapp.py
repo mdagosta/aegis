@@ -119,7 +119,7 @@ class AegisHandler(tornado.web.RequestHandler):
         logging.warning(req_str)
 
     def setup_user(self):
-        # Set up user-cookie tracking system, based on user-agent
+        # Set up user-cookie tracking system, based on user-agent. This function takes ~2-5ms depending on cpu and database speed and latency.
         if not self.tmpl['user_agent']:
             self.tmpl['user_agent'] = 'NULL USER AGENT'
         self.tmpl['user_agent_obj'] = ua = user_agents.parse(self.tmpl['user_agent'])

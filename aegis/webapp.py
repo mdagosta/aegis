@@ -39,16 +39,12 @@ import config
 class AegisHandler(tornado.web.RequestHandler):
 
     def __init__(self, *args, **kwargs):
-        # Request Timings
-        # init_time X, prepare_time X, handler_time X, finish_time X, render_time X, database_time X, database_cnt X, network_time X, network_cnt X
-
-        # Initialize _audits on self, since this could be called before a subclass calls on self._audits
-        if not hasattr(self, '_timers'):
-            setattr(self, '_timers', {})
-        # If already auditing,
-        self._parent_timer = not bool(self._timers.get('_init_start_t'))
+        # Initialize timer_obj on self, since this could be called before a subclass calls on self.timer_obj
+        if not hasattr(self, 'timer_obj'):
+            self.timer_obj = aegis.stdlib.TimerObj()
+        self._parent_timer = not bool(self.timer_obj._timers.get('_init_start_t'))
         if self._parent_timer:
-            aegis.stdlib.timer_start(self, 'init')
+            aegis.stdlib.timer_start(self.timer_obj, 'init')
         super(AegisHandler, self).__init__(*args, **kwargs)
         self.tmpl = {}
         self.tmpl['logw'] = self.logw = aegis.stdlib.logw
@@ -90,11 +86,11 @@ class AegisHandler(tornado.web.RequestHandler):
         self.models['UserAgent'] = aegis.model.UserAgent
         self.models['User'] = aegis.model.User
         if self._parent_timer:
-            aegis.stdlib.timer_stop(self, 'init')
+            aegis.stdlib.timer_stop(self.timer_obj, 'init')
 
     def prepare(self):
         if self._parent_timer:
-            aegis.stdlib.timer_start(self, 'prepare')
+            aegis.stdlib.timer_start(self.timer_obj, 'prepare')
         self.set_header('Cache-Control', 'no-cache, no-store')
         self.set_header('Pragma', 'no-cache')
         self.set_header('Expires', 'Fri, 21 Dec 2012 03:08:13 GMT')
@@ -104,11 +100,11 @@ class AegisHandler(tornado.web.RequestHandler):
         self.setup_user()
         super(AegisHandler, self).prepare()
         if self._parent_timer:
-            aegis.stdlib.timer_stop(self, 'prepare')
+            aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
 
     def finish(self, chunk=None):
         if self._parent_timer:
-            aegis.stdlib.timer_start(self, 'finish')
+            aegis.stdlib.timer_start(self.timer_obj, 'finish')
         auth_ck = self.cookie_get('auth')
         logged_out = (self.tmpl.get('logged_out') == True)
         if auth_ck and not logged_out:
@@ -128,12 +124,11 @@ class AegisHandler(tornado.web.RequestHandler):
                 for cookie in self._new_cookie.values():
                     cookies.append("Set-Cookie: %s" % cookie.OutputString(None))
             self.logw(cookies, "HTTP Reponse Set-Cookie Header")
-        super(AegisHandler, self).finish(chunk)
         if self._parent_timer:
-            aegis.stdlib.timer_stop(self, 'finish')
+            aegis.stdlib.timer_stop(self.timer_obj, 'finish')
             # Use tornado's handler time
-            self._timers['_handler_exec_t'] = self.request.request_time()
-            #self.logw(self._timers, "TIMERS AegisHandler.finish()")
+            self.timer_obj._timers['_handler_exec_s'] = self.request.request_time()
+        super(AegisHandler, self).finish(chunk)
 
     def debug_request(self):
         req_str = str(self.request).rstrip(')') + ', headers={'
@@ -208,18 +203,17 @@ class AegisHandler(tornado.web.RequestHandler):
 
     # Render may need to update something at the end
     def render(self, template_name, **kwargs):
-        aegis.stdlib.timer_start(self, 'render')
+        aegis.stdlib.timer_start(self.timer_obj, 'render')
         template_path = os.path.join(options.template_path, template_name)
         output = super(AegisHandler, self).render(template_path, **kwargs)
-        aegis.stdlib.timer_stop(self, 'render')
-        #self.logw(self._timers, "RENDERED TIMERS")
+        aegis.stdlib.timer_stop(self.timer_obj, 'render')
         return output
 
     def render_path(self, template_name, **kwargs):
-        aegis.stdlib.timer_start(self, 'render')
+        aegis.stdlib.timer_start(self.timer_obj, 'render')
         template_path = os.path.join(self.get_template_path(), template_name)
         output = super(AegisHandler, self).render(template_path, **kwargs)
-        aegis.stdlib.timer_stop(self, 'render')
+        aegis.stdlib.timer_stop(self.timer_obj, 'render')
         return output
 
     def _handle_request_exception(self, ex):
@@ -586,7 +580,8 @@ class AegisApplication():
             log_method = tornado.log.access_log.warning
         else:
             log_method = tornado.log.access_log.error
-        request_time = 1000.0 * handler.request.request_time()
+        timers = handler.timer_obj._timers
+        request_time = 1000.0 * (timers['_init_exec_s'] + timers['_prepare_exec_s'] + timers['_finish_exec_s'] + timers['_handler_exec_s'])
         host = handler.request.host.split(':')[0]
         extra_debug = ''
         user_id = None

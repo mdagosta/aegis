@@ -149,6 +149,8 @@ class HydraHead(HydraThread):
                         if not hasattr(self, hydra_type['hydra_type_name']):
                             logging.error("Missing hydra function for hydra type: %s", hydra_type)
                             continue
+                        self.timer_obj = aegis.stdlib.TimerObj()
+                        aegis.stdlib.timer_start(self.timer_obj, 'hydra_queue_run')
                         self.iter_cnt += 1
                         work_fn = getattr(self, hydra_type['hydra_type_name'])
                         # Allow queue items to specify that they should run in a specific host and environment.
@@ -169,8 +171,9 @@ class HydraHead(HydraThread):
                             hydra_queue.incr_error_cnt(minutes=15)
                             hydra_queue.unclaim()
                             continue
+                        aegis.stdlib.timer_stop(self.timer_obj, 'hydra_queue_run')
                         # Worker accounting
-                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE IN %.3f ms" % exec_t_ms))
+                        logging.warning(self.log_line(hydra_type, work_cnt, self.timer_msg()))
                         self.processed_cnt += work_cnt
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
@@ -186,6 +189,17 @@ class HydraHead(HydraThread):
         finally:
             self.finish()
 
+    def timer_msg(self):
+        exec_t_ms = self.timer_obj._timers.get('_hydra_queue_run_exec_s') * 1000
+        net_t_ms = self.timer_obj._timers.get('_network_exec_s', 0) * 1000
+        db_t_ms = self.timer_obj._timers.get('_database_exec_s') * 1000
+        cpu_t_ms = exec_t_ms - net_t_ms - db_t_ms
+        exec_t_str = "%.3fms" % exec_t_ms
+        net_t_str = "%.3fms" % net_t_ms
+        db_t_str = "%.3fms" % db_t_ms
+        cpu_t_str = "%.3fms" % cpu_t_ms
+        msg = " DONE %12s  |  %12s cpu  %12s db  %12s net" % (exec_t_str, cpu_t_str, db_t_str, net_t_str)
+        return msg
 
     def log_line(self, hydra_type, work_cnt=0, msg=''):
         line = '%s %s %s %s' % (self.name, format(hydra_type['hydra_type_name'], str(self.hydra_type_maxlen)), ("%d" % work_cnt).rjust(8), msg)

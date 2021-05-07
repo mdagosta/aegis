@@ -732,21 +732,24 @@ def rate_limit(limit_obj, key, hostname, delta_sec):
     return False
 
 
+class TimerObj(object):
+    pass
+
 def get_timer(obj=None):
     # Optional object that sets the timer on the object given so it doesn't have to crawl the stack each call
     if obj and hasattr(obj, '_timer_obj'):
         return obj._timer_obj
     frame = inspect.currentframe()
     f_self = frame.f_locals.get('self')
-    while not f_self or not hasattr(f_self, '_timers'):
+    while not f_self or not hasattr(f_self, 'timer_obj'):
         frame = frame.f_back
         if not frame:
             return None
         f_self = frame.f_locals.get('self')
-        if hasattr(f_self, '_timers'):
+        if hasattr(f_self, 'timer_obj'):
             if obj:
-                obj._timer_obj = f_self
-            return f_self
+                obj._timer_obj = f_self.timer_obj
+            return f_self.timer_obj
 
 # Timer System for by-hand tracking _timings on any object
 def timer_start(obj, timer_name):

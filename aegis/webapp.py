@@ -40,9 +40,9 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def __init__(self, *args, **kwargs):
         # Initialize timer_obj on self, since this could be called before a subclass calls on self.timer_obj
+        self._parent_timer = not hasattr(self, 'timer_obj')
         if not hasattr(self, 'timer_obj'):
             self.timer_obj = aegis.stdlib.TimerObj()
-        self._parent_timer = not bool(self.timer_obj._timers.get('_init_start_t'))
         if self._parent_timer:
             aegis.stdlib.timer_start(self.timer_obj, 'init')
         super(AegisHandler, self).__init__(*args, **kwargs)

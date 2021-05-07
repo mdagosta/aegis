@@ -5,7 +5,6 @@
 
 # Python Imports
 import asyncio
-import configparser
 import copy
 import datetime
 import functools
@@ -13,11 +12,9 @@ import json
 import logging
 import os
 import signal
-import socket
 import sys
 import time
 import traceback
-import urllib
 
 # Extern Imports
 import requests
@@ -126,9 +123,12 @@ class AegisHandler(tornado.web.RequestHandler):
             self.logw(cookies, "HTTP Reponse Set-Cookie Header")
         if self._parent_timer:
             aegis.stdlib.timer_stop(self.timer_obj, 'finish')
-            # Use tornado's handler time
-            self.timer_obj._timers['_handler_exec_s'] = self.request.request_time()
         super(AegisHandler, self).finish(chunk)
+
+    def on_finish(self):
+        # This runs after the response has been sent to the client, intended for cleanup.
+        #logging.warning("ON FINISH")
+        pass
 
     def debug_request(self):
         req_str = str(self.request).rstrip(')') + ', headers={'
@@ -201,20 +201,19 @@ class AegisHandler(tornado.web.RequestHandler):
     def get_template_path(self):
         return options.template_path
 
-    # Render may need to update something at the end
     def render(self, template_name, **kwargs):
         aegis.stdlib.timer_start(self.timer_obj, 'render')
         template_path = os.path.join(options.template_path, template_name)
-        output = super(AegisHandler, self).render(template_path, **kwargs)
+        # Override parent class render to remove the embeds and instrument a timer here. Copied in from tornado/web.py render()
+        if self._finished:
+            raise RuntimeError("Cannot render() after finish()")
+        html = self.render_string(template_name, **kwargs)
         aegis.stdlib.timer_stop(self.timer_obj, 'render')
-        return output
+        self.finish(html)
 
     def render_path(self, template_name, **kwargs):
-        aegis.stdlib.timer_start(self.timer_obj, 'render')
         template_path = os.path.join(self.get_template_path(), template_name)
-        output = super(AegisHandler, self).render(template_path, **kwargs)
-        aegis.stdlib.timer_stop(self.timer_obj, 'render')
-        return output
+        self.render(template_path, **kwargs)
 
     def _handle_request_exception(self, ex):
         aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
@@ -580,8 +579,7 @@ class AegisApplication():
             log_method = tornado.log.access_log.warning
         else:
             log_method = tornado.log.access_log.error
-        timers = handler.timer_obj._timers
-        request_time = 1000.0 * (timers['_init_exec_s'] + timers['_prepare_exec_s'] + timers['_finish_exec_s'] + timers['_handler_exec_s'])
+        # Main part of the response
         host = handler.request.host.split(':')[0]
         extra_debug = ''
         user_id = None
@@ -597,30 +595,36 @@ class AegisApplication():
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
             if handler.user_is_robot():
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
-        log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
-        # If request takes over 250ms we can give some extra debug output
-        if request_time > 250:
+        # Timing
+        request_t_ms = handler.request.request_time() * 1000   # Use tornado's from start of __init__ to end of finish() as a reference
+        timers = None
+        if hasattr(handler, 'timer_obj'):
+            timers = handler.timer_obj._timers
+        log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_t_ms, extra_debug)
+        # If request takes over options.slow_req_ms we can give some extra debug output
+        slow_req_ms = aegis.config.get('slow_req_ms') or 250
+        if request_t_ms > slow_req_ms and timers:
             net_t_ms = timers.get('_network_exec_s', 0) * 1000
-            db_t_ms = timers.get('_database_exec_s') * 1000
-            cpu_t_ms = request_time - net_t_ms - db_t_ms
-            init_t_ms = timers.get('_init_exec_s') * 1000
-            prepare_t_ms = timers.get('_prepare_exec_s') * 1000
-            handler_t_ms = timers.get('_handler_exec_s') * 1000
-            finish_t_ms = timers.get('_finish_exec_s') * 1000
-            msg = "Req Time: %.3fms  |  %.3fms cpu  %.3fms db  %.3fms net  |  %.3fms init  %.3fms prepare  %.3fms handler  %.3fms finish"
-            msg = msg % (request_time, cpu_t_ms, db_t_ms, net_t_ms, init_t_ms, prepare_t_ms, handler_t_ms, finish_t_ms)
+            db_t_ms = timers.get('_database_exec_s', 0) * 1000
+            cpu_t_ms = request_t_ms - net_t_ms - db_t_ms
+            init_t_ms = timers.get('_init_exec_s', 0) * 1000
+            prepare_t_ms = timers.get('_prepare_exec_s', 0) * 1000
+            render_t_ms = timers.get('_render_exec_s', 0) * 1000
+            finish_t_ms = timers.get('_finish_exec_s', 0) * 1000
+            handler_t_ms = request_t_ms - init_t_ms - prepare_t_ms - render_t_ms - finish_t_ms
+            msg = "Req Time: %.3fms  |  %.3fms cpu  %.3fms db  %.3fms net  |  %.3fms init  %.3fms prepare  %.3fms handler   %.3fms render  %.3fms finish"
+            msg = msg % (request_t_ms, cpu_t_ms, db_t_ms, net_t_ms, init_t_ms, prepare_t_ms, handler_t_ms, render_t_ms, finish_t_ms)
             tornado.log.access_log.warning(msg)
+
 
 
 def sig_handler(sig, frame):
     io_loop = tornado.ioloop.IOLoop.instance()
-
     def stop_loop():
         if len(asyncio.Task.all_tasks(io_loop)) == 0:
             io_loop.stop()
         else:
             io_loop.call_later(1, stop_loop)
-
     io_loop.add_callback_from_signal(stop_loop)
 
 

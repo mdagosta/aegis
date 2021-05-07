@@ -487,7 +487,10 @@ class MysqlConnection(object):
 
     def _execute(self, cursor, query, parameters):
         try:
-            return cursor.execute(query, parameters)
+            aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
+            result = cursor.execute(query, parameters)
+            aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
+            return result
         except MysqlOperationalError as ex:
             logging.error("Error with MySQL on %s", self.host)
             logging.exception(ex)

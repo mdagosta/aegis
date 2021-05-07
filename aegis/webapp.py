@@ -598,6 +598,18 @@ class AegisApplication():
             if handler.user_is_robot():
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
+        # If request takes over 250ms we can give some extra debug output
+        if request_time > 250:
+            net_t_ms = timers.get('_network_exec_s', 0) * 1000
+            db_t_ms = timers.get('_database_exec_s') * 1000
+            cpu_t_ms = request_time - net_t_ms - db_t_ms
+            init_t_ms = timers.get('_init_exec_s') * 1000
+            prepare_t_ms = timers.get('_prepare_exec_s') * 1000
+            handler_t_ms = timers.get('_handler_exec_s') * 1000
+            finish_t_ms = timers.get('_finish_exec_s') * 1000
+            msg = "Req Time: %.3fms  |  %.3fms cpu  %.3fms db  %.3fms net  |  %.3fms init  %.3fms prepare  %.3fms handler  %.3fms finish"
+            msg = msg % (request_time, cpu_t_ms, db_t_ms, net_t_ms, init_t_ms, prepare_t_ms, handler_t_ms, finish_t_ms)
+            tornado.log.access_log.warning(msg)
 
 
 def sig_handler(sig, frame):

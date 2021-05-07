@@ -37,7 +37,14 @@ import config
 
 
 class AegisHandler(tornado.web.RequestHandler):
+
     def __init__(self, *args, **kwargs):
+        # Initialize timer_obj on self, since this could be called before a subclass calls on self.timer_obj
+        self._parent_timer = not hasattr(self, 'timer_obj')
+        if not hasattr(self, 'timer_obj'):
+            self.timer_obj = aegis.stdlib.TimerObj()
+        if self._parent_timer:
+            aegis.stdlib.timer_start(self.timer_obj, 'init')
         super(AegisHandler, self).__init__(*args, **kwargs)
         self.tmpl = {}
         self.tmpl['logw'] = self.logw = aegis.stdlib.logw
@@ -78,8 +85,12 @@ class AegisHandler(tornado.web.RequestHandler):
         self.models = {}
         self.models['UserAgent'] = aegis.model.UserAgent
         self.models['User'] = aegis.model.User
+        if self._parent_timer:
+            aegis.stdlib.timer_stop(self.timer_obj, 'init')
 
     def prepare(self):
+        if self._parent_timer:
+            aegis.stdlib.timer_start(self.timer_obj, 'prepare')
         self.set_header('Cache-Control', 'no-cache, no-store')
         self.set_header('Pragma', 'no-cache')
         self.set_header('Expires', 'Fri, 21 Dec 2012 03:08:13 GMT')
@@ -88,8 +99,12 @@ class AegisHandler(tornado.web.RequestHandler):
         self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
         self.setup_user()
         super(AegisHandler, self).prepare()
+        if self._parent_timer:
+            aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
 
     def finish(self, chunk=None):
+        if self._parent_timer:
+            aegis.stdlib.timer_start(self.timer_obj, 'finish')
         auth_ck = self.cookie_get('auth')
         logged_out = (self.tmpl.get('logged_out') == True)
         if auth_ck and not logged_out:
@@ -109,6 +124,10 @@ class AegisHandler(tornado.web.RequestHandler):
                 for cookie in self._new_cookie.values():
                     cookies.append("Set-Cookie: %s" % cookie.OutputString(None))
             self.logw(cookies, "HTTP Reponse Set-Cookie Header")
+        if self._parent_timer:
+            aegis.stdlib.timer_stop(self.timer_obj, 'finish')
+            # Use tornado's handler time
+            self.timer_obj._timers['_handler_exec_s'] = self.request.request_time()
         super(AegisHandler, self).finish(chunk)
 
     def debug_request(self):
@@ -182,13 +201,20 @@ class AegisHandler(tornado.web.RequestHandler):
     def get_template_path(self):
         return options.template_path
 
+    # Render may need to update something at the end
     def render(self, template_name, **kwargs):
+        aegis.stdlib.timer_start(self.timer_obj, 'render')
         template_path = os.path.join(options.template_path, template_name)
-        return super(AegisHandler, self).render(template_path, **kwargs)
+        output = super(AegisHandler, self).render(template_path, **kwargs)
+        aegis.stdlib.timer_stop(self.timer_obj, 'render')
+        return output
 
     def render_path(self, template_name, **kwargs):
+        aegis.stdlib.timer_start(self.timer_obj, 'render')
         template_path = os.path.join(self.get_template_path(), template_name)
-        return super(AegisHandler, self).render(template_path, **kwargs)
+        output = super(AegisHandler, self).render(template_path, **kwargs)
+        aegis.stdlib.timer_stop(self.timer_obj, 'render')
+        return output
 
     def _handle_request_exception(self, ex):
         aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
@@ -554,7 +580,8 @@ class AegisApplication():
             log_method = tornado.log.access_log.warning
         else:
             log_method = tornado.log.access_log.error
-        request_time = 1000.0 * handler.request.request_time()
+        timers = handler.timer_obj._timers
+        request_time = 1000.0 * (timers['_init_exec_s'] + timers['_prepare_exec_s'] + timers['_finish_exec_s'] + timers['_handler_exec_s'])
         host = handler.request.host.split(':')[0]
         extra_debug = ''
         user_id = None
@@ -571,6 +598,18 @@ class AegisApplication():
             if handler.user_is_robot():
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
         log_method("%s %d %s %.2fms %s", host, handler.get_status(), handler._request_summary(), request_time, extra_debug)
+        # If request takes over 250ms we can give some extra debug output
+        if request_time > 250:
+            net_t_ms = timers.get('_network_exec_s', 0) * 1000
+            db_t_ms = timers.get('_database_exec_s') * 1000
+            cpu_t_ms = request_time - net_t_ms - db_t_ms
+            init_t_ms = timers.get('_init_exec_s') * 1000
+            prepare_t_ms = timers.get('_prepare_exec_s') * 1000
+            handler_t_ms = timers.get('_handler_exec_s') * 1000
+            finish_t_ms = timers.get('_finish_exec_s') * 1000
+            msg = "Req Time: %.3fms  |  %.3fms cpu  %.3fms db  %.3fms net  |  %.3fms init  %.3fms prepare  %.3fms handler  %.3fms finish"
+            msg = msg % (request_time, cpu_t_ms, db_t_ms, net_t_ms, init_t_ms, prepare_t_ms, handler_t_ms, finish_t_ms)
+            tornado.log.access_log.warning(msg)
 
 
 def sig_handler(sig, frame):

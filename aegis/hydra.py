@@ -121,6 +121,7 @@ class HydraHead(HydraThread):
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
         self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
+        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan()])
 
 
     def process(self):
@@ -140,6 +141,7 @@ class HydraHead(HydraThread):
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
                         #self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s  HOST: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
                         if not claimed: continue
+                        start_t = time.time()
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
                         if not hydra_type:
                             logging.error("Missing hydra type for hydra_type_id: %s", hydra_type)
@@ -147,6 +149,8 @@ class HydraHead(HydraThread):
                         if not hasattr(self, hydra_type['hydra_type_name']):
                             logging.error("Missing hydra function for hydra type: %s", hydra_type)
                             continue
+                        self.timer_obj = aegis.stdlib.TimerObj()
+                        aegis.stdlib.timer_start(self.timer_obj, 'hydra_queue_run')
                         self.iter_cnt += 1
                         work_fn = getattr(self, hydra_type['hydra_type_name'])
                         # Allow queue items to specify that they should run in a specific host and environment.
@@ -158,7 +162,8 @@ class HydraHead(HydraThread):
                         hydra_queue.incr_try_cnt()
                         hydra_queue.start()
                         result, work_cnt = work_fn(hydra_queue, hydra_type)
-                        #self.logw(work_cnt, "WORK CNT")
+                        end_t = time.time()
+                        exec_t_ms = (end_t - start_t) * 1000
                         if result:
                             hydra_queue.complete()
                         else:
@@ -166,8 +171,9 @@ class HydraHead(HydraThread):
                             hydra_queue.incr_error_cnt(minutes=15)
                             hydra_queue.unclaim()
                             continue
+                        aegis.stdlib.timer_stop(self.timer_obj, 'hydra_queue_run')
                         # Worker accounting
-                        logging.warning(self.log_line(hydra_type, work_cnt, " DONE"))
+                        logging.warning(self.log_line(hydra_type, work_cnt, self.timer_msg()))
                         self.processed_cnt += work_cnt
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
@@ -183,9 +189,22 @@ class HydraHead(HydraThread):
         finally:
             self.finish()
 
+    def timer_msg(self):
+        exec_t_ms = self.timer_obj._timers.get('_hydra_queue_run_exec_s') * 1000
+        net_t_ms = self.timer_obj._timers.get('_network_exec_s', 0) * 1000
+        db_t_ms = self.timer_obj._timers.get('_database_exec_s') * 1000
+        cpu_t_ms = exec_t_ms - net_t_ms - db_t_ms
+        exec_t_str = "%.3fms" % exec_t_ms
+        net_t_str = "%.3fms" % net_t_ms
+        db_t_str = "%.3fms" % db_t_ms
+        cpu_t_str = "%.3fms" % cpu_t_ms
+        msg = " DONE %12s  |  %12s cpu  %12s db  %12s net" % (exec_t_str, cpu_t_str, db_t_str, net_t_str)
+        return msg
 
     def log_line(self, hydra_type, work_cnt=0, msg=''):
-        return '%s %s %s %s' % (self.name, hydra_type['hydra_type_name'], ("%d" % work_cnt).rjust(8), msg)
+        line = '%s %s %s %s' % (self.name, format(hydra_type['hydra_type_name'], str(self.hydra_type_maxlen)), ("%d" % work_cnt).rjust(8), msg)
+        #self.logw(line, "LINE")
+        return line
 
 
     def housekeeping(self, hydra_queue, hydra_type):
@@ -332,11 +351,17 @@ class Hydra(HydraThread):
                             # Log if there are expired queue items in the past...
                             past_items = aegis.model.HydraQueue.past_items()
                             if past_items and len(past_items):
-                                logging.error("HydraQueue has %s stuck items", len(past_items))
+                                #logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
-                                    logging.error("Stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
-                                    #logging.error("Unclaiming stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
-                                    #past_item.unclaim()
+                                    logging.error("Running stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
+                                    past_item.run_now()
+                            # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.
+                            past_items = aegis.model.HydraType.past_items()
+                            if past_items and len(past_items):
+                                #logging.error("HydraType has %s stuck items", len(past_items))
+                                for past_item in past_items:
+                                    logging.error("Unclaiming stuck hydra_type_id: %s", past_item['hydra_type_name'])
+                                    past_item.unclaim()
 
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")

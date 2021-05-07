@@ -393,6 +393,14 @@ class HydraType(aegis.database.Row):
         sql = 'UPDATE hydra_type SET claimed_dttm=NULL WHERE hydra_type_id=%s AND claimed_dttm IS NOT NULL'
         return db().execute(sql, self['hydra_type_id'])
 
+    @classmethod
+    def past_items(cls):
+        if type(db()) is aegis.database.PostgresConnection:
+            sql = "SELECT * FROM hydra_type WHERE claimed_dttm < NOW() - INTERVAL '5 MINUTE' AND claimed_dttm > next_run_dttm"
+        elif type(db()) is aegis.database.MysqlConnection:
+            sql = "SELECT * FROM hydra_type WHERE claimed_dttm < NOW() - INTERVAL 5 MINUTE AND claimed_dttm > next_run_dttm"
+        return db().query(sql, cls=cls)
+
     @staticmethod
     def clear_claims():
         if type(db()) is aegis.database.PostgresConnection:

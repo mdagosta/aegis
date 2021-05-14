@@ -111,7 +111,8 @@ class HydraThread(threading.Thread):
     @staticmethod
     def signal_reset(signal, frm):
         logging.warning("SIGHUP received... clearing stale claims")
-        aegis.model.HydraQueue.clear_claims()
+        aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes)
+        aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes)
 
 
 class HydraHead(HydraThread):
@@ -299,7 +300,7 @@ class Hydra(HydraThread):
         HydraThread.__init__(self, name=self.thread_name)
         self.num_heads = 3
         self.hydra_head_cls = HydraHead
-
+        self.stuck_minutes = aegis.config.get('hydra_stuck_minutes') or 15
 
 
     def spawn_heads(self):
@@ -314,8 +315,8 @@ class Hydra(HydraThread):
         # When starting up, hydra_id 0 clears claims before spawning heads.
         if self.hydra_id == 0:
             logging.warning("%s clearing stale claims" % self.name)
-            aegis.model.HydraType.clear_claims()
-            aegis.model.HydraQueue.clear_claims()
+            aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes)
+            aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes)
             # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
             # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
             logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
@@ -349,14 +350,14 @@ class Hydra(HydraThread):
                             #if purged_completed:
                             #    logging.warning("%s queue purge deleted %s hydra_queue" % (self.thread_name, purged_completed))
                             # Log if there are expired queue items in the past...
-                            past_items = aegis.model.HydraQueue.past_items()
+                            past_items = aegis.model.HydraQueue.past_items(minutes=self.stuck_minutes)
                             if past_items and len(past_items):
                                 #logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
                                     logging.error("Running stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
                                     past_item.run_now()
                             # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.
-                            past_items = aegis.model.HydraType.past_items()
+                            past_items = aegis.model.HydraType.past_items(minutes=self.stuck_minutes)
                             if past_items and len(past_items):
                                 #logging.error("HydraType has %s stuck items", len(past_items))
                                 for past_item in past_items:

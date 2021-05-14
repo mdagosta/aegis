@@ -522,9 +522,9 @@ class HydraQueue(aegis.database.Row):
     @classmethod
     def past_items(cls):
         if type(db()) is aegis.database.PostgresConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '5 MINUTE'"
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '15 MINUTE'"
         elif type(db()) is aegis.database.MysqlConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 5 MINUTE"
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL 15 MINUTE"
         return db().query(sql, cls=cls)
 
     def run_now(self):

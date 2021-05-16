@@ -672,6 +672,8 @@ class Cache(aegis.database.Row):
             return db().execute(sql, cache_key, cache_json, cache_expiry)
         except aegis.database.PgsqlUniqueViolation as ex:
             logging.warning("Ignoring duplicate key in cache")
+        except aegis.database.MysqlIntegrityError as ex:
+            logging.warning("Ignoring duplicate key in cache")
 
     @classmethod
     def get_key(cls, cache_key):

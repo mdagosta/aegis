@@ -109,12 +109,15 @@ class AegisHandler(tornado.web.RequestHandler):
             # If there's a member_auth, refresh the expiration in the backend along with the cookie
             if hasattr(self, '_member_auth'):
                 self._member_auth.refresh(options.cookie_durations['auth'] * 86400)
-            # If the auth cookie being sent matches the request value, update it to refresh the timestamp. Otherwise don't overwrite.
-            cookie_value = self._new_cookie.get(self.cookie_name('auth'))
-            cookie_value = cookie_value.value.split(':')[-1].split('|')[0]
-            decoded = self.cookie_decode(base64.b64decode(cookie_value))
-            if decoded == auth_ck:
+            # Update auth cookie as long as it isn't being overwritten
+            new_cookie_value = self._new_cookie.get(self.cookie_name('auth'))
+            if not new_cookie_value:
                 self.cookie_set('auth', auth_ck)
+            else:
+                new_cookie_value = new_cookie_value.value.split(':')[-1].split('|')[0]
+                decoded = self.cookie_decode(base64.b64decode(new_cookie_value))
+                if decoded == auth_ck:
+                    self.cookie_set('auth', auth_ck)
         if 'session_ck' in self.tmpl:
             if self.tmpl.get('session_ck'):
                 self.cookie_set('session', self.tmpl['session_ck'])

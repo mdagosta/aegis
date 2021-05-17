@@ -774,6 +774,22 @@ def timer_stop(obj, timer_name):
         obj._timers[stop_name] = time.time()
         obj._timers[exec_name] = obj._timers[stop_name] - obj._timers[start_name]
 
+def timer_log(obj, timer_name):
+    if not obj:
+        return {}
+    exec_name = '_%s_exec_s' % timer_name
+    logging.error("%s  %.3f ms" % (timer_name, 1000 * obj._timers[exec_name]))
+
+def timer_reset(obj, timer_name):
+    if not obj:
+        return {}
+    start_name = '_%s_start_ts' % timer_name
+    stop_name = '_%s_stop_ts' % timer_name
+    exec_name = '_%s_exec_s' % timer_name
+    del obj._timers[start_name]
+    del obj._timers[stop_name]
+    del obj._timers[exec_name]
+
 def incr_start(obj, timer_name):
     if not obj:
         return {}

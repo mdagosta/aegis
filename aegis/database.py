@@ -207,6 +207,20 @@ class PostgresConnection(object):
             self.close()
             raise
 
+    def iter(self, query, *parameters, **kwargs):
+        """Returns an iterator for the given query and parameters."""
+        cursor = self._cursor()
+        try:
+            self._execute(cursor, query, parameters)
+            column_names = [d[0] for d in cursor.description]
+            if kwargs.get('cls'):
+                for row in cursor:
+                    yield kwargs['cls'](zip(column_names, row))
+            else:
+                for row in cursor:
+                    yield Row(zip(column_names, row))
+        finally:
+            cursor.close()
 
     def query(self, query, *parameters, **kwargs):
         """ Returns a row list for the given query and parameters."""

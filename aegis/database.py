@@ -213,6 +213,10 @@ class PostgresConnection(object):
             if kwargs.get('return_column_names'):
                 return (rows, column_names)
             return rows
+        except psycopg2.InterfaceError as ex:
+            print(ex)
+            self._db = None
+            self.query(query, *parameters, **kwargs)
         finally:
             if not self._txn:
                 cursor.close()

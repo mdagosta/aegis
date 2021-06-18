@@ -101,6 +101,10 @@ class AegisHandler(tornado.web.RequestHandler):
             aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
 
     def finish(self, chunk=None):
+        # Fail fast for maintenance errors
+        if self.get_status() in (503,):
+            super(AegisHandler, self).finish(chunk)
+            return
         if self._parent_timer:
             aegis.stdlib.timer_start(self.timer_obj, 'finish')
         auth_ck = self.cookie_get('auth')
@@ -225,6 +229,10 @@ class AegisHandler(tornado.web.RequestHandler):
         self.render(template_path, **kwargs)
 
     def _handle_request_exception(self, ex):
+        if type(ex) in (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError):
+            logging.error("Database is down. Send HTTP 503.")
+            self.send_error(503)
+            return
         aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
         #self.logw(ex, "EX")
         #logging.exception(ex)

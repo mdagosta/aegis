@@ -23,6 +23,7 @@ PgsqlOperationalError = None
 PgsqlDatabaseError = None
 PgsqlProgrammingError = None
 PgsqlUniqueViolation = None
+PgsqlAdminShutdown = None
 try:
     import psycopg2
     pgsql_available = True
@@ -32,6 +33,7 @@ try:
     PgsqlDatabaseError = psycopg2.Error
     PgsqlProgrammingError = psycopg2.ProgrammingError
     PgsqlUniqueViolation = psycopg2.errors.UniqueViolation
+    PgsqlAdminShutdown = psycopg2.errors.AdminShutdown
 except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now - but shim the exception types.")
     class PgsqlIntegrityError(BaseException):
@@ -43,6 +45,8 @@ except Exception as ex:
     class PgsqlProgrammingError(BaseException):
         pass
     class PgsqlUniqueViolation(BaseException):
+        pass
+    class PgsqlAdminShutdown(BaseException):
         pass
 
 mysql_available = False
@@ -201,7 +205,7 @@ class PostgresConnection(object):
         except PgsqlUniqueViolation as ex:
             # UniqueViolation doesn't need to close connection, it needs to be handled in application
             raise
-        except psycopg2.Error as ex:
+        except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError) as ex:
             logging.error("General Error at PostgreSQL - close connection/rollback")
             logging.exception(ex)
             self.close()

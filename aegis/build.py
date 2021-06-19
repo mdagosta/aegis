@@ -161,12 +161,19 @@ class Build:
         num_procs = 1 if main_is_hydra else 0
         if len(processes) == num_procs:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
-        # Remove and re-link
-        # Set up a set of prev to use with try_files in nginx
-        # rm md-prev.1
-        # rm/ln prev2->3
-        # rm/ln prev1->2
-        # rm/ln prev->1
+        # Set up a set of <env>_prev-# to use with try_files in nginx
+        prev_version = self.build_row['previous_version']
+        for prev_num in range(1, 6):
+            link_file = os.path.join(app_dir, '%s_prev-%s' % (env, prev_num))
+            link_target = os.path.join(app_dir, prev_version)
+            if self._shell_exec("rm -f %s" % link_file, build_step=build_step, cwd=app_dir):
+                return
+            if self._shell_exec("ln -s %s %s" % (link_target, link_file), build_step=build_step, cwd=app_dir):
+                return
+            # Get previous build and its previous version
+            prev_build = aegis.model.Build.get_version(prev_version)
+            prev_version = prev_build['previous_version']
+        # GO LIVE
         if self._shell_exec("rm -f %s" % live_symlink, build_step=build_step, cwd=app_dir):
             return
         if self._shell_exec("ln -s %s %s" % (build_dir, live_symlink), build_step=build_step, cwd=app_dir):

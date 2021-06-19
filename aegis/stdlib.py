@@ -61,6 +61,13 @@ def shell(cmd, cwd=None, env=None):
     stderr = stderr.decode('utf-8').strip()
     return (stdout, stderr, proc.returncode)
 
+def multi_shell(cmds, cwd=None, env=None):
+    """ These processes should all be started and non-blocking. Then caller can use communicate(), wait(), call() as needed. """
+    procs = []
+    for cmd in cmds:
+        procs.append(subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, cwd=cwd, env=env))
+    return procs
+
 def force_int(string):
     if type(string) in (int, int): return int(string)
     int_re = re.compile('^.*?(\d+).*?$')

@@ -120,11 +120,18 @@ class Build:
                     build_size = os.path.getsize(build_output_file)
                     if build_size:
                         self.build_row.set_build_size(build_size)
-            # Rsync the files to the servers if it's configured
+            # Rsync the files to the servers if it's configured, using non-blocking multi-shell so the rsync run in parallel
             rsync_hosts = [rh for rh in aegis.config.get('deploy_hosts') if rh != self.host]
+            cmds = []
             for rsync_host in rsync_hosts:
                 cmd = "nice rsync -q --password-file=/etc/rsync.password -avzhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
-                if self._shell_exec(cmd, cwd=self.build_dir, build_step='build'):
+                cmds.append(cmd)
+            for proc in aegis.stdlib.multi_shell(cmds, cwd=self.build_dir):
+                stdout, stderr = proc.communicate()
+                stdout = stdout.decode('utf-8').strip()
+                stderr = stderr.decode('utf-8').strip()
+                cmd = ' '.join(proc.args)
+                if self._shell_exec(cmd, build_step='build', cwd=self.build_dir, stdout=stdout, stderr=stderr, exit_status=proc.returncode):
                     return
         except Exception as ex:
             logging.exception(ex)
@@ -155,6 +162,11 @@ class Build:
         if len(processes) == num_procs:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
         # Remove and re-link
+        # Set up a set of prev to use with try_files in nginx
+        # rm md-prev.1
+        # rm/ln prev2->3
+        # rm/ln prev1->2
+        # rm/ln prev->1
         if self._shell_exec("rm -f %s" % live_symlink, build_step=build_step, cwd=app_dir):
             return
         if self._shell_exec("ln -s %s %s" % (build_dir, live_symlink), build_step=build_step, cwd=app_dir):
@@ -203,11 +215,12 @@ class Build:
             self.logw("IS ALL DELETED")
 
 
-
     # Shell execution with structured logging and database output handling.
-    def _shell_exec(self, cmd, cwd, build_step, env=None):
+    def _shell_exec(self, cmd, cwd, build_step, env=None, stdout=None, stderr=None, exit_status=None):
         exec_output = "%s@%s:%s> %s" % (self.username, self.host, cwd, cmd)
-        stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=cwd, env=env)
+        # Main case is that we're executing. But alternate is to execute elsewhere and pass in the outputs
+        if exit_status is None:
+            stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=cwd, env=env)
         if stdout:
             exec_output += '\n%s' % stdout
         if stderr:

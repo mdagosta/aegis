@@ -124,7 +124,7 @@ class Build:
             rsync_hosts = [rh for rh in aegis.config.get('deploy_hosts') if rh != self.host]
             cmds = []
             for rsync_host in rsync_hosts:
-                cmd = "nice rsync -q --password-file=/etc/rsync.password -avzhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
+                cmd = "nice rsync -q --password-file=/etc/rsync.password -avhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
                 cmds.append(cmd)
             for proc in aegis.stdlib.multi_shell(cmds, cwd=self.build_dir):
                 stdout, stderr = proc.communicate()

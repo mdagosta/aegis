@@ -5,6 +5,9 @@
 
 # Python Imports
 import argparse
+import ast
+import functools
+import glob
 import logging
 import os
 import pwd
@@ -19,6 +22,7 @@ import aegis.stdlib
 import aegis.build
 import aegis.config
 
+
 # Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
 venv = os.environ.get('VIRTUAL_ENV')
 if venv:
@@ -26,18 +30,18 @@ if venv:
     repo_dir = os.path.dirname(venv)
     src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
     sys.path.insert(0, src_dir)
-    logging.warning("within virtualenv")
+    #print("running within virtualenv")
     import config
 elif sys.argv[0] == 'virtualenv/bin/aegis':
     # Running by calling the virtualenv binary directly
     repo_dir = os.getcwd()
     src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
     sys.path.insert(0, src_dir)
-    logging.warning("aegis cmdline")
+    #print("running from aegis cmdline")
     import config
 elif sys.argv[0] == '/usr/local/bin/aegis':
     repo_dir = os.getcwd()
-    logging.warning("/usr/local/bin")
+    #print("running from /usr/local/bin")
     if os.path.exists(os.path.join(repo_dir, '.git')):
         src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
         sys.path.insert(0, src_dir)
@@ -128,60 +132,37 @@ def install(parser):
 
 
 def schema(parser):
+    # Argument Handling
+    args = parser.parse_args()
+    schema_args = {'hostname': args.hostname, 'dry_run': ast.literal_eval(args.dry_run), 'env': aegis.config.get('env')}
+    if not schema_args.get('env') or not schema_args.get('hostname'):
+        logging.error("aegis schema requires --env and --hostname")
+        aegis.stdlib.loge(schema_args, "SCHEMA ARGS")
+        sys.exit(1)
     # Command line options and sanity checking
-    define('dry_run', default=True, help="Dry run - make no changes", type=bool)
-    config.initialize()
-    if not options.hostname:
+    if not schema_args['hostname']:
         logging.error("Please specify hostname to apply schema to, ie dev.codebug.com")
         exit(1)
-    config.apply_hostname(options.hostname)
-    logging.info("Running schema.py   Env: %s   Hostname: %s   Database: %s   Dry Run: %s", options.env, options.hostname, options.pg_database, options.dry_run)
+    config.initialize()
+    config.apply_hostname(schema_args['hostname'])
+    logging.info("Running schema.py   Env: %s   Hostname: %s   Database: %s   Dry Run: %s",
+                 schema_args['env'], schema_args['hostname'], options.pg_database, schema_args['dry_run'])
     if not options.pg_database:
         logging.error("Database isn't configured for this hostname")
         exit(1)
-    if not options.app_name:    # is this program_name ?
-        logging.error("Please specify app_name to find sql diffs")
-        exit(1)
-    # Do schema
+    # Prime the database and sql_diff
     try:
         dbnow = aegis.database.dbnow()
         logging.warning("Database Standard Time: %s", dbnow['now'])
         results = aegis.database.db().get("SELECT EXISTS ( SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'sql_diff' )")
         if not results['exists']:
             logging.warning("Creating sql_diff table since it doesn't exist yet.")
-            aegis.database.SqlDiff.create_table()
-    except aegis.database.OperationalError as ex:
+            aegis.model.SqlDiff.create_table()
+    except aegis.database.PgsqlOperationalError as ex:
         logging.error("Could not connect to database. Do you need to log into postgres and run:")
         logging.error("postgres=# CREATE USER %s WITH PASSWORD '%s';" % (options.pg_username, options.pg_password))
         logging.error("postgres=# CREATE DATABASE %s OWNER=%s;" % (options.pg_database, options.pg_username))
         exit(1)
-    # Read sql_diffs from filesystem
-    sql_dir = os.path.join(options.basedir, 'sql')
-    diff_files = patch_diffs(sql_dir)
-    # Read state from database, INSERT INTO sql_diff for unknown diffs
-    sql_diff_rows = aegis.database.SqlDiff.scan()
-    sql_diff_map = aegis.database.SqlDiff.map_items(sql_diff_rows, 'sql_diff_name')
-    for diff_file in diff_files:
-        if diff_file not in sql_diff_map:
-            logging.warning("Inserting diff: %s", diff_file)
-            aegis.database.SqlDiff.insert(diff_file)
-    # Apply any unapplied diffs
-    for patch in aegis.database.SqlDiff.scan_unapplied():
-        filename = os.path.join(sql_dir, patch['sql_diff_name'])
-        sql = open(filename).read().replace('%', '%%')
-        try:
-            if options.dry_run:
-                logging.warning("[Dry Run] diff:  %s  from: %s" % (patch['sql_diff_name'], filename))
-            else:
-                logging.warning("Applying diff:  %s  from: %s" % (patch['sql_diff_name'], filename))
-                query = sql
-                aegis.database.db().execute(query)
-                aegis.database.SqlDiff.mark_applied(patch['sql_diff_name'])
-        except Exception as ex:
-            logging.exception(ex)
-            logging.error('Query was: %s', query)
-            exit(1)
-    # Globals
     def diff_sort_cmp(x, y):
         xx = int(x.split('diff')[1].split('.sql')[0])
         yy = int(y.split('diff')[1].split('.sql')[0])
@@ -196,6 +177,31 @@ def schema(parser):
         diffs = ['%s%s.sql' % (prefix, patchnum) for patchnum in patchnums]
         diffs = sorted(diffs, key=functools.cmp_to_key(diff_sort_cmp))
         return diffs
+    # Read sql_diffs from filesystem and perform schema migrations
+    sql_dir = os.path.join(options.basedir, 'sql')
+    diff_files = patch_diffs(sql_dir)
+    # Read state from database, INSERT INTO sql_diff for unknown diffs
+    sql_diff_rows = aegis.model.SqlDiff.scan()
+    sql_diff_map = aegis.model.SqlDiff.map_items(sql_diff_rows, 'sql_diff_name')
+    for diff_file in diff_files:
+        if diff_file not in sql_diff_map:
+            logging.warning("Inserting diff: %s", diff_file)
+            aegis.model.SqlDiff.insert(diff_file)
+    # Apply any unapplied diffs
+    for patch in aegis.model.SqlDiff.scan_unapplied():
+        filename = os.path.join(sql_dir, patch['sql_diff_name'])
+        sql = open(filename).read().replace('%', '%%')
+        try:
+            if schema_args['dry_run']:
+                logging.warning("[Dry Run] diff:  %s  from: %s" % (patch['sql_diff_name'], filename))
+            else:
+                logging.warning("Applying diff:  %s  from: %s" % (patch['sql_diff_name'], filename))
+                aegis.database.db().execute(sql)
+                aegis.model.SqlDiff.mark_applied(patch['sql_diff_name'])
+        except Exception as ex:
+            logging.exception(ex)
+            logging.error('Query was: %s', sql)
+            exit(1)
 
 
 def build(parser):
@@ -305,6 +311,8 @@ def initialize():
         define('revision', default=None, help='git revision hash', type=str)
     if not aegis.config.get('version'):
         define('version', default=None, help='git version name', type=str)
+    if not aegis.config.get('dry_run'):
+        define('dry_run', default='True', help='make no changes', type=str)
     try:
         config.initialize(args=sys.argv[1:])
     except Exception as ex:
@@ -321,6 +329,8 @@ def main():
     parser.add_argument('--version', metavar='<version>', type=str, help='program version tag')
     parser.add_argument('--appname', metavar='<appname>', type=str, nargs=1, help='code name for application')
     parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='domain to create application')
+    parser.add_argument('--hostname', metavar='<hostname>', type=str, help='hostname to specify configs')
+    parser.add_argument('--dry_run', metavar='<dry_run>', type=str, default='True', help='make no changes')
     args = parser.parse_args()
     cmd = args.cmd[0]
     # Do something

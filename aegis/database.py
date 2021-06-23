@@ -101,6 +101,7 @@ def db(use_schema=None, autocommit=True):
 
 
 def dbnow(use_schema=None):
+    dbconn = db(use_schema)
     return db(use_schema).get("SELECT NOW()")
 
 def sql_in_format(lst, cast):

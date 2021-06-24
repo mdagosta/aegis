@@ -122,7 +122,7 @@ class HydraHead(HydraThread):
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
         self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
-        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan()])
+        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan()]+[8])
 
 
     def process(self):

@@ -791,6 +791,7 @@ class AegisHydraQueue(AegisWeb):
         if run_ids:
             hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0])
             if hydra_queue:
+                self.logw(hydra_queue['hydra_queue_id'], "RUN NOW HYDRA_QUEUE_ID")
                 hydra_queue.run_now()
         return self.redirect('/admin/hydra/queue')
 

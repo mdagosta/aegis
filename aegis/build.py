@@ -163,16 +163,19 @@ class Build:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
         # Set up a set of <env>_prev-# to use with try_files in nginx
         prev_version = self.build_row['previous_version']
-        for prev_num in range(1, 6):
-            link_file = os.path.join(app_dir, '%s_prev-%s' % (env, prev_num))
-            link_target = os.path.join(app_dir, prev_version)
-            if self._shell_exec("rm -f %s" % link_file, build_step=build_step, cwd=app_dir):
-                return
-            if self._shell_exec("ln -s %s %s" % (link_target, link_file), build_step=build_step, cwd=app_dir):
-                return
-            # Get previous build and its previous version
-            prev_build = aegis.model.Build.get_version(prev_version)
-            prev_version = prev_build['previous_version']
+        if prev_version:
+            for prev_num in range(1, 6):
+                link_file = os.path.join(app_dir, '%s_prev-%s' % (env, prev_num))
+                link_target = os.path.join(app_dir, prev_version)
+                if self._shell_exec("rm -f %s" % link_file, build_step=build_step, cwd=app_dir):
+                    return
+                if self._shell_exec("ln -s %s %s" % (link_target, link_file), build_step=build_step, cwd=app_dir):
+                    return
+                # Get previous build and its previous version
+                prev_build = aegis.model.Build.get_version(prev_version)
+                prev_version = prev_build['previous_version']
+                if not prev_version:
+                    break
         # GO LIVE
         if self._shell_exec("rm -f %s" % live_symlink, build_step=build_step, cwd=app_dir):
             return
@@ -292,9 +295,12 @@ class Build:
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, build_row['version'])
         live_build = aegis.model.Build.get_live_build(build_row['env'])
-        commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (live_build['version'], build_row['version']), cwd=build_dir)
-        commits = commits.splitlines()
-        return commits
+        if live_build:
+            commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (live_build['version'], build_row['version']), cwd=build_dir)
+            commits = commits.splitlines()
+            return commits
+        else:
+            return []
 
 
     # Set previous version and send notifications

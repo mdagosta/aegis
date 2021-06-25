@@ -57,7 +57,7 @@ class Build:
                 refspec = build_row['revision']
             # Make a local clone of the repository from origin so we don't have to clone entire repository every time
             if not os.path.exists(self.src_repo):
-                if self._shell_exec("git clone --progress git@%s %s" % (aegis.config.get('git_repo'), options.program_name), cwd=self.src_dir, build_step='build'):
+                if self._shell_exec("git clone --progress %s %s" % (aegis.config.get('git_repo'), options.program_name), cwd=self.src_dir, build_step='build'):
                     return
             # Fetch all the changes to repo and set the correct branch and revision
             if self._shell_exec("git fetch --all", cwd=self.src_repo, build_step='build'):

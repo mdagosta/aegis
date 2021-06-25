@@ -57,12 +57,9 @@ try:
     import MySQLdb
     mysql_available = True
     # These are here for mapping errors from MySQLdb into application namespace
-    from MySQLdb._exceptions import IntegrityError as mysqldb_IntegrityError
-    from MySQLdb._exceptions import OperationalError as mysqldb_OperationalError
-    from MySQLdb._exceptions import DataError as mysqldb_DataError
-    MysqlIntegrityError = mysqldb_IntegrityError
-    MysqlOperationalError = mysqldb_OperationalError
-    MysqlDataError = mysqldb_DataError
+    MysqlIntegrityError = MySQLdb._exceptions.IntegrityError
+    MysqlOperationalError = MySQLdb._exceptions.OperationalError
+    MysqlDataError = MySQLdb._exceptions.DataError
 except Exception as ex:
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now - but shim the exception types.")
     class MysqlIntegrityError(BaseException):
@@ -102,7 +99,7 @@ def db(use_schema=None, autocommit=True):
 
 def dbnow(use_schema=None):
     dbconn = db(use_schema)
-    return db(use_schema).get("SELECT NOW()")
+    return db(use_schema).get("SELECT NOW() AS now")
 
 def sql_in_format(lst, cast):
     lst = [cast(lst_item) for lst_item in lst]

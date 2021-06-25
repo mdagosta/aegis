@@ -145,16 +145,24 @@ def schema(parser):
         exit(1)
     config.initialize()
     config.apply_hostname(schema_args['hostname'])
+    if aegis.database.pgsql_available:
+        database = options.pg_database
+    elif aegis.database.mysql_available:
+        database = options.mysql_database
     logging.info("Running schema.py   Env: %s   Hostname: %s   Database: %s   Dry Run: %s",
-                 schema_args['env'], schema_args['hostname'], options.pg_database, schema_args['dry_run'])
-    if not options.pg_database:
+                 schema_args['env'], schema_args['hostname'], database, schema_args['dry_run'])
+    if not database:
         logging.error("Database isn't configured for this hostname")
         exit(1)
     # Prime the database and sql_diff
     try:
         dbnow = aegis.database.dbnow()
         logging.warning("Database Standard Time: %s", dbnow['now'])
-        results = aegis.database.db().get("SELECT EXISTS ( SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'sql_diff' )")
+        if aegis.database.pgsql_available:
+            results = aegis.database.db().get("SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'sql_diff')")
+        elif aegis.database.mysql_available:
+            results = aegis.database.db().get("SELECT * FROM information_schema.tables WHERE TABLE_SCHEMA=%s AND TABLE_NAME='sql_diff'", options.mysql_database)
+            results = {'exists': bool(results)}
         if not results['exists']:
             logging.warning("Creating sql_diff table since it doesn't exist yet.")
             aegis.model.SqlDiff.create_table()
@@ -162,6 +170,10 @@ def schema(parser):
         logging.error("Could not connect to database. Do you need to log into postgres and run:")
         logging.error("postgres=# CREATE USER %s WITH PASSWORD '%s';" % (options.pg_username, options.pg_password))
         logging.error("postgres=# CREATE DATABASE %s OWNER=%s;" % (options.pg_database, options.pg_username))
+        exit(1)
+    except Exception as ex:
+        logging.error("Unknown Error Occurred")
+        logging.exception(ex)
         exit(1)
     def diff_sort_cmp(x, y):
         xx = int(x.split('diff')[1].split('.sql')[0])

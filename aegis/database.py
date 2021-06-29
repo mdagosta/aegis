@@ -52,6 +52,7 @@ except Exception as ex:
 mysql_available = False
 MysqlIntegrityError = None
 MysqlOperationalError = None
+MysqlInterfaceError = None
 MysqlDataError = None
 try:
     import MySQLdb
@@ -59,12 +60,15 @@ try:
     # These are here for mapping errors from MySQLdb into application namespace
     MysqlIntegrityError = MySQLdb._exceptions.IntegrityError
     MysqlOperationalError = MySQLdb._exceptions.OperationalError
+    MysqlInterfaceErrorMySQLdb._exceptions.InterfaceError
     MysqlDataError = MySQLdb._exceptions.DataError
 except Exception as ex:
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now - but shim the exception types.")
     class MysqlIntegrityError(BaseException):
         pass
     class MysqlOperationalError(BaseException):
+        pass
+    class MysqlInterfaceError(BaseException):
         pass
     class MysqlDataErrorError(BaseException):
         pass
@@ -492,8 +496,7 @@ class MysqlConnection(object):
         # you try to perform a query and it fails.  Protect against this
         # case by preemptively closing and reopening the connection
         # if it has been idle for too long (7 hours by default).
-        if (self._db is None or
-                (time.time() - self._last_use_time > self.max_idle_time)):
+        if (self._db is None or (time.time() - self._last_use_time > self.max_idle_time)):
             self._last_use_time = time.time()
             self.reconnect()
 
@@ -507,11 +510,11 @@ class MysqlConnection(object):
             result = cursor.execute(query, parameters)
             aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
             return result
-        except MysqlOperationalError as ex:
-            logging.error("Error with MySQL on %s", self.host)
+        except (MysqlOperationalError, MysqlInterfaceError) as ex:
+            logging.error("Error with MySQL on %s. Close connection and raise.", self.host)
             logging.exception(ex)
-            #self.close()
-            raise ex
+            self.close()
+            raise
 
 
 # To support inserting something literally, like NOW(), into mini-ORM below

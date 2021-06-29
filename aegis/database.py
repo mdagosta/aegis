@@ -36,6 +36,7 @@ try:
     PgsqlAdminShutdown = psycopg2.errors.AdminShutdown
 except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now - but shim the exception types.")
+    #logging.exception(ex)
     class PgsqlIntegrityError(BaseException):
         pass
     class PgsqlOperationalError(BaseException):
@@ -60,10 +61,11 @@ try:
     # These are here for mapping errors from MySQLdb into application namespace
     MysqlIntegrityError = MySQLdb._exceptions.IntegrityError
     MysqlOperationalError = MySQLdb._exceptions.OperationalError
-    MysqlInterfaceErrorMySQLdb._exceptions.InterfaceError
+    MysqlInterfaceError = MySQLdb._exceptions.InterfaceError
     MysqlDataError = MySQLdb._exceptions.DataError
 except Exception as ex:
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now - but shim the exception types.")
+    #logging.exception(ex)
     class MysqlIntegrityError(BaseException):
         pass
     class MysqlOperationalError(BaseException):
@@ -387,7 +389,7 @@ class MysqlConnection(object):
     def reconnect(self):
         """Closes the existing database connection and re-opens it."""
         self.close()
-        self._db = MySQLdb.connect(autocommit=True, **self._db_args)
+        self._db = MySQLdb.connect(autocommit=True, **self._db_args)   # connect_timeout=1 for debug
         self.execute(self._db_init_command, disable_audit_sql=True)
 
     def iter(self, query, *parameters, **kwargs):

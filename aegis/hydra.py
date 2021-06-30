@@ -129,6 +129,8 @@ class HydraHead(HydraThread):
         logging.info("Spawning %s", self.name)
         try:
             while(not HydraThread.quitting.is_set()):
+                # In the case that the database is down, these fail and the HydraHead will die.
+                # The respawning of the head has a 1s sleep to pace out reconnecting to db, and also the new process completely resets aegis.database values.
                 if self.hydra_head_id == 0:
                     queue_items = aegis.model.HydraQueue.scan_work_priority(hostname=self.hostname, env=aegis.config.get('env'))
                 else:
@@ -188,6 +190,7 @@ class HydraHead(HydraThread):
             logging.exception(ex)
             self.exception_alert(ex)
         finally:
+            logging.info("HydraHead %s Dying", self.name)
             self.finish()
 
     def timer_msg(self):
@@ -299,15 +302,19 @@ class Hydra(HydraThread):
         self.thread_name = 'Hydra-%02d' % options.hydra_id
         HydraThread.__init__(self, name=self.thread_name)
         self.num_heads = 3
+        self.heads = []
         self.hydra_head_cls = HydraHead
         self.stuck_minutes = aegis.config.get('hydra_stuck_minutes') or 15
 
 
     def spawn_heads(self):
-        for ndx in range(0, self.num_heads):
+        # When any of the hydra's heads are cut off, a new one will grow in its place.
+        self.heads = [head for head in self.heads if head.is_alive()]
+        for ndx in range(0, self.num_heads - len(self.heads)):
             time.sleep(1)
             head = self.hydra_head_cls(ndx)
             head.start()
+            self.heads.append(head)
 
 
     def process(self):
@@ -370,6 +377,8 @@ class Hydra(HydraThread):
                 # Iterate!
                 #logging.warning("The great hydra sleeps...")
                 time.sleep(options.hydra_sleep)
+                self.spawn_heads()
+
         except Exception as ex:
             logging.exception(ex)
             traceback.print_exc()

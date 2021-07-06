@@ -204,7 +204,7 @@ class AegisHandler(tornado.web.RequestHandler):
             super(AegisHandler, self)._handle_request_exception(ex)
             return
         # Send errors to chat hooks, based on them being configured for the environment
-        header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
+        header = "`[%s ENV   %s   %s   uid: %s   mid: %s   ip: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-', self.request.headers.get("X-Forwarded-For", ['-'])[0])
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}
         error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
         if config.get_env() == 'prod':

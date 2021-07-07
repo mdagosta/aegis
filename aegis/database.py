@@ -389,7 +389,7 @@ class MysqlConnection(object):
     def reconnect(self):
         """Closes the existing database connection and re-opens it."""
         self.close()
-        self._db = MySQLdb.connect(autocommit=True, **self._db_args)   # connect_timeout=1 for debug
+        self._db = MySQLdb.connect(autocommit=True, connect_timeout=3, **self._db_args)
         self.execute(self._db_init_command, disable_audit_sql=True)
 
     def iter(self, query, *parameters, **kwargs):

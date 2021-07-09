@@ -22,7 +22,6 @@ import aegis.stdlib
 import aegis.build
 import aegis.config
 
-
 # Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
 venv = os.environ.get('VIRTUAL_ENV')
 if venv:
@@ -49,6 +48,13 @@ elif sys.argv[0] == '/usr/local/bin/aegis':
     else:
         logging.error("Can't detect your app dir. Be in the source root, next to .git dir.")
         sys.exit(1)
+else:
+    print(aegis.stdlib.cstr("Running in non-standard context. Going to wing it and import config. Hope this works!", 'yellow'))
+    print(aegis.stdlib.cstr("Make sure you're in the source root, next to the .git dir.", 'yellow'))
+    repo_dir = os.getcwd()
+    src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+    sys.path.insert(0, src_dir)
+    import config
 
 
 ### Note to self: aegis create will work better if the core web is web.py so we don't clobber snowballin.py
@@ -229,6 +235,7 @@ def build(parser):
     if not os.geteuid() == 0:
         logging.error('You need root privileges, please run it with sudo.')
         sys.exit(1)
+    config.initialize()
     pw = pwd.getpwnam('www-data')
     os.putenv('HOME', pw.pw_dir)
     os.setregid(pw.pw_gid, pw.pw_gid)
@@ -328,8 +335,10 @@ def initialize():
     try:
         config.initialize(args=sys.argv[1:])
     except Exception as ex:
+        logging.exception(ex)
         # No config, such as during aegis create shell command
         remaining = tornado.options.parse_command_line(sys.argv[1:])
+        print(aegis.stdlib.cstr("Remaining arguments: %s" % remaining, 'red'))
 
 
 def main():
@@ -361,7 +370,6 @@ def main():
     else:
         logging.error("NOT IMPLEMENTED... YET")
         return 127
-
 
 if __name__ == "__main__":
     # Called from repository checkout, for example ./aegis/aegis_.py

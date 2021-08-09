@@ -168,6 +168,7 @@ class PostgresConnection(object):
                 cursor = self._db.cursor()
                 return cursor
             except psycopg2.InterfaceError as ex:
+                print("Closed cursor is catched")
                 self._connect(self._autocommit)
                 return self._db.cursor()
         # The connection is single-use when doing a transaction via autocommit=False. That's the cursor to use until we commit the transaction.
@@ -219,7 +220,7 @@ class PostgresConnection(object):
                 return (rows, column_names)
             return rows
         except psycopg2.InterfaceError as ex:
-            print(ex)
+            print("Closed cursor is catched")
             self._db = None
             self.query(query, *parameters, **kwargs)
         finally:

@@ -164,7 +164,12 @@ class PostgresConnection(object):
             self._connect(self._autocommit)
         # If auto-commit then return a new cursor immediately.
         if self._autocommit:
-            return self._db.cursor()
+            try:
+                cursor = self._db.cursor()
+                return cursor
+            except psycopg2.InterfaceError as ex:
+                self._connect(self._autocommit)
+                return self._db.cursor()
         # The connection is single-use when doing a transaction via autocommit=False. That's the cursor to use until we commit the transaction.
         if not self._txn:
             self._txn = self._db.cursor()

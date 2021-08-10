@@ -272,6 +272,7 @@ def deploy(parser):
     if not os.geteuid() == 0:
         logging.error('You need root privileges, please run it with sudo.')
         sys.exit(1)
+    config.initialize()
     pw = pwd.getpwnam('www-data')
     os.putenv('HOME', pw.pw_dir)
     os.setregid(pw.pw_gid, pw.pw_gid)
@@ -332,13 +333,16 @@ def initialize():
         define('version', default=None, help='git version name', type=str)
     if not aegis.config.get('dry_run'):
         define('dry_run', default='True', help='make no changes', type=str)
-    try:
-        config.initialize(args=sys.argv[1:])
-    except Exception as ex:
-        logging.exception(ex)
-        # No config, such as during aegis create shell command
-        remaining = tornado.options.parse_command_line(sys.argv[1:])
-        print(aegis.stdlib.cstr("Remaining arguments: %s" % remaining, 'red'))
+    #aegis.stdlib.logw(aegis.config.get('env'), "AEGIS ENV")
+    tornado.options.parse_command_line(sys.argv[1:])
+    #aegis.stdlib.logw(aegis.config.get('env'), "AEGIS ENV PARSED")
+    #try:
+    #    config.initialize(args=sys.argv[1:])
+    #except Exception as ex:
+    #    logging.exception(ex)
+    #    # No config, such as during aegis create shell command
+    #    remaining = tornado.options.parse_command_line(sys.argv[1:])
+    #    print(aegis.stdlib.cstr("Remaining arguments: %s" % remaining, 'red'))
 
 
 def main():

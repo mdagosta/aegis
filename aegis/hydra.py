@@ -142,7 +142,8 @@ class HydraHead(HydraThread):
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
                         claimed = hydra_queue.claim()
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
-                        #self.logw(claimed, "CLAIMED HYDRA QUEUE: %s  TYPE: %s  HOST: %s" % (hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
+                        if aegis.config.get('hydra_debug'):
+                            self.logw(claimed, "%s CLAIM HYDRA QUEUE: %s  TYPE: %s  HOST: %s  " % (self.name, hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
                         if not claimed: continue
                         start_t = time.time()
                         # Hydra Magic: Find the hydra_type specific function in a subclass of HydraHead
@@ -162,6 +163,13 @@ class HydraHead(HydraThread):
                         if hydra_queue['work_data']:
                             work_data = json.loads(hydra_queue['work_data'])
                         # Do the work
+                        if hydra_type['next_run_sql']:
+                            singleton = hydra_queue.singleton()
+                            if singleton:
+                                logging.error("%s card_assets already running" % self.name)
+                                hydra_queue.finish()    # Not complete, since that affects status
+                                continue
+                        logging.warning("%s RUN HYDRA QUEUE: %s %s" % (self.name, hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name']))
                         hydra_queue.incr_try_cnt()
                         hydra_queue.start()
                         result, work_cnt = work_fn(hydra_queue, hydra_type)
@@ -338,9 +346,12 @@ class Hydra(HydraThread):
                         if HydraThread.quitting.is_set(): break
                         # Check if the task is runnable
                         runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
+                        if aegis.config.get('hydra_debug') and runnable:
+                            logging.warning("%s FOUND RUNNABLE %s" % (self.name, hydra_type['hydra_type_name']))
                         if runnable:
                             claimed = hydra_type.claim()
-                            #self.logw(claimed, "CLAIMED HYDRA TYPE: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
+                            if aegis.config.get('hydra_debug'):
+                                self.logw(claimed, "%s CLAIM HYDRA TYPE: %s %s  " % (self.name, hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
                             if not claimed: continue
                             # Set up a hydra_queue row to represent the work and re-schedule the batch's next run
                             hydra_queue = {}
@@ -349,9 +360,9 @@ class Hydra(HydraThread):
                             hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
                             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
                             hydra_type.schedule_next()
-                            #self.logw("SCHEDULED NEXT: %s %s" % (hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
                             _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
-                            #logging.warning("%s queue up %s   Next Run: %s" % (self.name, _hydra_type['hydra_type_name'], _hydra_type['next_run_dttm']))
+                            if aegis.config.get('hydra_debug'):
+                                self.logw(_hydra_type['next_run_dttm'], "SCHEDULE NEXT ID: %s  Type: %s  " % (_hydra_type['hydra_type_id'], _hydra_type['hydra_type_name']))
                             # Clean out queue then sleep depending on how much work there is to do
                             purged_completed = aegis.model.HydraQueue.purge_completed()
                             #if purged_completed:

@@ -229,7 +229,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.render(template_path, **kwargs)
 
     def _handle_request_exception(self, ex):
-        if type(ex) in (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError):
+        if type(ex) in (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError):
             logging.error("Database is down. Send HTTP 503.")
             self.send_error(503)
             return
@@ -720,6 +720,7 @@ class AegisHydraForm(AegisWeb):
         hydra_type['hydra_type_desc'] = self.request.args.get('hydra_type_desc')
         hydra_type['priority_ndx'] = aegis.stdlib.validate_int(self.request.args.get('priority_ndx'))
         hydra_type['next_run_sql'] = self.request.args.get('next_run_sql')
+        hydra_type['run_host'] = self.request.args.get('run_host')
         self.tmpl['hydra_type'] = hydra_type
         if not hydra_type['hydra_type_name']:
             self.tmpl['errors']['hydra_type_name'] = '** required (string)'
@@ -791,6 +792,7 @@ class AegisHydraQueue(AegisWeb):
         if run_ids:
             hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0])
             if hydra_queue:
+                self.logw(hydra_queue['hydra_queue_id'], "RUN NOW HYDRA_QUEUE_ID")
                 hydra_queue.run_now()
         return self.redirect('/admin/hydra/queue')
 

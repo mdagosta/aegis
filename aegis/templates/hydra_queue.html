@@ -8,15 +8,17 @@
     {% raw xsrf_form_html() %}
     <table class="w3-table-all w3-responsive w3-medium">
         <tr>
-            <th>ID</th>
-            <th>Type</th>
-            <th>Env</th>
-            <th>Host</th>
+            <th>Queue ID</th>
+            <th>Type Name</th>
+            <th>Work Env</th>
+            <th>Work Host</th>
             <th>Work Dttm</th>
             <th>Work Data</th>
+            <th>Claimed</th>
             <th>Tries</th>
             <th>Errors</th>
-            <th>Functions</th>
+            <th>Finished</th>
+            <th>Actions</th>
         </tr>
 
         {% for hydra_queue in hydra_queues %}
@@ -27,20 +29,11 @@
             <td>{{hydra_queue['work_host']}}</td>
             <td>{{hydra_queue['work_dttm']}}</td>
             <td>{{hydra_queue['work_data']}}</td>
+            <td>{{hydra_queue['claimed_dttm']}}</td>
             <td>{{hydra_queue['try_cnt']}}</td>
             <td>{{hydra_queue['error_cnt']}}</td>
-            {#
-            <td>{{hydra_type['hydra_type_id']}}</td>
-            <td><a class="w3-text-blue" href="{{request.uri}}/{{hydra_type['hydra_type_id']}}">{{hydra_type['hydra_type_name']}}</a></td>
-            <td>{{hydra_type['priority_ndx']}}</td>
-            <td>{{hydra_type['status']}}</td>
-            <td>{{hydra_type['last_run_dttm']}}</td>
-            <td>{{hydra_type['next_run_dttm']}}</td>
-            <td><input type="submit" class="w3-button w3-light-blue w3-small" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}p{% end %}ause"/></td>
-            <td><input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
-            <td>{{hydra_type['next_run_sql']}}</td>
-            #}
-            <td><input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/></td>
+            <td>{{hydra_queue['finish_dttm']}}</td>
+            <td>{% if hydra_queue['next_run_sql'] and hydra_queue['status'] == 'running' %}running...{% else %}    <input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/> {% end %}</td>
         </tr>
         {% end %}
 

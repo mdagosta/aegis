@@ -335,7 +335,7 @@ class Pageview(aegis.database.Row):
 class HydraType(aegis.database.Row):
     table_name = 'hydra_type'
     id_column = 'hydra_type_id'
-    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm')
+    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host')
 
     @classmethod
     def get_name(cls, hydra_type_name):
@@ -456,7 +456,7 @@ class HydraQueue(aegis.database.Row):
     @classmethod
     def scan(cls, limit=100):
         # XXX TODO using work_host, work_env
-        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY create_dttm ASC LIMIT %s"
+        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name, hydra_type.next_run_sql, hydra_type.status FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY create_dttm ASC LIMIT %s"
         return db().query(sql, limit, cls=cls)
 
     @classmethod
@@ -503,6 +503,10 @@ class HydraQueue(aegis.database.Row):
         hydra_type = HydraType.get_id(self['hydra_type_id'])
         if hydra_type['next_run_sql'] and hydra_type['status'] == 'running':
             hydra_type.set_status('live')
+        sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
+        return db().execute(sql, self['hydra_queue_id'])
+
+    def finish(self):
         sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
         return db().execute(sql, self['hydra_queue_id'])
 

@@ -36,6 +36,7 @@ try:
     PgsqlAdminShutdown = psycopg2.errors.AdminShutdown
 except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now - but shim the exception types.")
+    #logging.exception(ex)
     class PgsqlIntegrityError(BaseException):
         pass
     class PgsqlOperationalError(BaseException):
@@ -52,22 +53,24 @@ except Exception as ex:
 mysql_available = False
 MysqlIntegrityError = None
 MysqlOperationalError = None
+MysqlInterfaceError = None
 MysqlDataError = None
 try:
     import MySQLdb
     mysql_available = True
     # These are here for mapping errors from MySQLdb into application namespace
-    from MySQLdb._exceptions import IntegrityError as mysqldb_IntegrityError
-    from MySQLdb._exceptions import OperationalError as mysqldb_OperationalError
-    from MySQLdb._exceptions import DataError as mysqldb_DataError
-    MysqlIntegrityError = mysqldb_IntegrityError
-    MysqlOperationalError = mysqldb_OperationalError
-    MysqlDataError = mysqldb_DataError
+    MysqlIntegrityError = MySQLdb._exceptions.IntegrityError
+    MysqlOperationalError = MySQLdb._exceptions.OperationalError
+    MysqlInterfaceError = MySQLdb._exceptions.InterfaceError
+    MysqlDataError = MySQLdb._exceptions.DataError
 except Exception as ex:
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now - but shim the exception types.")
+    #logging.exception(ex)
     class MysqlIntegrityError(BaseException):
         pass
     class MysqlOperationalError(BaseException):
+        pass
+    class MysqlInterfaceError(BaseException):
         pass
     class MysqlDataErrorError(BaseException):
         pass
@@ -101,7 +104,8 @@ def db(use_schema=None, autocommit=True):
 
 
 def dbnow(use_schema=None):
-    return db(use_schema).get("SELECT NOW()")
+    dbconn = db(use_schema)
+    return db(use_schema).get("SELECT NOW() AS now")
 
 def sql_in_format(lst, cast):
     lst = [cast(lst_item) for lst_item in lst]
@@ -385,7 +389,7 @@ class MysqlConnection(object):
     def reconnect(self):
         """Closes the existing database connection and re-opens it."""
         self.close()
-        self._db = MySQLdb.connect(autocommit=True, **self._db_args)
+        self._db = MySQLdb.connect(autocommit=True, connect_timeout=3, **self._db_args)
         self.execute(self._db_init_command, disable_audit_sql=True)
 
     def iter(self, query, *parameters, **kwargs):
@@ -494,8 +498,7 @@ class MysqlConnection(object):
         # you try to perform a query and it fails.  Protect against this
         # case by preemptively closing and reopening the connection
         # if it has been idle for too long (7 hours by default).
-        if (self._db is None or
-                (time.time() - self._last_use_time > self.max_idle_time)):
+        if (self._db is None or (time.time() - self._last_use_time > self.max_idle_time)):
             self._last_use_time = time.time()
             self.reconnect()
 
@@ -509,11 +512,11 @@ class MysqlConnection(object):
             result = cursor.execute(query, parameters)
             aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
             return result
-        except MysqlOperationalError as ex:
-            logging.error("Error with MySQL on %s", self.host)
+        except (MysqlOperationalError, MysqlInterfaceError) as ex:
+            logging.error("Error with MySQL on %s. Close connection and raise.", self.host)
             logging.exception(ex)
-            #self.close()
-            raise ex
+            self.close()
+            raise
 
 
 # To support inserting something literally, like NOW(), into mini-ORM below

@@ -57,7 +57,7 @@ class Build:
                 refspec = build_row['revision']
             # Make a local clone of the repository from origin so we don't have to clone entire repository every time
             if not os.path.exists(self.src_repo):
-                if self._shell_exec("git clone --progress git@%s %s" % (aegis.config.get('git_repo'), options.program_name), cwd=self.src_dir, build_step='build'):
+                if self._shell_exec("git clone --progress %s %s" % (aegis.config.get('git_repo'), options.program_name), cwd=self.src_dir, build_step='build'):
                     return
             # Fetch all the changes to repo and set the correct branch and revision
             if self._shell_exec("git fetch --all", cwd=self.src_repo, build_step='build'):
@@ -107,9 +107,9 @@ class Build:
                     yarn_dir = os.path.join(self.build_dir, yarn_dir)
                 else:
                     yarn_dir = self.build_dir
-                if self._shell_exec("nice yarn install", cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("nice -n 10 yarn install", cwd=yarn_dir, build_step='build'):
                     return
-                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("nice -n 10 yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
@@ -124,7 +124,7 @@ class Build:
             rsync_hosts = [rh for rh in aegis.config.get('deploy_hosts') if rh != self.host]
             cmds = []
             for rsync_host in rsync_hosts:
-                cmd = "nice rsync -q --password-file=/etc/rsync.password -avhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
+                cmd = "nice -n 10 rsync -q --password-file=/etc/rsync.password -avhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
                 cmds.append(cmd)
             for proc in aegis.stdlib.multi_shell(cmds, cwd=self.build_dir):
                 stdout, stderr = proc.communicate()
@@ -163,16 +163,19 @@ class Build:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
         # Set up a set of <env>_prev-# to use with try_files in nginx
         prev_version = self.build_row['previous_version']
-        for prev_num in range(1, 6):
-            link_file = os.path.join(app_dir, '%s_prev-%s' % (env, prev_num))
-            link_target = os.path.join(app_dir, prev_version)
-            if self._shell_exec("rm -f %s" % link_file, build_step=build_step, cwd=app_dir):
-                return
-            if self._shell_exec("ln -s %s %s" % (link_target, link_file), build_step=build_step, cwd=app_dir):
-                return
-            # Get previous build and its previous version
-            prev_build = aegis.model.Build.get_version(prev_version)
-            prev_version = prev_build['previous_version']
+        if prev_version:
+            for prev_num in range(1, 6):
+                link_file = os.path.join(app_dir, '%s_prev-%s' % (env, prev_num))
+                link_target = os.path.join(app_dir, prev_version)
+                if self._shell_exec("rm -f %s" % link_file, build_step=build_step, cwd=app_dir):
+                    return
+                if self._shell_exec("ln -s %s %s" % (link_target, link_file), build_step=build_step, cwd=app_dir):
+                    return
+                # Get previous build and its previous version
+                prev_build = aegis.model.Build.get_version(prev_version)
+                prev_version = prev_build['previous_version']
+                if not prev_version:
+                    break
         # GO LIVE
         if self._shell_exec("rm -f %s" % live_symlink, build_step=build_step, cwd=app_dir):
             return
@@ -292,9 +295,12 @@ class Build:
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, build_row['version'])
         live_build = aegis.model.Build.get_live_build(build_row['env'])
-        commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (live_build['version'], build_row['version']), cwd=build_dir)
-        commits = commits.splitlines()
-        return commits
+        if live_build:
+            commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (live_build['version'], build_row['version']), cwd=build_dir)
+            commits = commits.splitlines()
+            return commits
+        else:
+            return []
 
 
     # Set previous version and send notifications

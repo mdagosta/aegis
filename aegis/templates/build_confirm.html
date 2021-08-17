@@ -11,7 +11,7 @@
     <p class="w3-medium">
         {% if build_step == 'deploy' %}
         Live version now: <br/>
-        {{live_build['version']}} <br/>
+        {{(live_build and live_build['version']) or 'Not Live'}} <br/>
         Deploying version: <br/>
         {{build_row['version']}} <br/>
         {% elif build_step == 'revert' %}

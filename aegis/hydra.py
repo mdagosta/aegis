@@ -169,7 +169,8 @@ class HydraHead(HydraThread):
                                 logging.error("%s card_assets already running" % self.name)
                                 hydra_queue.finish()    # Not complete, since that affects status
                                 continue
-                        logging.warning("%s RUN HYDRA QUEUE: %s %s" % (self.name, hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name']))
+                        if aegis.config.get('hydra_debug'):
+                            logging.warning("%s RUN HYDRA QUEUE: %s %s" % (self.name, hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name']))
                         hydra_queue.incr_try_cnt()
                         hydra_queue.start()
                         result, work_cnt = work_fn(hydra_queue, hydra_type)

@@ -8,13 +8,14 @@ CREATE TABLE hydra_type (
   last_run_dttm datetime DEFAULT NULL,
   next_run_dttm datetime DEFAULT NULL,
   next_run_sql varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,     -- date_add(now(), interval 6 hour). NOT REQUIRED.
+  run_host varchar(100) DEFAULT NULL,                                    -- to specify a single host to run on
   claimed_dttm datetime DEFAULT NULL,
   run_cnt int NOT NULL DEFAULT '0',
   create_dttm timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_dttm timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   delete_dttm datetime DEFAULT NULL,
   PRIMARY KEY (hydra_type_name),
-  KEY hydra_type_id (hydra_type_id)
+  UNIQUE (hydra_type_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

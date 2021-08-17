@@ -358,6 +358,8 @@ class Hydra(HydraThread):
                             hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
                             hydra_queue['priority_ndx'] = hydra_type['priority_ndx']
                             hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
+                            if hydra_type.get('run_host'):
+                                hydra_queue['work_host'] = hydra_type['run_host']
                             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
                             hydra_type.schedule_next()
                             _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])

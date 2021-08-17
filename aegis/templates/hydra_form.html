@@ -10,7 +10,7 @@
   {% if hydra_type and hydra_type.get('hydra_type_id') %}
   <input type="hidden" name="hydra_type_id" value="{{hydra_type['hydra_type_id']}}"/>
   {% end %}
-  
+
   <p>
     <label><b>Work Type Name</b> {% if errors.get('hydra_type_name') %}<span class="w3-text-red">{{errors['hydra_type_name']}}</span>{% end %}</label>
     <input class="w3-input {% if errors.get('hydra_type_name') %}w3-border w3-border-red{% end %}" type="text" name="hydra_type_name" value="{{hydra_type.get('hydra_type_name') or ''}}" placeholder="ie 'housekeeping' [required]" />
@@ -27,8 +27,13 @@
   </p>
 
   <p>
-    <label><b>Next Run SQL</b></label>
-    <input class="w3-input" type="text" name="next_run_sql" value="{{hydra_type.get('next_run_sql', '')}}" placeholder="SQL to set next_run_dttm, ie DATE(DATE_ADD(next_run_dttm, INTERVAL 1 DAY)) for tomorrow start of day" />
+      <label><b>Next Run SQL</b></label>
+      <input class="w3-input" type="text" name="next_run_sql" value="{{hydra_type.get('next_run_sql', '')}}" placeholder="SQL to set next_run_dttm, ie DATE(DATE_ADD(next_run_dttm, INTERVAL 1 DAY)) for tomorrow start of day" />
+  </p>
+
+  <p>
+      <label><b>Run Host</b></label>
+      <input class="w3-input" type="text" name="run_host" value="{{hydra_type.get('run_host', '')}}" placeholder="Specify a single host that should always run this Hydra Type. Not required." />
   </p>
 
   <div class="w3-center w3-padding">

@@ -107,9 +107,9 @@ class Build:
                     yarn_dir = os.path.join(self.build_dir, yarn_dir)
                 else:
                     yarn_dir = self.build_dir
-                if self._shell_exec("nice yarn install", cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("nice -n 10 yarn install", cwd=yarn_dir, build_step='build'):
                     return
-                if self._shell_exec("nice yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("nice -n 10 yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
@@ -124,7 +124,7 @@ class Build:
             rsync_hosts = [rh for rh in aegis.config.get('deploy_hosts') if rh != self.host]
             cmds = []
             for rsync_host in rsync_hosts:
-                cmd = "nice rsync -q --password-file=/etc/rsync.password -avhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
+                cmd = "nice -n 10 rsync -q --password-file=/etc/rsync.password -avhW %s www-data@%s::%s" % (self.build_dir, rsync_host, options.rsync_module)
                 cmds.append(cmd)
             for proc in aegis.stdlib.multi_shell(cmds, cwd=self.build_dir):
                 stdout, stderr = proc.communicate()

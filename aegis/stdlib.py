@@ -122,6 +122,21 @@ def split_name(name):
 def map_items(items, key):
     return dict([(item[key], item) for item in items])
 
+# From Maxime Biais's comment on http://www.peterbe.com/plog/uniqifiers-benchmark
+# Preserves order of the iterable in the return value
+def unique_list(iterable):
+    m = set()
+    return list(filter(lambda x: not (m.__contains__(x) or m.add(x)), iterable))
+
+# From the accepted answer on http://stackoverflow.com/questions/642763/python-intersection-of-two-lists
+# Preserves order of the items in the second iterable
+def stable_intersection(iter1, iter2):
+    return list(itertools.ifilter(set(iter1).__contains__, iter2))
+
+# Modified from above - remove items in 'iter_remove' from items in 'iter_keep'
+def stable_difference(iter_remove, iter_keep):
+    return list(itertools.ifilterfalse(set(iter_remove).__contains__, iter_keep))
+
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):

@@ -375,7 +375,7 @@ class Hydra(HydraThread):
                             if past_items and len(past_items):
                                 #logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
-                                    past_item_type = model.HydraType.get_id(past_item['hydra_type_id'])
+                                    past_item_type = aegis.model.HydraType.get_id(past_item['hydra_type_id'])
                                     logging.error("Running stuck hydra_queue_id: %s  hydra_type_name: %s", past_item['hydra_queue_id'], past_item_type['hydra_type_name'])
                                     past_item.run_now()
                             # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.

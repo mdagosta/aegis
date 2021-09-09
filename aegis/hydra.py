@@ -166,7 +166,7 @@ class HydraHead(HydraThread):
                         if hydra_type['next_run_sql']:
                             singleton = hydra_queue.singleton()
                             if singleton:
-                                logging.error("%s card_assets already running" % self.name)
+                                logging.error("%s %s already running" % (self.name, hydra_type['hydra_type_name']))
                                 hydra_queue.finish()    # Not complete, since that affects status
                                 continue
                         if aegis.config.get('hydra_debug'):
@@ -179,7 +179,7 @@ class HydraHead(HydraThread):
                         if result:
                             hydra_queue.complete()
                         else:
-                            logging.error("hydra_queue_id %s failed, will retry every 15m", hydra_queue['hydra_queue_id'])
+                            logging.error("%s hydra_queue_id %s failed, will retry every 15m", self.name, hydra_queue['hydra_queue_id'])
                             hydra_queue.incr_error_cnt(minutes=15)
                             hydra_queue.unclaim()
                             continue
@@ -375,14 +375,15 @@ class Hydra(HydraThread):
                             if past_items and len(past_items):
                                 #logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
-                                    logging.error("Running stuck hydra_queue_id: %s", past_item['hydra_queue_id'])
+                                    past_item_type = model.HydraType.get_id(past_item['hydra_type_id'])
+                                    logging.error("Running stuck hydra_queue_id: %s  hydra_type_name: %s", past_item['hydra_queue_id'], past_item_type['hydra_type_name'])
                                     past_item.run_now()
                             # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.
                             past_items = aegis.model.HydraType.past_items(minutes=self.stuck_minutes)
                             if past_items and len(past_items):
                                 #logging.error("HydraType has %s stuck items", len(past_items))
                                 for past_item in past_items:
-                                    logging.error("Unclaiming stuck hydra_type_id: %s", past_item['hydra_type_name'])
+                                    logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim()
 
                 except Exception as ex:

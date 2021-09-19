@@ -471,6 +471,11 @@ class HydraQueue(aegis.database.Row):
         sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND hydra_type_id=%s AND work_data=%s"
         return db().query(sql, hydra_type_id, data, cls=cls)
 
+    @classmethod
+    def scan_type(cls, hydra_type_id):
+        sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND delete_dttm IS NULL AND hydra_type_id=%s"
+        return db().query(sql, hydra_type_id, cls=cls)
+
     def claim(self):
         sql = 'UPDATE hydra_queue SET claimed_dttm=NOW() WHERE hydra_queue_id=%s AND claimed_dttm IS NULL'
         return db().execute(sql, self['hydra_queue_id'])

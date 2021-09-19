@@ -586,6 +586,12 @@ class Row(dict):
         sql = 'SELECT * FROM %s' % cls.table_name
         return db().query(sql, cls=cls)
 
+    @classmethod
+    def scan_ids(cls, row_ids):
+        args, fmt = aegis.database.sql_in_format(row_ids, int)
+        sql = "SELECT * FROM "+cls._table_name()+" WHERE "+cls.id_column+" IN ("+fmt+")"
+        return db().query(sql, *args, cls=cls)
+
     # kva_split(), insert(), update() together are a mini-ORM in processing arbitrary column-value combinations on a row.
     # define table_name and data_columns to know which are allowed to be set along with user action
     # columns and where are simple dictionaries: {'full_name': "FULL NAME", 'email': 'email@example.com'}

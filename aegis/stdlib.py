@@ -52,13 +52,14 @@ def logline(*args):
     msg = '%s %s' % (cstr(caller, 'yellow'), args[0])
     logging.warning(msg, *args[1:])
 
-def shell(cmd, cwd=None, env=None):
+def shell(cmd, cwd=None, env=None, decode_utf8=True):
     if type(cmd) not in (tuple, list):
         cmd = shlex.split(cmd)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, cwd=cwd, env=env)
     stdout, stderr = proc.communicate()
-    stdout = stdout.decode('utf-8').strip()
-    stderr = stderr.decode('utf-8').strip()
+    if decode_utf8:
+        stdout = stdout.decode('utf-8').strip()
+        stderr = stderr.decode('utf-8').strip()
     return (stdout, stderr, proc.returncode)
 
 def multi_shell(cmds, cwd=None, env=None):

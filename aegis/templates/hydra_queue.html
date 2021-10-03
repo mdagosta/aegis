@@ -3,6 +3,8 @@
 {% block body %}
 <h1 style="margin-top: 1em;">Hydra Queue</h1>
 
+{{queue_cnt['queue_cnt']}} Queue Items
+
 {% if hydra_queues %}
 <form action="{{request.uri}}" method="POST">
     {% raw xsrf_form_html() %}

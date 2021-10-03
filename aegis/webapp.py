@@ -783,6 +783,7 @@ class AegisHydraQueue(AegisWeb):
         self.tmpl['page_title'] = 'Hydra'
         self.tmpl['home_link'] = '/admin/hydra'
         self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
+        self.tmpl['queue_cnt'] = aegis.model.HydraQueue.count_live()
         return self.render_path("hydra_queue.html", **self.tmpl)
 
     @tornado.web.authenticated

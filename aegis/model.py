@@ -472,6 +472,11 @@ class HydraQueue(aegis.database.Row):
         return db().query(sql, hydra_type_id, data, cls=cls)
 
     @classmethod
+    def count_live(cls):
+        sql = "SELECT COUNT(*) AS queue_cnt FROM hydra_queue WHERE finish_dttm IS NULL AND delete_dttm IS NULL"
+        return db().get(sql, cls=cls)
+
+    @classmethod
     def scan_type(cls, hydra_type_id):
         sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND delete_dttm IS NULL AND hydra_type_id=%s"
         return db().query(sql, hydra_type_id, cls=cls)
@@ -531,9 +536,9 @@ class HydraQueue(aegis.database.Row):
     @classmethod
     def past_items(cls, minutes=15):
         if type(db()) is aegis.database.PostgresConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE'" % int(minutes)
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE' ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
         elif type(db()) is aegis.database.MysqlConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE" % int(minutes)
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
         return db().query(sql, cls=cls)
 
     def run_now(self):

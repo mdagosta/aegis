@@ -456,7 +456,7 @@ class HydraQueue(aegis.database.Row):
     @classmethod
     def scan(cls, limit=100):
         # XXX TODO using work_host, work_env
-        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name, hydra_type.next_run_sql, hydra_type.status FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY create_dttm ASC LIMIT %s"
+        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name, hydra_type.next_run_sql, hydra_type.status FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY hydra_queue.work_dttm ASC LIMIT %s"
         return db().query(sql, limit, cls=cls)
 
     @classmethod

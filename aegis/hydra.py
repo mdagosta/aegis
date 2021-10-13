@@ -186,7 +186,7 @@ class HydraHead(HydraThread):
                             continue
                         aegis.stdlib.timer_stop(self.timer_obj, 'hydra_queue_run')
                         # Worker accounting
-                        logging.warning(self.log_line(hydra_type, work_cnt, self.timer_msg()))
+                        logging.info(self.log_line(hydra_type, work_cnt, self.timer_msg()))
                         self.processed_cnt += work_cnt
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])

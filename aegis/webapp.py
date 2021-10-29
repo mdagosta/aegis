@@ -415,7 +415,7 @@ class AegisHandler(tornado.web.RequestHandler):
     def auth_required(method):
         def wrapper(self, *args, **kwargs):
             if not self.current_user:
-                raise tornado.web.HTTPError(403)
+                raise tornado.web.HTTPError(401)
             return method(self, *args, **kwargs)
         return wrapper
 

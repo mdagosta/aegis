@@ -23,6 +23,7 @@ from tornado.options import define, options
 
 # Project Imports
 import aegis.stdlib
+import aegis.database
 import aegis.model
 import aegis.build
 import config
@@ -185,7 +186,7 @@ class HydraHead(HydraThread):
                             continue
                         aegis.stdlib.timer_stop(self.timer_obj, 'hydra_queue_run')
                         # Worker accounting
-                        logging.warning(self.log_line(hydra_type, work_cnt, self.timer_msg()))
+                        logging.info(self.log_line(hydra_type, work_cnt, self.timer_msg()))
                         self.processed_cnt += work_cnt
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
@@ -386,6 +387,12 @@ class Hydra(HydraThread):
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim()
 
+                # Better handling of AdminShutdown, OperationalError, to capture structured and complete data to logs and alerts.
+                except (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError) as ex:
+                    aegis.stdlib.loge(ex, "Database is Down. Pause 3 seconds.")
+                    logging.exception(ex)
+                    self.exception_alert(ex)
+                    time.sleep(3)
                 except Exception as ex:
                     logging.exception("Batch had an inner loop failure.")
                     self.exception_alert(ex)

@@ -456,7 +456,7 @@ class HydraQueue(aegis.database.Row):
     @classmethod
     def scan(cls, limit=100):
         # XXX TODO using work_host, work_env
-        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name, hydra_type.next_run_sql, hydra_type.status FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY create_dttm ASC LIMIT %s"
+        sql = "SELECT hydra_queue.*, hydra_type.hydra_type_name, hydra_type.next_run_sql, hydra_type.status FROM hydra_queue JOIN hydra_type USING (hydra_type_id) WHERE finish_dttm IS NULL AND hydra_queue.delete_dttm IS NULL ORDER BY hydra_queue.work_dttm ASC LIMIT %s"
         return db().query(sql, limit, cls=cls)
 
     @classmethod
@@ -470,6 +470,11 @@ class HydraQueue(aegis.database.Row):
         # XXX TODO using work_host, work_env
         sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND hydra_type_id=%s AND work_data=%s"
         return db().query(sql, hydra_type_id, data, cls=cls)
+
+    @classmethod
+    def count_live(cls):
+        sql = "SELECT COUNT(*) AS queue_cnt FROM hydra_queue WHERE finish_dttm IS NULL AND delete_dttm IS NULL"
+        return db().get(sql, cls=cls)
 
     @classmethod
     def scan_type(cls, hydra_type_id):
@@ -531,9 +536,9 @@ class HydraQueue(aegis.database.Row):
     @classmethod
     def past_items(cls, minutes=15):
         if type(db()) is aegis.database.PostgresConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE'" % int(minutes)
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE' ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
         elif type(db()) is aegis.database.MysqlConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE" % int(minutes)
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
         return db().query(sql, cls=cls)
 
     def run_now(self):

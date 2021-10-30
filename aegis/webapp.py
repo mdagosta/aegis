@@ -403,8 +403,12 @@ class AegisHandler(tornado.web.RequestHandler):
         logging.error("No email for this member. Does get_member_email() need to be overridden in a subclass? Is self.get_current_user() overridden in a subclass?")
 
     def del_current_user(self):
-        # check if member_auth record exists, if so delete it
-        self.validate_member_auth_ck()
+        # check if member_auth record exists, if so delete it, but don't explode if it doesn't match
+        try:
+            self.validate_member_auth_ck()
+        except Exception as ex:
+            logging.exception(ex)
+            logging.error("This *should* be an unusual case, when cookies aren't matching. Cookies will be cleared now.")
         if aegis.config.get('use_server_logout') and hasattr(self, '_member_auth'):
             self._member_auth.revoke()
         self.cookie_clear('auth')
@@ -783,6 +787,7 @@ class AegisHydraQueue(AegisWeb):
         self.tmpl['page_title'] = 'Hydra'
         self.tmpl['home_link'] = '/admin/hydra'
         self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
+        self.tmpl['queue_cnt'] = aegis.model.HydraQueue.count_live()
         return self.render_path("hydra_queue.html", **self.tmpl)
 
     @tornado.web.authenticated

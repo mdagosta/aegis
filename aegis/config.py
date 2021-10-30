@@ -58,4 +58,5 @@ class SyslogHandler(logging.Handler):
             # Setup Syslog Handler
             syslog_handler = SyslogHandler(options.syslog_ident, options.facility)
             syslog_handler.level = syslog_level
+            syslog_handler.setFormatter(logging.Formatter("%(threadName)s:%(module)s.py:%(lineno)d | %(message)s"))
             cls.root_logger.addHandler(syslog_handler)

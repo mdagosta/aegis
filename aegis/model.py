@@ -646,7 +646,7 @@ class Build(aegis.database.Row):
 
     @classmethod
     def get_live_build(cls, env):
-        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL AND env=%s ORDER BY deploy_dttm DESC LIMIT 1"
+        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL AND env=%s AND build_target <> 'admin' ORDER BY deploy_dttm DESC LIMIT 1"
         return db().get(sql, env, cls=cls)
 
     @classmethod

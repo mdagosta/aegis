@@ -901,7 +901,7 @@ class AegisBuild(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if not b['delete_dttm']]
+        self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if (not b['delete_dttm'] and b['build_target'] != 'admin')]
         self.tmpl['home_link'] = '/admin/build'
         self.tmpl['live_build'] = aegis.model.Build.get_live_build(aegis.config.get('env'))
         return self.render_path("build.html", **self.tmpl)

@@ -4,6 +4,7 @@ CREATE TABLE build (
   revision VARCHAR(100) NOT NULL,
   version VARCHAR(100) DEFAULT NULL,
   env VARCHAR(20) NOT NULL,
+  build_target VARCHAR(20) DEFAULT NULL,
   build_output_tx TEXT DEFAULT NULL,
   build_exit_status INTEGER DEFAULT NULL,
   build_exec_sec DECIMAL DEFAULT NULL,

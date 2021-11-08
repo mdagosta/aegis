@@ -147,6 +147,8 @@ class Build:
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, deploy_build['version'])
         live_symlink = os.path.join(app_dir, env)
+        if deploy_build['build_target'] == 'admin':
+            live_symlink = os.path.join(app_dir, "%s-admin" % env)
         # Set self.build_row for where to record output if it's deploy, but don't overwrite in the revert case
         if build_step == 'deploy':
             self.build_row = deploy_build
@@ -191,6 +193,13 @@ class Build:
                 logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
                 continue
             # Restart processes one-by-one from supervisorctl
+            # If it's an admin deploy, don't restart the other processes. And if it's the others, don't restart admin.
+            if deploy_build['build_target'] == 'admin' and not process.startswith('admin'):
+                aegis.stdlib.logw(process, "Skip Non-Admin Process While Deploying Admin")
+                continue
+            if deploy_build['build_target'] == 'application' and process.startswith('admin'):
+                aegis.stdlib.logw(process, "Skip Admin Process While Deploying Application")
+                continue
             if self._shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), build_step=build_step, cwd=app_dir):
                 self.logw(process, "ERROR RESTARTING PROCESS")
                 return
@@ -264,6 +273,8 @@ class Build:
     # Version numbering and version files
     def _new_version(self):
         version_name = '%s_%s' % (self.build_row['env'], self.build_row['branch'])
+        if self.build_row['build_target'] == 'admin':
+            version_name = '%s-admin_%s' % (self.build_row['env'], self.build_row['branch'])
         version_tags, stderr, exit_status = aegis.stdlib.shell("git tag --list '%s*'" % version_name, cwd=self.src_repo)
         if version_tags:
             for version_tag in sorted(version_tags.splitlines()):

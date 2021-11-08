@@ -60,9 +60,6 @@ else:
 ### Note to self: aegis create will work better if the core web is web.py so we don't clobber snowballin.py
 # Needs templates dir, etc
 # Prompt y/n to clobber with diff
-#
-
-
 # Also need aegis install, to make system admin faster
 # Should all start with the /aegis stuff
 # Also the sql should all be there for hydra, reports, etc
@@ -225,7 +222,7 @@ def schema(parser):
 def build(parser):
     # Argument Handling
     args = parser.parse_args()
-    build_args = {'branch': args.branch, 'revision': args.revision, 'env': aegis.config.get('env')}
+    build_args = {'branch': args.branch, 'revision': args.revision, 'env': aegis.config.get('env'), 'build_target': args.build_target}
     if not aegis.config.get('env') or not(build_args['branch'] or build_args['revision']):
         logging.error("aegis build requires --env and one of --branch or --revision")
         aegis.stdlib.loge(aegis.config.get('env'), "ENV")
@@ -351,6 +348,7 @@ def main():
     parser.add_argument('--branch', metavar='<branch>', type=str, help='git branch name')
     parser.add_argument('--revision', metavar='<revision>', type=str, help='git revision hash')
     parser.add_argument('--env', metavar='<env>', type=str, help='primary environment name')
+    parser.add_argument('--build_target', metavar='<build_target>', default='application', type=str, help='build target  <application, admin>')
     parser.add_argument('--version', metavar='<version>', type=str, help='program version tag')
     parser.add_argument('--appname', metavar='<appname>', type=str, nargs=1, help='code name for application')
     parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='domain to create application')

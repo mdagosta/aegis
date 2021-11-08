@@ -289,11 +289,9 @@ class HydraHead(HydraThread):
         # Delete any builds that are undeployed or deleted and older than a week.
         dead_builds = aegis.model.Build.scan_dead_builds()
         for dead_build in dead_builds:
-            self.logw(dead_build['build_id'], "DEAD BUILD - should clean it up")
             build.clean(dead_build)
         # Keep the 5 most recently deployed builds per environment. Delete the rest.
         envs = [env['env'] for env in aegis.model.Build.deployed_envs()]
-        self.logw(envs, "ENVS")
         for env in envs:
             stale_builds = aegis.model.Build.scan_stale_builds(env)
             for stale_build in stale_builds[5:]:

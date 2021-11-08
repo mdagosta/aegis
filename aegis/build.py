@@ -3,6 +3,7 @@
 # Mainly a web interface to do a build. Command line backup/repair.
 
 # Python Imports
+import datetime
 import logging
 import os
 import requests
@@ -195,10 +196,10 @@ class Build:
             # Restart processes one-by-one from supervisorctl
             # If it's an admin deploy, don't restart the other processes. And if it's the others, don't restart admin.
             if deploy_build['build_target'] == 'admin' and not process.startswith('admin'):
-                aegis.stdlib.logw(process, "Skip Non-Admin Process While Deploying Admin")
+                aegis.stdlib.logw(process, "Skip Non-Admin Process Deploying Admin")
                 continue
             if deploy_build['build_target'] == 'application' and process.startswith('admin'):
-                aegis.stdlib.logw(process, "Skip Admin Process While Deploying Application")
+                aegis.stdlib.logw(process, "Skip Admin Process Deploying Application")
                 continue
             if self._shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), build_step=build_step, cwd=app_dir):
                 self.logw(process, "ERROR RESTARTING PROCESS")
@@ -218,20 +219,21 @@ class Build:
 
     def clean(self, build_row):
         # Delete all the files from filesystem for this build
-        # ON ALL HOSTS...
-        self.logw(build_row['build_id'], "BUILD ID")
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         if build_row['version']:
             build_dir = os.path.join(app_dir, build_row['version'])
             if os.path.exists(build_dir):
                 shutil.rmtree(build_dir)
-                self.logw(build_dir, "DELETED BUILD DIR")
+            # If it was deleted over a month ago and the filesystem files no longer exist, just ignore this.
+            elif build_row['delete_dttm'] and build_row['delete_dttm'] < datetime.datetime.utcnow() - datetime.timedelta(days=30):
+                return
             build_row.set_soft_deleted()
         elif not build_row['delete_dttm']:
-            self.logw(build_row['build_id'], "BUILD WITH NO VERSION - DOA")
+            self.logw(build_row['build_id'], "SOFT DELETE DOA BUILD WITH NO VERSION")
             build_row.set_soft_deleted()
-        else:
-            self.logw("IS ALL DELETED")
+        #else:
+        #    self.logw(build_row['build_id'], "IS ALL DELETED")
+        #self.logw(build_row['build_id'], "DONE PROCESSING BUILD ID")
 
 
     # Shell execution with structured logging and database output handling.

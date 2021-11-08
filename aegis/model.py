@@ -664,7 +664,7 @@ class Build(aegis.database.Row):
 
     @classmethod
     def scan_stale_builds(cls, env):
-        sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+        sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL AND delete_dttm IS NULL ORDER BY deploy_dttm DESC"
         return db().query(sql, env, cls=cls)
 
     @classmethod

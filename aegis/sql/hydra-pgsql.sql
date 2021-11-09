@@ -9,6 +9,7 @@ CREATE TABLE hydra_type (
   next_run_dttm TIMESTAMP DEFAULT NULL,
   next_run_sql VARCHAR(100) DEFAULT NULL,     -- date_add(now(), interval 6 hour). NOT REQUIRED.
   run_host VARCHAR(100) DEFAULT NULL,         -- to specify a single host to run on
+  run_env VARCHAR(100) DEFAULT NULL,          -- to specify a single env to run on
   claimed_dttm TIMESTAMP DEFAULT NULL,
   run_cnt BIGINT NOT NULL DEFAULT '0',
   create_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

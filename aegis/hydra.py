@@ -345,7 +345,7 @@ class Hydra(HydraThread):
                     for hydra_type in aegis.model.HydraType.scan():
                         if HydraThread.quitting.is_set(): break
                         # Check if the task is runnable
-                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'])
+                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'], aegis.config.get('env'))
                         if aegis.config.get('hydra_debug') and runnable:
                             logging.warning("%s FOUND RUNNABLE %s" % (self.name, hydra_type['hydra_type_name']))
                         if runnable:

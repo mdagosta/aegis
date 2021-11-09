@@ -729,6 +729,7 @@ class AegisHydraForm(AegisWeb):
         hydra_type['priority_ndx'] = aegis.stdlib.validate_int(self.request.args.get('priority_ndx'))
         hydra_type['next_run_sql'] = self.request.args.get('next_run_sql')
         hydra_type['run_host'] = self.request.args.get('run_host')
+        hydra_type['run_env'] = self.request.args.get('run_env')
         self.tmpl['hydra_type'] = hydra_type
         if not hydra_type['hydra_type_name']:
             self.tmpl['errors']['hydra_type_name'] = '** required (string)'

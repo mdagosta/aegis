@@ -347,7 +347,7 @@ class Hydra(HydraThread):
                         # Check if the task is runnable
                         runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'], aegis.config.get('env'))
                         if aegis.config.get('hydra_debug') and runnable:
-                            logging.warning("%s FOUND RUNNABLE %s" % (self.name, hydra_type['hydra_type_name']))
+                            logging.warning("%s FOUND RUNNABLE %s %s" % (self.name, hydra_type['hydra_type_name'], aegis.config.get('env')))
                         if runnable:
                             claimed = hydra_type.claim()
                             if aegis.config.get('hydra_debug'):
@@ -358,7 +358,7 @@ class Hydra(HydraThread):
                             hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
                             hydra_queue['priority_ndx'] = hydra_type['priority_ndx']
                             hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
-                            hydra_queue['work_env'] = aegis.config.get('env')
+                            hydra_queue['work_env'] = hydra_type.get('run_env', aegis.config.get('env'))
                             if hydra_type.get('run_host'):
                                 hydra_queue['work_host'] = hydra_type['run_host']
                             hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)

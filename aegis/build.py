@@ -190,7 +190,7 @@ class Build:
             # https://stackoverflow.com/questions/52763508/python-prevent-child-threads-from-being-affected-from-sigint-signal
             # Instead, allow Hydra to use its quitting flag to stop and let supervisor restart.
             proc_is_hydra = process.startswith(options.deploy_hydra_name)
-            if main_is_hydra and proc_is_hydra:
+            if main_is_hydra and proc_is_hydra and aegis.config.get('env') == self.build_row['env']:
                 logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
                 continue
             # Restart processes one-by-one from supervisorctl

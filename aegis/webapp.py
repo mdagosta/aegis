@@ -988,7 +988,7 @@ class AegisBuildForm(AegisWeb):
         if aegis.config.get('env').endswith('-admin'):
             build['env'] = aegis.config.get('env').split('-')[0]
         aegis.stdlib.logw(build['env'], "SET BUILD ENV FROM PROCESS ENV")
-        # XXX This should be env-admin
+        build['build_target'] = 'application'
 
         # Create build row and add it to run on Hydra
         build_id = aegis.model.Build.insert_columns(**build)

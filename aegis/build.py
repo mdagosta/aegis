@@ -160,7 +160,7 @@ class Build:
         import __main__
         main_is_hydra = __main__.__file__.endswith('%s.py' % options.deploy_hydra_name)
         processes, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
-        processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+env)]
+        processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+env) or process.split(':')[0].endswith('_'+env+'-admin')]
         num_procs = 1 if main_is_hydra else 0
         if len(processes) == num_procs:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)

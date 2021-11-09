@@ -288,8 +288,6 @@ class AegisHandler(tornado.web.RequestHandler):
             name = "%s_%s" % (self.tmpl['env'].split('-')[0], name)
         else:
             name = "%s_%s" % (self.tmpl['env'], name)
-        aegis.stdlib.logw(self.tmpl['env'], "ENV")
-        aegis.stdlib.logw(name, "COOKIE NAME")
         return name
 
     def cookie_set(self, name, value, cookie_duration=None):

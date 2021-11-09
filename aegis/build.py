@@ -110,7 +110,7 @@ class Build:
                     yarn_dir = self.build_dir
                 if self._shell_exec("yarn install", cwd=yarn_dir, build_step='build'):
                     return
-                if self._shell_exec("yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("yarn run %s" % self.build_row['env'], cwd=yarn_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:

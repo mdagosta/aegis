@@ -281,10 +281,12 @@ class AegisHandler(tornado.web.RequestHandler):
         return ck
 
     def cookie_name(self, name):
-        if self.tmpl['env'] != 'prod':
-            name = "%s_%s" % (self.tmpl['env'], name)
-        return name
-
+        if self.tmpl['env'] == 'prod':
+            return name
+        name = "%s_%s" % (self.tmpl['env'], name)
+        # Authentication for special -admin environment to use cookies from the main env
+        if self.tmpl['env'].endswith('-admin'):
+            name = "%s_%s" % (self.tmpl['env'].split('-')[0], name)
 
     def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
@@ -980,6 +982,9 @@ class AegisBuildForm(AegisWeb):
         if not build['revision']:
             build['revision'] = 'HEAD'
         build['env'] = aegis.config.get('env')
+        aegis.stdlib.logw(build['env'], "SET BUILD ENV FROM PROCESS ENV")
+        # XXX This should be env-admin
+
         # Create build row and add it to run on Hydra
         build_id = aegis.model.Build.insert_columns(**build)
         hydra_type = aegis.model.HydraType.get_name('build_build')

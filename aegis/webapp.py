@@ -985,7 +985,10 @@ class AegisBuildForm(AegisWeb):
             return self.render_path("build_form.html", **self.tmpl)
         if not build['revision']:
             build['revision'] = 'HEAD'
+        aegis.stdlib.logw(aegis.config.get('env'), "RUNNING ENV")
         build['env'] = aegis.config.get('env')
+        if aegis.config.get('env').endswith('-admin'):
+            build['env'] = aegis.config.get('env').split('-')[0]
         aegis.stdlib.logw(build['env'], "SET BUILD ENV FROM PROCESS ENV")
         # XXX This should be env-admin
 

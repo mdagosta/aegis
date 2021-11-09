@@ -195,10 +195,10 @@ class Build:
                 continue
             # Restart processes one-by-one from supervisorctl
             # If it's an admin deploy, don't restart the other processes. And if it's the others, don't restart admin.
-            if deploy_build['build_target'] == 'admin' and not process.startswith('admin'):
+            if deploy_build['build_target'] == 'admin' and not process.endswith('admin'):
                 aegis.stdlib.logw(process, "Skip Non-Admin Process Deploying Admin")
                 continue
-            if deploy_build['build_target'] == 'application' and process.startswith('admin'):
+            if deploy_build['build_target'] == 'application' and process.endswith('admin'):
                 aegis.stdlib.logw(process, "Skip Admin Process Deploying Application")
                 continue
             if self._shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), build_step=build_step, cwd=app_dir):

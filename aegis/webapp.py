@@ -287,6 +287,8 @@ class AegisHandler(tornado.web.RequestHandler):
         # Authentication for special -admin environment to use cookies from the main env
         if self.tmpl['env'].endswith('-admin'):
             name = "%s_%s" % (self.tmpl['env'].split('-')[0], name)
+        aegis.stdlib.logw(self.tmpl['env'], "ENV")
+        aegis.stdlib.logw(name, "COOKIE NAME")
         return name
 
     def cookie_set(self, name, value, cookie_duration=None):

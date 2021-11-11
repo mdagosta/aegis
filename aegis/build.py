@@ -3,6 +3,7 @@
 # Mainly a web interface to do a build. Command line backup/repair.
 
 # Python Imports
+import datetime
 import logging
 import os
 import requests
@@ -109,7 +110,7 @@ class Build:
                     yarn_dir = self.build_dir
                 if self._shell_exec("yarn install", cwd=yarn_dir, build_step='build'):
                     return
-                if self._shell_exec("yarn run %s" % aegis.config.get('env'), cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("yarn run %s" % self.build_row['env'], cwd=yarn_dir, build_step='build'):
                     return
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
@@ -147,6 +148,8 @@ class Build:
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, deploy_build['version'])
         live_symlink = os.path.join(app_dir, env)
+        if deploy_build['build_target'] == 'admin':
+            live_symlink = os.path.join(app_dir, "%s-admin" % env)
         # Set self.build_row for where to record output if it's deploy, but don't overwrite in the revert case
         if build_step == 'deploy':
             self.build_row = deploy_build
@@ -157,7 +160,7 @@ class Build:
         import __main__
         main_is_hydra = __main__.__file__.endswith('%s.py' % options.deploy_hydra_name)
         processes, stderr, exit_status = aegis.stdlib.shell("sudo /usr/bin/supervisorctl status")
-        processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+env)]
+        processes = [process.split(' ')[0] for process in processes.splitlines() if process.split(':')[0].endswith('_'+env) or process.split(':')[0].endswith('_'+env+'-admin')]
         num_procs = 1 if main_is_hydra else 0
         if len(processes) == num_procs:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
@@ -187,10 +190,17 @@ class Build:
             # https://stackoverflow.com/questions/52763508/python-prevent-child-threads-from-being-affected-from-sigint-signal
             # Instead, allow Hydra to use its quitting flag to stop and let supervisor restart.
             proc_is_hydra = process.startswith(options.deploy_hydra_name)
-            if main_is_hydra and proc_is_hydra:
+            if main_is_hydra and proc_is_hydra and aegis.config.get('env') == self.build_row['env']:
                 logging.warning("Skip 'supervisorctl restart hydra' from within Hydra")
                 continue
             # Restart processes one-by-one from supervisorctl
+            # If it's an admin deploy, don't restart the other processes. And if it's the others, don't restart admin.
+            if deploy_build['build_target'] == 'admin' and not process.split(':')[0].endswith('admin'):
+                aegis.stdlib.logw(process, "Skip Non-Admin Process Deploying Admin")
+                continue
+            if deploy_build['build_target'] == 'application' and process.split(':')[0].endswith('admin'):
+                aegis.stdlib.logw(process, "Skip Admin Process Deploying Application")
+                continue
             if self._shell_exec("sudo /usr/bin/supervisorctl restart %s" % (process), build_step=build_step, cwd=app_dir):
                 self.logw(process, "ERROR RESTARTING PROCESS")
                 return
@@ -209,20 +219,21 @@ class Build:
 
     def clean(self, build_row):
         # Delete all the files from filesystem for this build
-        # ON ALL HOSTS...
-        self.logw(build_row['build_id'], "BUILD ID")
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         if build_row['version']:
             build_dir = os.path.join(app_dir, build_row['version'])
             if os.path.exists(build_dir):
                 shutil.rmtree(build_dir)
-                self.logw(build_dir, "DELETED BUILD DIR")
+            # If it was deleted over a month ago and the filesystem files no longer exist, just ignore this.
+            elif build_row['delete_dttm'] and build_row['delete_dttm'] < datetime.datetime.utcnow() - datetime.timedelta(days=30):
+                return
             build_row.set_soft_deleted()
         elif not build_row['delete_dttm']:
-            self.logw(build_row['build_id'], "BUILD WITH NO VERSION - DOA")
+            self.logw(build_row['build_id'], "SOFT DELETE DOA BUILD WITH NO VERSION")
             build_row.set_soft_deleted()
-        else:
-            self.logw("IS ALL DELETED")
+        #else:
+        #    self.logw(build_row['build_id'], "IS ALL DELETED")
+        #self.logw(build_row['build_id'], "DONE PROCESSING BUILD ID")
 
 
     # Shell execution with structured logging and database output handling.
@@ -264,6 +275,8 @@ class Build:
     # Version numbering and version files
     def _new_version(self):
         version_name = '%s_%s' % (self.build_row['env'], self.build_row['branch'])
+        if self.build_row['build_target'] == 'admin':
+            version_name = '%s-admin_%s' % (self.build_row['env'], self.build_row['branch'])
         version_tags, stderr, exit_status = aegis.stdlib.shell("git tag --list '%s*'" % version_name, cwd=self.src_repo)
         if version_tags:
             for version_tag in sorted(version_tags.splitlines()):

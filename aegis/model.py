@@ -335,7 +335,7 @@ class Pageview(aegis.database.Row):
 class HydraType(aegis.database.Row):
     table_name = 'hydra_type'
     id_column = 'hydra_type_id'
-    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host')
+    data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host', 'run_env')
 
     @classmethod
     def get_name(cls, hydra_type_name):
@@ -356,15 +356,16 @@ class HydraType(aegis.database.Row):
         return db().execute(sql, status, self['hydra_type_id'])
 
     @classmethod
-    def get_runnable(cls, hydra_type_id):
+    def get_runnable(cls, hydra_type_id, env):
         sql = """SELECT hydra_type_id, hydra_type_name, next_run_sql
                    FROM hydra_type
                   WHERE next_run_dttm <= NOW()
                     AND status='live'
                     AND hydra_type_id=%s
+                    AND run_env=%s
                     AND claimed_dttm IS NULL
                     AND next_run_sql IS NOT NULL"""
-        return db().get(sql, hydra_type_id, cls=cls)
+        return db().get(sql, hydra_type_id, env, cls=cls)
 
     def schedule_next(self):
         sql = """
@@ -646,7 +647,7 @@ class Build(aegis.database.Row):
 
     @classmethod
     def get_live_build(cls, env):
-        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL AND env=%s ORDER BY deploy_dttm DESC LIMIT 1"
+        sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL AND env=%s AND build_target <> 'admin' ORDER BY deploy_dttm DESC LIMIT 1"
         return db().get(sql, env, cls=cls)
 
     @classmethod
@@ -664,7 +665,7 @@ class Build(aegis.database.Row):
 
     @classmethod
     def scan_stale_builds(cls, env):
-        sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL ORDER BY deploy_dttm DESC"
+        sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL AND delete_dttm IS NULL ORDER BY deploy_dttm DESC"
         return db().query(sql, env, cls=cls)
 
     @classmethod

@@ -281,10 +281,14 @@ class AegisHandler(tornado.web.RequestHandler):
         return ck
 
     def cookie_name(self, name):
-        if self.tmpl['env'] != 'prod':
+        if self.tmpl['env'] in ('prod', 'prod-admin'):
+            return name
+        # Authentication for special -admin environment to use cookies from the main env
+        if self.tmpl['env'].endswith('-admin'):
+            name = "%s_%s" % (self.tmpl['env'].split('-')[0], name)
+        else:
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
-
 
     def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
@@ -403,8 +407,12 @@ class AegisHandler(tornado.web.RequestHandler):
         logging.error("No email for this member. Does get_member_email() need to be overridden in a subclass? Is self.get_current_user() overridden in a subclass?")
 
     def del_current_user(self):
-        # check if member_auth record exists, if so delete it
-        self.validate_member_auth_ck()
+        # check if member_auth record exists, if so delete it, but don't explode if it doesn't match
+        try:
+            self.validate_member_auth_ck()
+        except Exception as ex:
+            logging.exception(ex)
+            logging.error("This *should* be an unusual case, when cookies aren't matching. Cookies will be cleared now.")
         if aegis.config.get('use_server_logout') and hasattr(self, '_member_auth'):
             self._member_auth.revoke()
         self.cookie_clear('auth')
@@ -721,6 +729,7 @@ class AegisHydraForm(AegisWeb):
         hydra_type['priority_ndx'] = aegis.stdlib.validate_int(self.request.args.get('priority_ndx'))
         hydra_type['next_run_sql'] = self.request.args.get('next_run_sql')
         hydra_type['run_host'] = self.request.args.get('run_host')
+        hydra_type['run_env'] = self.request.args.get('run_env')
         self.tmpl['hydra_type'] = hydra_type
         if not hydra_type['hydra_type_name']:
             self.tmpl['errors']['hydra_type_name'] = '** required (string)'
@@ -897,9 +906,12 @@ class AegisBuild(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if not b['delete_dttm']]
+        self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if (not b['delete_dttm'] and b['build_target'] != 'admin')]
         self.tmpl['home_link'] = '/admin/build'
-        self.tmpl['live_build'] = aegis.model.Build.get_live_build(aegis.config.get('env'))
+        env = aegis.config.get('env')
+        if env.endswith('-admin'):
+            env = env.split('-')[0]
+        self.tmpl['live_build'] = aegis.model.Build.get_live_build(env)
         return self.render_path("build.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -975,7 +987,13 @@ class AegisBuildForm(AegisWeb):
             return self.render_path("build_form.html", **self.tmpl)
         if not build['revision']:
             build['revision'] = 'HEAD'
+        aegis.stdlib.logw(aegis.config.get('env'), "RUNNING ENV")
         build['env'] = aegis.config.get('env')
+        if aegis.config.get('env').endswith('-admin'):
+            build['env'] = aegis.config.get('env').split('-')[0]
+        aegis.stdlib.logw(build['env'], "SET BUILD ENV FROM PROCESS ENV")
+        build['build_target'] = 'application'
+
         # Create build row and add it to run on Hydra
         build_id = aegis.model.Build.insert_columns(**build)
         hydra_type = aegis.model.HydraType.get_name('build_build')

@@ -175,6 +175,7 @@ def schema(parser):
     except aegis.database.PgsqlOperationalError as ex:
         logging.error("Could not connect to database. Do you need to log into postgres and run:")
         logging.error("postgres=# CREATE USER %s WITH PASSWORD '%s';" % (options.pg_username, options.pg_password))
+        logging.error("postgres=# GRANT %s TO <root>;" % (options.pg_username))
         logging.error("postgres=# CREATE DATABASE %s OWNER=%s;" % (options.pg_database, options.pg_username))
         exit(1)
     except Exception as ex:

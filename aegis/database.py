@@ -615,7 +615,7 @@ class Row(dict):
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
-            columns = dict( [ (key,val) for key, val in columns.items() if key in data_columns] )
+            columns = dict( [ (key, val) for key, val in columns.items() if key in data_columns] )
         keys, values, args = cls.kva_split(columns)
         use_db = db()
         if type(use_db) is PostgresConnection:

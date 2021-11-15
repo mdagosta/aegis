@@ -293,11 +293,13 @@ class HydraHead(HydraThread):
         # Keep the 5 most recently deployed builds per environment. Delete the rest.
         envs = [env['env'] for env in aegis.model.Build.deployed_envs()]
         for env in envs:
-            stale_builds = aegis.model.Build.scan_stale_builds(env)
+            # Don't delete the builds with version <env>-admin
+            stale_builds = [build for build in aegis.model.Build.scan_stale_builds(env) if not build['version'].startswith('%s-admin' % env)]
             for stale_build in stale_builds[5:]:
                 #logging.error("STALE BUILDS need to be handled by my recent BY ENV or else we could delete in-use old ones")
-                self.logw(env, "STALE ENV")
-                self.logw(stale_build['build_id'], "STALE BUILD - should clean it up")
+                self.logw(stale_build['build_id'], "STALE BUILD - cleaning it up")
+                self.logw(env, "ENV")
+                self.logw(stale_build['version'], "VERSION")
                 self.logw(stale_build['deploy_dttm'], "DEPLOY DTTM")
                 build.clean(stale_build)
         return True, 1

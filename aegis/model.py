@@ -700,6 +700,17 @@ class Cache(aegis.database.Row):
         sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s WHERE cache_key=%s"
         return db().execute(sql, cache_json, cache_expiry, cache_key)
 
+    @classmethod
+    def set_key(cls, cache_key, cache_json, cache_expiry):
+        cache_obj = cls.get_key(cache_key)
+        if cache_obj:
+            cls.update_key(cache_key, cache_json, cache_expiry)
+            cache_obj = cls.get_key(cache_key)
+        else:
+            cls.insert(cache_key, cache_json, cache_expiry)
+            cache_obj = cls.get_key(cache_key)
+        return cache_obj
+
     @staticmethod
     def del_key(cache_key):
         sql = "DELETE FROM cache WHERE cache_key=%s"

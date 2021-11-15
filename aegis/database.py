@@ -644,4 +644,5 @@ class Row(dict):
         # SQL statement
         sql = 'UPDATE %s SET %s WHERE %s' % (db_table, set_clause, where_clause)
         #aegis.stdlib.logw(sql, "SQL")
+        #aegis.stdlib.logw(args, "ARGS")
         return db().execute_rowcount(sql, *args)

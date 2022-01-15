@@ -836,3 +836,4 @@ def incr_stop(obj, timer_name):
     obj._timers.setdefault(cnt_name, 0)
     obj._timers[exec_name] += obj._timers[stop_name] - obj._timers[start_name]
     obj._timers[cnt_name] += 1
+    return obj._timers[stop_name] - obj._timers[start_name]

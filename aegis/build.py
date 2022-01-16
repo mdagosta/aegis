@@ -23,9 +23,6 @@ import aegis.model
 import aegis.config
 
 
-# TODO
-# - hydra clean build: started but needs sorting and action-taking
-
 class Build:
     def __init__(self, user=None):
         self.logw = aegis.stdlib.logw

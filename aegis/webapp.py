@@ -285,7 +285,7 @@ class AegisHandler(tornado.web.RequestHandler):
             return name
         # Authentication for special -admin environment to use cookies from the main env
         if self.tmpl['env'].endswith('-admin'):
-            name = "%s_%s" % (self.tmpl['env'].split('-')[0], name)
+            name = "%s_%s" % (self.tmpl['env'].rsplit('-', maxsplit=1)[0], name)
         else:
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
@@ -910,7 +910,7 @@ class AegisBuild(AegisWeb):
         self.tmpl['home_link'] = '/admin/build'
         env = aegis.config.get('env')
         if env.endswith('-admin'):
-            env = env.split('-')[0]
+            env = env.rsplit('-', maxsplit=1)[0]
         self.tmpl['live_build'] = aegis.model.Build.get_live_build(env)
         return self.render_path("build.html", **self.tmpl)
 
@@ -990,7 +990,7 @@ class AegisBuildForm(AegisWeb):
         aegis.stdlib.logw(aegis.config.get('env'), "RUNNING ENV")
         build['env'] = aegis.config.get('env')
         if aegis.config.get('env').endswith('-admin'):
-            build['env'] = aegis.config.get('env').split('-')[0]
+            build['env'] = aegis.config.get('env').rsplit('-', maxsplit=1)[0]
         aegis.stdlib.logw(build['env'], "SET BUILD ENV FROM PROCESS ENV")
         build['build_target'] = 'application'
 

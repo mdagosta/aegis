@@ -283,7 +283,7 @@ def magic_token(length=token_length):
     return random.choice(string.ascii_lowercase) + functools.reduce(lambda x, y: x + random.choice(token_chars), range(length-1), '').lower()
 
 def validate_token(row_id, token):
-    return validate_int(row_id) and len([ch for ch in token if ch in token_chars]) == token_length
+    return validate_int(row_id) and token and len([ch for ch in token if ch in token_chars]) == token_length
 
 def validate_int(value):
     # int() can't take a None so we have to check that first

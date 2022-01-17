@@ -344,7 +344,7 @@ class HydraType(aegis.database.Row):
 
     @classmethod
     def scan(cls):
-        sql = "SELECT * FROM hydra_type ORDER BY next_run_dttm ASC"
+        sql = "SELECT * FROM hydra_type ORDER BY next_run_dttm ASC, status ASC, priority_ndx ASC"
         return db().query(sql, cls=cls)
 
     def run_now(self):

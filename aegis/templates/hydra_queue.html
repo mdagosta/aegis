@@ -39,7 +39,7 @@
             <td>{{hydra_queue['try_cnt']}}</td>
             <td>{{hydra_queue['error_cnt']}}</td>
             <td>{{hydra_queue['finish_dttm']}}</td>
-            <td>{% if hydra_queue['next_run_sql'] and hydra_queue['status'] == 'running' %}running...{% else %}    <input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/> {% end %}</td>
+            <td>{% if (hydra_queue['next_run_sql'] and hydra_queue['status'] == 'running') or (not hydra_queue['next_run_sql'] and hydra_queue['claimed_dttm']) %}running...{% else %}    <input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/> {% end %}</td>
         </tr>
         {% end %}
 

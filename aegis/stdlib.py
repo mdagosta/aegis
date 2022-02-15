@@ -332,6 +332,14 @@ def validate_ip_address(value):
     except:
         return None
 
+def validate_json(self, value):
+    if type(value) is dict:
+        return value
+    try:
+        return json.loads(value)
+    except ValueError:
+        return None
+
 
 email_validator = None
 def validate_email(value):

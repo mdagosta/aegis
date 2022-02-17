@@ -275,7 +275,10 @@ class AegisHandler(tornado.web.RequestHandler):
     def cookie_decode(self, val):
         if val is None:
             return None
-        ck = tornado.escape.json_decode(tornado.escape.url_unescape(val))
+        unescaped_val = tornado.escape.url_unescape(val)
+        if unescaped_val == '':
+            return unescaped_val
+        ck = tornado.escape.json_decode(unescaped_val)
         if type(ck) is dict:
             ck = dict([(str(key), ck[key]) for key in ck])
         return ck

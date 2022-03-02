@@ -545,7 +545,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.prepare()
         # Audit Session - takes 10ms !!
         audit_session_id = self.tmpl.get('session_ck', {}).get('audit_session_id')
-        aegis.stdlib.logw(audit_session_id, "AUDIT SESSION ID")
+        #aegis.stdlib.logw(audit_session_id, "AUDIT SESSION ID")
         self.audit_session['member_id'] = self.get_member_id()
         if audit_session_id:
             if self.view_ind:
@@ -595,7 +595,7 @@ class AegisHandler(tornado.web.RequestHandler):
             if render_time_s:
                 self.audit_request['render_time'] = render_time_s * 1000
         audit_request_id = aegis.model.AuditRequest.insert_columns(**self.audit_request)
-        aegis.stdlib.logw(audit_request_id, "AUDIT REQUEST ID")
+        #aegis.stdlib.logw(audit_request_id, "AUDIT REQUEST ID")
         self.save_audit_relations(audit_request_id)
         return audit_request_id
 

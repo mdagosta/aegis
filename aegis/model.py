@@ -723,3 +723,13 @@ class Cache(aegis.database.Row):
     def purge_expired():
         sql = "DELETE FROM cache WHERE cache_expiry < NOW()"
         return db().execute(sql)
+
+
+class AuditSession(aegis.database.Row):
+    table_name = 'audit_session'
+    id_column = 'audit_session_id'
+
+
+class AuditRequest(aegis.database.Row):
+    table_name = 'audit_request'
+    id_column = 'audit_request_id'

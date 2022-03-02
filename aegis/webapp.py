@@ -16,6 +16,7 @@ import signal
 import sys
 import time
 import traceback
+import urllib
 
 # Extern Imports
 import requests
@@ -80,6 +81,11 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['get_member_id'] = self.get_member_id
         self.tmpl['get_member_email'] = self.get_member_email
         self.tmpl['utcnow'] = datetime.datetime.utcnow()
+        if self.cookie_get('session'):
+            self.tmpl['session_ck'] = self.cookie_get('session')
+        self.audit_session = {}
+        self.audit_request = {}
+        self.audit_relations = []
         self.models = {}
         self.models['UserAgent'] = aegis.model.UserAgent
         self.models['User'] = aegis.model.User
@@ -99,6 +105,8 @@ class AegisHandler(tornado.web.RequestHandler):
         super(AegisHandler, self).prepare()
         if self._parent_timer:
             aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
+        if options.use_audit and self.audit_ind:
+            self.audit_start()
 
     def finish(self, chunk=None):
         # Fail fast for maintenance errors
@@ -140,8 +148,8 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def on_finish(self):
         # This runs after the response has been sent to the client, intended for cleanup.
-        #logging.warning("ON FINISH")
-        pass
+        if options.use_audit and self.audit_ind:
+            self.audit_request_id = self.audit_finish()
 
     def debug_request(self):
         req_str = str(self.request).rstrip(')') + ', headers={'
@@ -470,6 +478,134 @@ class AegisHandler(tornado.web.RequestHandler):
                 raise tornado.web.HTTPError(403)
             return method(self, *args, **kwargs)
         return wrapper
+
+    # Request and session auditing
+    def audit_start(self):
+        # Set up the session first
+        is_robot = self.user_is_robot()
+        audit_session_id = None
+        audit_session_row = None
+        if self.tmpl.get('session_ck', {}).get('audit_session_id'):
+            audit_session_id = self.tmpl['session_ck']['audit_session_id']
+            audit_session_row = aegis.model.AuditSession.get_id(audit_session_id)
+            self.audit_session['last_request_name'] = self.tmpl['request_name']
+            self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
+            self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_dttm)')
+            self.audit_session['request_cnt'] = aegis.database.Literal('request_cnt+1')
+            self.audit_request['request_nbr'] = audit_session_row['request_cnt'] + 1
+        else:
+            self.audit_session['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
+            self.audit_session['request_cnt'] = 1
+            self.audit_request['request_nbr'] = 1
+            self.audit_session['view_cnt'] = self.view_ind
+            self.audit_session['api_cnt'] = self.api_ind
+            self.audit_session['first_request_name'] = self.tmpl['request_name']
+            self.audit_session['last_request_name'] = self.tmpl['request_name']
+            self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
+            self.audit_session['ip_tx'] = self.request.remote_ip
+            if options.use_geoip:
+                self.audit_session['country_cd'] = self.tmpl['geoip'].get('country_code')
+                self.audit_session['region_cd'] = self.tmpl['geoip'].get('region')
+            try:
+                if self.tmpl['user_agent_row']:
+                    self.audit_session['user_agent_id'] = self.tmpl['user_agent_row']['user_agent_id']
+            except Exception as ex:
+                pass
+            self.audit_session['robot_ind'] = is_robot
+            self.audit_session['referer_tx'] = self.request.headers.get('Referer')
+            audit_session_id = aegis.model.AuditSession.insert_columns(**self.audit_session)
+            self.tmpl['session_ck'] = {'audit_session_id': audit_session_id}
+            self.cookie_set('session', self.tmpl['session_ck'])
+
+        # Audit Request
+        url_parts = urllib.parse.urlparse(self.request.uri)
+        self.audit_request['audit_session_id'] = audit_session_id
+        self.audit_request['request_name'] = self.tmpl['request_name']
+        self.audit_request['url_path_tx'] = url_parts.path
+        self.audit_request['url_query_tx'] = url_parts.query or None
+        self.audit_request['ip_tx'] = self.request.remote_ip
+        if options.use_geoip:
+            self.audit_request['country_cd'] = self.tmpl['geoip'].get('country_code')
+            self.audit_request['region_cd'] = self.tmpl['geoip'].get('region')
+        try:
+            user_agent = model.UserAgent.get_agent(self.tmpl['user_agent'])
+            if user_agent:
+                self.audit_request['user_agent_id'] = user_agent['user_agent_id']
+        except Exception as ex:
+            pass
+        self.audit_request['robot_ind'] = self.audit_request['robot_ind'] = is_robot
+        self.audit_request['referer_tx'] = self.request.headers.get('Referer')
+        self.audit_request['cookies_tx'] = self.request.headers.get('Cookie')
+        return audit_session_id
+
+    def audit_finish(self):
+        # The time spent in here is the database calls... almost entirely.
+        # 403 can be DOA, when no _xsrf __init__() and prepare() not called. Manually call inferno.web.prepare() to set up.
+        if self._status_code == 403 and not hasattr(self.request, 'args'):
+            self.prepare()
+        # Audit Session - takes 10ms !!
+        audit_session_id = self.tmpl.get('session_ck', {}).get('audit_session_id')
+        aegis.stdlib.logw(audit_session_id, "AUDIT SESSION ID")
+        self.audit_session['member_id'] = self.get_member_id()
+        if audit_session_id:
+            if self.view_ind:
+                self.audit_session['view_cnt'] = aegis.database.Literal('view_cnt+1')
+            if self.api_ind:
+                self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
+            aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
+        # Audit Request
+        if self.request.method == 'POST' and self.request.args and not getattr(self, 'no_formpost_audit', False):
+            post_secret_fields = ['password']
+            if config.is_defined('post_secret_fields') and options.post_secret_fields:
+                post_secret_fields += options.post_secret_fields
+            request_args = dict(self.request.args)
+            for field in post_secret_fields:
+                if field in request_args:
+                    request_args[field] = 'SECRET'
+            try:
+                #self.logw(request_args, "ARGS")
+                self.audit_request['formpost_tx'] = json.dumps(request_args)[:65535]
+            except UnicodeDecodeError:
+                self.audit_request['formpost_tx'] = str(request_args)[:65535]
+        self.audit_request['member_id'] = self.get_member_id()
+        self.audit_request['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
+        self.audit_request['audit_session_id'] = audit_session_id
+        self.audit_request['view_ind'] = self.view_ind
+        self.audit_request['api_ind'] = self.api_ind
+        self.audit_request['http_status_nbr'] = self._status_code
+        # Optional application-specific columns
+        if config.is_defined('audit_request_columns'):
+            for column in options.audit_request_columns:
+                if hasattr(self, column):
+                    self.audit_request[column] = getattr(self, column)
+        # Make the finish time the very last thing
+        self.audit_request['exec_time'] = int((time.time() - self.local_data['start_t']) * 1000)
+        # getting the database, memcache, render times on the timer - will be higher than during aegis.webapp.log_request because of above auditing
+        timer_obj = aegis.stdlib.get_timer()
+        if timer_obj and timer_obj._timers:
+            database_time_s = timer_obj._timers.get('_database_exec_s')
+            if database_time_s:
+                self.audit_request['db_query_time'] = database_time_s * 1000
+                self.audit_request['db_query_cnt'] = timer_obj._timers.get('_database_cnt')
+            memcache_time_s = timer_obj._timers.get('_memcache_exec_s')
+            if memcache_time_s:
+                self.audit_request['mc_time'] = memcache_time_s * 1000
+                self.audit_request['mc_cnt'] = timer_obj._timers.get('_memcache_cnt')
+            render_time_s = timer_obj._timers.get('_render_exec_s')
+            if render_time_s:
+                self.audit_request['render_time'] = render_time_s * 1000
+        audit_request_id = aegis.model.AuditRequest.insert_columns(**self.audit_request)
+        aegis.stdlib.logw(audit_request_id, "AUDIT REQUEST ID")
+        self.save_audit_relations(audit_request_id)
+        return audit_request_id
+
+    def prepare_audit_relation(self, model_class, row_id):
+        self.audit_relations.append([model_class, row_id])
+
+    def save_audit_relations(self, audit_request_id):
+        for audit_relation in self.audit_relations:
+            model_class, row_id = audit_relation
+            model_class.set_audit_request_id(row_id, audit_request_id)
 
 
 class JsonRestApi(AegisHandler):

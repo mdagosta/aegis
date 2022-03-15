@@ -20,6 +20,8 @@ import traceback
 # Extern Imports
 import tornado.options
 from tornado.options import define, options
+import pympler.muppy
+import pympler.summary
 
 # Project Imports
 import aegis.stdlib
@@ -88,10 +90,10 @@ class HydraThread(threading.Thread):
                 time.sleep(options.hydra_sleep)
 
 
-    # Graceful shutdown with debug
+    # Debug dump in response to kill -SIGUSR1
     @staticmethod
     def signal_debug(sig, frame):
-        """Interrupt running process, and provide a python prompt for interactive debugging."""
+        """Interrupt running process, and provide a stack trace for each thread. Trigger using kill -SIGUSR1 <pid>"""
         id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
         code = ["Received SIGUSR1 - Dumping Debug Output"]
         for threadId, stack in sys._current_frames().items():
@@ -101,6 +103,9 @@ class HydraThread(threading.Thread):
                 if line:
                     code.append("  %s" % (line.strip()))
         logging.warning("\n".join(code))
+        all_objects = pympler.muppy.get_objects()
+        summary1 = pympler.summary.summarize(all_objects)
+        logging.warning('\n'.join(pympler.summary.format_(summary1)) + '\n')
 
 
     @staticmethod

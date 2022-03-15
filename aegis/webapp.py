@@ -73,13 +73,13 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['referer'] = self.request.headers.get('Referer')
         self.tmpl['user_agent'] = self.request.headers.get('User-Agent')
         self.tmpl['scheme'] = 'https://'
-        self.tmpl['get_current_user'] = self.get_current_user
         self.tmpl['xsrf_token'] = self.xsrf_token
         self.tmpl['nl2br'] = aegis.stdlib.nl2br
         self.tmpl['format_integer'] = aegis.stdlib.format_integer
         self.tmpl['get_user_id'] = self.get_user_id
         self.tmpl['get_member_id'] = self.get_member_id
         self.tmpl['get_member_email'] = self.get_member_email
+        self.tmpl['get_current_user'] = self.get_current_user
         self.tmpl['utcnow'] = datetime.datetime.utcnow()
         if self.cookie_get('session'):
             self.tmpl['session_ck'] = self.cookie_get('session')
@@ -301,16 +301,17 @@ class AegisHandler(tornado.web.RequestHandler):
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
 
-    def cookie_set(self, name, value, cookie_duration=None):
+    def cookie_set(self, name, value, cookie_duration=None, httponly=True):
         # Session cookie is set to None duration to implement a browser session cookie
         if not cookie_duration:
             cookie_durations = aegis.config.get('cookie_durations')
             if not cookie_durations:
                 cookie_durations = {'user': 3650, 'session': None, 'auth': 90}
             cookie_duration = cookie_durations[name]
-        cookie_flags = {'httponly': True, 'secure': True}
+        cookie_flags = {'httponly': aegis.stdlib.validate_bool(httponly), 'secure': True}
         if options.hostname == 'localhost':
             cookie_flags['secure'] = False
+        # XXX Way to not set httponly for reading in javascript
         cookie_val = self.cookie_encode(value)
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
 
@@ -428,6 +429,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self._member_auth.revoke()
         self.cookie_clear('auth')
         self.tmpl['logged_out'] = True
+        self.audit_session_end()
 
     def email_link_auth(self, email_link_id, token, email_type=None):
         if not aegis.stdlib.validate_token(email_link_id, token):
@@ -516,7 +518,6 @@ class AegisHandler(tornado.web.RequestHandler):
             audit_session_id = aegis.model.AuditSession.insert_columns(**self.audit_session)
             self.tmpl['session_ck'] = {'audit_session_id': audit_session_id}
             self.cookie_set('session', self.tmpl['session_ck'])
-
         # Audit Request
         url_parts = urllib.parse.urlparse(self.request.uri)
         self.audit_request['audit_session_id'] = audit_session_id
@@ -606,6 +607,12 @@ class AegisHandler(tornado.web.RequestHandler):
         for audit_relation in self.audit_relations:
             model_class, row_id = audit_relation
             model_class.set_audit_request_id(row_id, audit_request_id)
+
+    def audit_session_end(self):
+        # closes the session by deleting the cookie
+        self.cookie_clear('session')
+        if hasattr(self.tmpl, 'session_ck'):
+            del self.tmpl['session_ck']
 
 
 class JsonRestApi(AegisHandler):

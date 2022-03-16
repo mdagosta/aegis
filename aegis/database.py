@@ -5,6 +5,7 @@
 
 # Python Imports
 import logging
+import os
 import threading
 import time
 
@@ -83,24 +84,28 @@ dbconns = threading.local()
 def db(use_schema=None, autocommit=True):
     if not hasattr(dbconns, 'databases'):
         dbconns.databases = {}
+    # psycopg and probably mysqldb are thread-safe but not multiprocess-safe. If it's a separate process, create a new connection.
+    # You'll want to do a db().close() after the multiprocessing function returns since the SSL breaks down anyways
+    pid = os.getpid()
+    dbconns.databases.setdefault(pid, {})
     if pgsql_available:
         # Autocommit==False will be its own short-lived connection, not cached or pooled, so we don't end up with transactions open from other cursors.
         if not autocommit:
             return PostgresConnection.connect(autocommit=False)
         # Autocommit==True we can cache the database connection and let autocommit handle cursor-transaction-safety
-        if options.pg_database not in dbconns.databases:
-            dbconns.databases[options.pg_database] = PostgresConnection.connect()
+        if options.pg_database not in dbconns.databases[pid]:
+            dbconns.databases[pid][options.pg_database] = PostgresConnection.connect()
         if not use_schema:
             use_schema = options.pg_database
     if mysql_available:
-        if options.mysql_schema not in dbconns.databases:
-            dbconns.databases[options.mysql_schema] = MysqlConnection.connect()
+        if options.mysql_schema not in dbconns.databases[pid]:
+            dbconns.databases[pid][options.mysql_schema] = MysqlConnection.connect()
         if not use_schema:
             use_schema = options.mysql_schema
     # Default situation - much better to be explicit which database we're connecting to!
-    if not use_schema and len(dbconns.databases) == 1:
-        use_schema = [dbconn for dbconn in dbconns.databases.keys()][0]
-    return dbconns.databases[use_schema]
+    if not use_schema and len(dbconns.databases[pid]) == 1:
+        use_schema = [dbconn for dbconn in dbconns.databases[pid].keys()][0]
+    return dbconns.databases[pid][use_schema]
 
 
 def dbnow(use_schema=None):

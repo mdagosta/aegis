@@ -415,7 +415,6 @@ class Hydra(HydraThread):
             traceback.print_exc()
             self.exception_alert(ex)
 
-
         finally:
             self.finish()
 

@@ -105,7 +105,7 @@ class AegisHandler(tornado.web.RequestHandler):
         super(AegisHandler, self).prepare()
         if self._parent_timer:
             aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
-        if options.use_audit and self.audit_ind:
+        if aegis.config.get('use_audit') and options.use_audit:
             self.audit_start()
 
     def finish(self, chunk=None):

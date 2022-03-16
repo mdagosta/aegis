@@ -94,8 +94,14 @@ class HydraThread(threading.Thread):
     @staticmethod
     def signal_debug(sig, frame):
         """Interrupt running process, and provide a stack trace for each thread. Trigger using kill -SIGUSR1 <pid>"""
+        # Show memory usage
+        all_objects = pympler.muppy.get_objects()
+        summary1 = pympler.summary.summarize(all_objects)
+        formatted = pympler.summary.format_(summary1)
+        logging.warning("Received SIGUSR1 - Dumping Debug Output" + "\n".join(formatted) + "\n")
+        # Dump a stack trace on each thread
         id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
-        code = ["Received SIGUSR1 - Dumping Debug Output"]
+        code = []
         for threadId, stack in sys._current_frames().items():
             code.append("\n# Thread: %s(%d)" % (id2name.get(threadId,""), threadId))
             for filename, lineno, name, line in traceback.extract_stack(stack):
@@ -103,9 +109,6 @@ class HydraThread(threading.Thread):
                 if line:
                     code.append("  %s" % (line.strip()))
         logging.warning("\n".join(code))
-        all_objects = pympler.muppy.get_objects()
-        summary1 = pympler.summary.summarize(all_objects)
-        logging.warning('\n'.join(pympler.summary.format_(summary1)) + '\n')
 
 
     @staticmethod

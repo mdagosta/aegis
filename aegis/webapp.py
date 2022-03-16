@@ -301,14 +301,14 @@ class AegisHandler(tornado.web.RequestHandler):
             name = "%s_%s" % (self.tmpl['env'], name)
         return name
 
-    def cookie_set(self, name, value, cookie_duration=None, httponly=True):
+    def cookie_set(self, name, value, cookie_duration=None):
         # Session cookie is set to None duration to implement a browser session cookie
         if not cookie_duration:
             cookie_durations = aegis.config.get('cookie_durations')
             if not cookie_durations:
                 cookie_durations = {'user': 3650, 'session': None, 'auth': 90}
             cookie_duration = cookie_durations[name]
-        cookie_flags = {'httponly': aegis.stdlib.validate_bool(httponly), 'secure': True}
+        cookie_flags = {'httponly': True, 'secure': True}
         if options.hostname == 'localhost':
             cookie_flags['secure'] = False
         # XXX Way to not set httponly for reading in javascript

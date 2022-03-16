@@ -148,7 +148,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def on_finish(self):
         # This runs after the response has been sent to the client, intended for cleanup.
-        if options.use_audit and self.audit_ind:
+        if aegis.config.get('use_audit') and options.use_audit:
             self.audit_request_id = self.audit_finish()
 
     def debug_request(self):

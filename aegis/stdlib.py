@@ -771,11 +771,16 @@ def get_timer(obj=None):
     if obj and hasattr(obj, '_timer_obj'):
         return obj._timer_obj
     frame = inspect.currentframe()
+    timer_obj = frame.f_locals.get('timer_obj')
+    if timer_obj:
+        return timer_obj
     f_self = frame.f_locals.get('self')
     while not f_self or not hasattr(f_self, 'timer_obj'):
         frame = frame.f_back
         if not frame:
             return None
+        if frame.f_locals.get('timer_obj'):
+            return frame.f_locals['timer_obj']
         f_self = frame.f_locals.get('self')
         if hasattr(f_self, 'timer_obj'):
             if obj:

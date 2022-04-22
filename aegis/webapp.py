@@ -520,6 +520,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.cookie_set('session', self.tmpl['session_ck'])
         # Audit Request
         url_parts = urllib.parse.urlparse(self.request.uri)
+        self.audit_session['audit_session_id'] = audit_session_id
         self.audit_request['audit_session_id'] = audit_session_id
         self.audit_request['request_name'] = self.tmpl['request_name']
         self.audit_request['url_path_tx'] = url_parts.path

@@ -255,6 +255,10 @@ class AegisHandler(tornado.web.RequestHandler):
         # Send errors to chat hooks, based on them being configured for the environment
         header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}
+        template_opts['kwargs']['user_agent'] = self.tmpl['user_agent']
+        template_opts['kwargs']['remote_ip'] = self.request.remote_ip
+        template_opts['kwargs']['robot'] = self.user_is_robot()
+        template_opts['kwargs']['Python UTC Now'] = self.tmpl['utcnow'].strftime('%Y-%m-%dT%H:%M:%S')
         error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')
         if config.get_env() == 'prod':
             hooks = ['alerts_chat_hook']

@@ -122,7 +122,9 @@ class AegisHandler(tornado.web.RequestHandler):
             if hasattr(self, '_member_auth'):
                 self._member_auth.refresh(options.cookie_durations['auth'] * 86400)
             # Update auth cookie as long as it isn't being overwritten
-            new_cookie_value = self._new_cookie.get(self.cookie_name('auth'))
+            new_cookie_value = None
+            if hasattr(self, "_new_cookie"):
+                new_cookie_value = self._new_cookie.get(self.cookie_name('auth'))
             if not new_cookie_value:
                 self.cookie_set('auth', auth_ck)
             else:

@@ -4,8 +4,11 @@
 
 
 # Python Imports
+import datetime
 import hashlib
+import json
 import logging
+import random
 import uuid
 
 # Project Imports
@@ -681,6 +684,27 @@ class Cache(aegis.database.Row):
     table_name = 'cache'
     id_column = 'cache_id'
 
+    # External Interface for simplified usage
+    @classmethod
+    def get_cache(cls, cache_key):
+        cls.purge_expired()
+        cache_obj = cls.get_key(cache_key)
+        if cache_obj:
+            return json.loads(cache_obj['cache_json'])
+
+    @classmethod
+    def set_cache(cls, cache_key, cache_obj, duration_s):
+        cache_json = json.dumps(cache_obj, cls=aegis.stdlib.DateTimeEncoder)
+        cache_expiry = datetime.datetime.utcnow() + datetime.timedelta(seconds=duration_s) + datetime.timedelta(seconds=random.randint(0, duration_s))
+        cache_id = cls.set_key(cache_key, cache_json, cache_expiry)
+        return cls.get_key(cache_key)
+
+    @staticmethod
+    def purge_all():
+        sql = "DELETE FROM cache"
+        return db().execute(sql)
+
+    # Internal Interface
     @staticmethod
     def insert(cache_key, cache_json, cache_expiry):
         sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s)"

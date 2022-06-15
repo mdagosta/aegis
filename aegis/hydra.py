@@ -347,10 +347,10 @@ class Hydra(HydraThread):
             logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
             aegis.model.HydraType.clear_running()
         try:
-            self.spawn_heads()
             while(not HydraThread.quitting.is_set()):
                 self.iter_cnt += 1
                 try:
+                    self.spawn_heads()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan():
                         if HydraThread.quitting.is_set(): break
@@ -408,7 +408,6 @@ class Hydra(HydraThread):
                 # Iterate!
                 #logging.warning("The great hydra sleeps...")
                 time.sleep(options.hydra_sleep)
-                self.spawn_heads()
 
         except Exception as ex:
             logging.exception(ex)

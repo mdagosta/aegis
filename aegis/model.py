@@ -697,7 +697,7 @@ class Cache(aegis.database.Row):
         cache_json = json.dumps(cache_obj, cls=aegis.stdlib.DateTimeEncoder)
         cache_expiry = datetime.datetime.utcnow() + datetime.timedelta(seconds=duration_s) + datetime.timedelta(seconds=random.randint(0, duration_s))
         cache_id = cls.set_key(cache_key, cache_json, cache_expiry)
-        return cls.get_key(cache_key)
+        return cls.get_cache(cache_key)
 
     @staticmethod
     def purge_all():

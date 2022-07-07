@@ -210,7 +210,6 @@ class AegisHandler(tornado.web.RequestHandler):
         # At the end leave the row behind for later user in the request
         self.tmpl['user_agent_row'] = user_agent
 
-
     def enforce_admin(self):
         if not self.is_super_admin():
             raise tornado.web.HTTPError(403)
@@ -515,11 +514,8 @@ class AegisHandler(tornado.web.RequestHandler):
             if options.use_geoip:
                 self.audit_session['country_cd'] = self.tmpl['geoip'].get('country_code')
                 self.audit_session['region_cd'] = self.tmpl['geoip'].get('region')
-            try:
-                if self.tmpl['user_agent_row']:
-                    self.audit_session['user_agent_id'] = self.tmpl['user_agent_row']['user_agent_id']
-            except Exception as ex:
-                pass
+            if self.tmpl['user_agent_row']:
+                self.audit_session['user_agent_id'] = self.tmpl['user_agent_row']['user_agent_id']
             self.audit_session['robot_ind'] = is_robot
             self.audit_session['referer_tx'] = self.request.headers.get('Referer')
             audit_session_id = aegis.model.AuditSession.insert_columns(**self.audit_session)
@@ -536,12 +532,9 @@ class AegisHandler(tornado.web.RequestHandler):
         if options.use_geoip:
             self.audit_request['country_cd'] = self.tmpl['geoip'].get('country_code')
             self.audit_request['region_cd'] = self.tmpl['geoip'].get('region')
-        try:
-            user_agent = model.UserAgent.get_agent(self.tmpl['user_agent'])
-            if user_agent:
-                self.audit_request['user_agent_id'] = user_agent['user_agent_id']
-        except Exception as ex:
-            pass
+        user_agent = aegis.model.UserAgent.get_agent(self.tmpl['user_agent'])
+        if user_agent:
+            self.audit_request['user_agent_id'] = user_agent['user_agent_id']
         self.audit_request['robot_ind'] = self.audit_request['robot_ind'] = is_robot
         self.audit_request['referer_tx'] = self.request.headers.get('Referer')
         self.audit_request['cookies_tx'] = self.request.headers.get('Cookie')

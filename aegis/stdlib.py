@@ -630,6 +630,7 @@ class RobotValidator:
         '^percbotspider',
         '^PercolateCrawler',
         '^perlclient',
+        'PetalBot',
         '^Pingdom',
         '^Pinterest',
         '^PostRank',

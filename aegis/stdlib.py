@@ -764,6 +764,32 @@ def rate_limit(limit_obj, key, hostname, delta_sec):
     return False
 
 
+# Simple memory cache with expiry mechanism. Stores objects in process so no serialization required, but is not distributed over network.
+# The application must call purge_cache() as needed by the application to expire keys that haven't been accessed.
+class Memcache(dict):
+    def set_cache(self, key, value, expiry_sec):
+        seconds_old = expiry_sec + random.randint(0, expiry_sec)
+        expiry = datetime.datetime.utcnow() + datetime.timedelta(seconds=seconds_old)
+        self[key] = (value, expiry)
+
+    def get_cache(self, key):
+        cache_obj = self.get(key)
+        if cache_obj:
+            value, expiry = cache_obj
+            if expiry > datetime.datetime.utcnow():
+                return value
+
+    def purge_cache(self):
+        utcnow = datetime.datetime.utcnow()
+        delete_keys = []
+        for key, cache_obj in self.items():
+            value, expiry = cache_obj
+            if expiry <= utcnow:
+                delete_keys.append(key)
+        for delete_key in delete_keys:
+            del self[delete_key]
+
+
 class TimerObj(object):
     pass
 
@@ -835,7 +861,7 @@ def incr_start(obj, timer_name):
         setattr(obj, '_timers', {})
     # Do overwrite the previous so we can add up the times
     start_name = '_%s_start_ts' % timer_name
-    obj._timers[start_name] =  time.time()
+    obj._timers[start_name] = time.time()
 
 def incr_stop(obj, timer_name):
     if not obj:

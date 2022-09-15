@@ -511,9 +511,9 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
             self.audit_session['ip_tx'] = self.request.remote_ip
-            if options.use_geoip:
-                self.audit_session['country_cd'] = self.tmpl['geoip'].get('country_code')
-                self.audit_session['region_cd'] = self.tmpl['geoip'].get('region')
+            if aegis.config.get('geolite_path'):
+                self.audit_session['country_cd'] = self.tmpl['geoip'].get('country_iso_code')
+                self.audit_session['region_cd'] = self.tmpl['geoip'].get('region_iso_code')
             if self.tmpl['user_agent_row']:
                 self.audit_session['user_agent_id'] = self.tmpl['user_agent_row']['user_agent_id']
             self.audit_session['robot_ind'] = is_robot
@@ -529,9 +529,9 @@ class AegisHandler(tornado.web.RequestHandler):
         self.audit_request['url_path_tx'] = url_parts.path
         self.audit_request['url_query_tx'] = url_parts.query or None
         self.audit_request['ip_tx'] = self.request.remote_ip
-        if options.use_geoip:
-            self.audit_request['country_cd'] = self.tmpl['geoip'].get('country_code')
-            self.audit_request['region_cd'] = self.tmpl['geoip'].get('region')
+        if aegis.config.get('geolite_path'):
+            self.audit_request['country_cd'] = self.tmpl['geoip'].get('country_iso_code')
+            self.audit_request['region_cd'] = self.tmpl['geoip'].get('region_iso_code')
         user_agent = aegis.model.UserAgent.get_agent(self.tmpl['user_agent'])
         if user_agent:
             self.audit_request['user_agent_id'] = user_agent['user_agent_id']
@@ -542,7 +542,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def audit_finish(self):
         # The time spent in here is the database calls... almost entirely.
-        # 403 can be DOA, when no _xsrf __init__() and prepare() not called. Manually call inferno.web.prepare() to set up.
+        # 403 can be DOA, when no _xsrf __init__() and prepare() not called. Manually call self.prepare() to set up.
         if self._status_code == 403 and not hasattr(self.request, 'args'):
             self.prepare()
         # Audit Session - takes 10ms !!
@@ -556,7 +556,7 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
             aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
         # Audit Request
-        if self.request.method == 'POST' and self.request.args and not getattr(self, 'no_formpost_audit', False):
+        if self.request.method in ('POST', 'PUT') and self.request.args and not getattr(self, 'no_formpost_audit', False):
             post_secret_fields = ['password']
             if config.is_defined('post_secret_fields') and options.post_secret_fields:
                 post_secret_fields += options.post_secret_fields

@@ -18,6 +18,7 @@ import re
 import shlex
 import string
 import subprocess
+import sys
 import time
 import xml
 
@@ -877,3 +878,29 @@ def incr_stop(obj, timer_name):
     obj._timers[exec_name] += obj._timers[stop_name] - obj._timers[start_name]
     obj._timers[cnt_name] += 1
     return obj._timers[stop_name] - obj._timers[start_name]
+
+
+# Support for MaxMind's free GeoLite2 database, sign up at https://www.maxmind.com/en/geolite2/signup
+# Add geoip2 to setup.py and pip requirements.txt, and set geolite_db_path to the filesystem location of the downloaded db in application config.py
+class GeoLite(object):
+    geolite = None
+    geolite_path = None
+
+    def __init__(self, geolite_path):
+        if not GeoLite.geolite_path:
+            GeoLite.geolite_path = geolite_path
+
+    @classmethod
+    def get_ip(cls, ip_addr):
+        # Only import the module and open the database once, and only as-needed
+        if 'geoip2.database' not in sys.modules:
+            import geoip2.database
+        if not cls.geolite:
+            cls.geolite = geoip2.database.Reader(cls.geolite_path)
+        record = cls.geolite.city(ip_addr)
+        geoip = {'continent': record.continent.name, 'country_iso_code': record.country.iso_code, 'country': record.country.name, 'time_zone': record.location.time_zone,
+                 'city': record.city.name, 'ip_addr': ip_addr}
+        if len(record.subdivisions):
+            geoip['region_iso_code'] = record.subdivisions[0].iso_code
+            geoip['region'] = record.subdivisions[0].name
+        return geoip

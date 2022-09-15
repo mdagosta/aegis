@@ -89,6 +89,9 @@ class AegisHandler(tornado.web.RequestHandler):
         self.models = {}
         self.models['UserAgent'] = aegis.model.UserAgent
         self.models['User'] = aegis.model.User
+        # Initializing db takes ~5ms, then each read by ip takes about 0.3ms
+        if aegis.config.get('geolite_path'):
+            self.tmpl['geoip'] = aegis.stdlib.GeoLite(options.geolite_path).get_ip(self.request.remote_ip)
         if self._parent_timer:
             aegis.stdlib.timer_stop(self.timer_obj, 'init')
 

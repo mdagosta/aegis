@@ -892,9 +892,11 @@ class GeoLite(object):
 
     @classmethod
     def get_ip(cls, ip_addr):
-        # Only import the module and open the database once, and only as-needed
-        if 'geoip2.database' not in sys.modules:
-            import geoip2.database
+        # Only open the database once, and only as-needed
+        if not os.path.exists(cls.geolite_path):
+            logging.error("GeoLite db not found: %s" % cls.geolite_path)
+            return {}
+        import geoip2.database
         if not cls.geolite:
             cls.geolite = geoip2.database.Reader(cls.geolite_path)
         record = cls.geolite.city(ip_addr)

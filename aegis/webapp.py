@@ -514,7 +514,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
             self.audit_session['ip_tx'] = self.request.remote_ip
-            if aegis.config.get('geolite_path'):
+            if aegis.config.get('geolite_path') and self.tmpl['geoip']:
                 self.audit_session['country_cd'] = self.tmpl['geoip'].get('country_iso_code')
                 self.audit_session['region_cd'] = self.tmpl['geoip'].get('region_iso_code')
             if self.tmpl['user_agent_row']:
@@ -532,7 +532,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.audit_request['url_path_tx'] = url_parts.path
         self.audit_request['url_query_tx'] = url_parts.query or None
         self.audit_request['ip_tx'] = self.request.remote_ip
-        if aegis.config.get('geolite_path'):
+        if aegis.config.get('geolite_path') and self.tmpl['geoip']:
             self.audit_request['country_cd'] = self.tmpl['geoip'].get('country_iso_code')
             self.audit_request['region_cd'] = self.tmpl['geoip'].get('region_iso_code')
         user_agent = aegis.model.UserAgent.get_agent(self.tmpl['user_agent'])

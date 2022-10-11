@@ -174,7 +174,6 @@ class AegisHandler(tornado.web.RequestHandler):
                    'browser_name': ua.get_browser(), 'browser_family': ua.browser.family, 'browser_version': ua.browser.version_string}
         if not (aegis.config.get('pg_database') or aegis.config.get('mysql_database')):
             return
-        self.tmpl['user'] = {}
         user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
         # if ua_json not set, set it
         if not user_agent['user_agent_json'] and ua_json:
@@ -208,9 +207,10 @@ class AegisHandler(tornado.web.RequestHandler):
                 else:
                     user_ck = {'user_id': user_id}
                 self.cookie_set('user', user_ck)
+        self.tmpl['user'] = {}
         if user:
             self.tmpl['user']['user_id'] = user['user_id']
-        # At the end leave the row behind for later user in the request
+        # At the end leave the row behind for later use in the request
         self.tmpl['user_agent_row'] = user_agent
 
     def enforce_admin(self):

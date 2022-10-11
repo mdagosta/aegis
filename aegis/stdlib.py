@@ -892,6 +892,8 @@ class GeoLite(object):
 
     @classmethod
     def get_ip(cls, ip_addr):
+        if not ip_addr:
+            return {}
         # Only open the database once, and only as-needed
         if not os.path.exists(cls.geolite_path):
             logging.error("GeoLite db not found: %s" % cls.geolite_path)

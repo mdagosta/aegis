@@ -883,7 +883,7 @@ def incr_stop(obj, timer_name):
 # Support for MaxMind's free GeoLite2 database, sign up at https://www.maxmind.com/en/geolite2/signup
 # Add geoip2 to setup.py and pip requirements.txt, and set geolite_db_path to the filesystem location of the downloaded db in application config.py
 class GeoLite(object):
-    geolite = None
+    geolite_db = None
     geolite_path = None
 
     def __init__(self, geolite_path):
@@ -899,9 +899,13 @@ class GeoLite(object):
             logging.error("GeoLite db not found: %s" % cls.geolite_path)
             return {}
         import geoip2.database
-        if not cls.geolite:
-            cls.geolite = geoip2.database.Reader(cls.geolite_path)
-        record = cls.geolite.city(ip_addr)
+        if not cls.geolite_db:
+            cls.geolite_db = geoip2.database.Reader(cls.geolite_path)
+        try:
+            record = cls.geolite_db.city(ip_addr)
+        except geoip2.errors.AddressNotFoundError as ex:
+            logging.exception(ex)
+            return {}
         geoip = {'continent': record.continent.name, 'country_iso_code': record.country.iso_code, 'country': record.country.name, 'time_zone': record.location.time_zone,
                  'city': record.city.name, 'ip_addr': ip_addr}
         if len(record.subdivisions):

@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import sys
 import time
 import traceback
@@ -628,6 +629,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_request_data = {'audit_request_id': audit_request_id, 'audit_session_id': audit_session_id,
                                        'request_url': self.request.uri, 'request_method': self.request.method,
                                        'request_headers': req_headers, 'request_body': request_body,
+                                       'run_host': socket.gethostname(), 'run_env': aegis.config.get('env'),
                                        'request_bytes': len(self.request.uri) + len(self.request.headers) + len(self.request.body),
                                        'response_status': self._status_code, 'response_headers': resp_headers, 'response_ms': self.audit_request['exec_time']}
             if hasattr(self, 'json_resp'):

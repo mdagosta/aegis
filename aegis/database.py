@@ -593,7 +593,13 @@ class Row(dict):
 
     @classmethod
     def scan_ids(cls, row_ids):
-        args, fmt = aegis.database.sql_in_format(row_ids, int)
+        # Fail fast if any of the data are bad, to not return confusing results
+        try:
+            args, fmt = aegis.database.sql_in_format(row_ids, int)
+        except ValueError as ex:
+            logging.exception(ex)
+            logging.error("Bad arguments passed from %s to aegis.database.Row.scan_ids(): %s", aegis.stdlib.get_caller(), row_ids)
+            return []
         sql = "SELECT * FROM "+cls._table_name()+" WHERE "+cls.id_column+" IN ("+fmt+")"
         return db().query(sql, *args, cls=cls)
 
@@ -627,6 +633,7 @@ class Row(dict):
             sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
         #aegis.stdlib.logw(sql, "SQL")
+        #aegis.stdlib.logw(args, "ARGS")
         return use_db.execute(sql, *args)
 
     @classmethod

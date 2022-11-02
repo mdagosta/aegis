@@ -560,6 +560,7 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
             aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
         # Audit Request
+        request_args = {}
         if self.request.method in ('POST', 'PUT', 'PATCH') and self.request.args:
             post_secret_fields = ['password']
             if config.is_defined('post_secret_fields') and options.post_secret_fields:

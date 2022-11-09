@@ -172,7 +172,7 @@ def schema(parser):
     except aegis.database.PgsqlOperationalError as ex:
         logging.error("Could not connect to database. Do you need to log into postgres and run:")
         logging.error("postgres=# CREATE USER %s WITH PASSWORD '%s';" % (options.pg_username, options.pg_password))
-        logging.error("postgres=# GRANT %s TO <root>;" % (options.pg_username))
+        logging.error("postgres=# GRANT %s TO <root>;    # where root like doadmin, awsadmin" % (options.pg_username))
         logging.error("postgres=# CREATE DATABASE %s OWNER=%s;" % (options.pg_database, options.pg_username))
         exit(1)
     except Exception as ex:
@@ -195,6 +195,8 @@ def schema(parser):
         return diffs
     # Read sql_diffs from filesystem and perform schema migrations
     sql_dir = os.path.join(options.basedir, 'sql')
+    if aegis.config.get('sql_dir'):
+        sql_dir = os.path.join(options.basedir, options.sql_dir, 'sql')
     diff_files = patch_diffs(sql_dir)
     # Read state from database, INSERT INTO sql_diff for unknown diffs
     sql_diff_rows = aegis.model.SqlDiff.scan()

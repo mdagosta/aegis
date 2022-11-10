@@ -837,12 +837,15 @@ def sig_handler(sig, frame):
 
 
 class WebApplication(AegisApplication, tornado.web.Application):
+    application = None
+
     def __init__(self, **kwargs):
         settings = AegisApplication.__init__(self, **kwargs)
         tornado.web.Application.__init__(self, **settings)
 
     @staticmethod
     def start(application):
+        WebApplication.application = application
         host = options.host
         port = options.port
         http_server = tornado.httpserver.HTTPServer(application, xheaders=True, no_keep_alive=True)
@@ -868,8 +871,8 @@ class WebApplication(AegisApplication, tornado.web.Application):
         signal.signal(signal.SIGINT, functools.partial(sig_handler))
         http_server.start()
 
-### Aegis Web Admin
 
+### Aegis Web Admin
 
 class AegisWeb(AegisHandler):
     def prepare(self):

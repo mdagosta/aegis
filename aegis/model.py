@@ -757,3 +757,11 @@ class AuditSession(aegis.database.Row):
 class AuditRequest(aegis.database.Row):
     table_name = 'audit_request'
     id_column = 'audit_request_id'
+
+class AuditRequestData(aegis.database.Row):
+    table_name = 'audit_request_data'
+    id_column = 'audit_request_data_id'
+
+class Monitor(aegis.database.Row):
+    table_name = 'monitor'
+    id_column = 'monitor_id'

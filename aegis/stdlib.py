@@ -16,6 +16,7 @@ import pprint
 import random
 import re
 import shlex
+import socket
 import string
 import subprocess
 import sys
@@ -53,11 +54,11 @@ def logline(*args):
     msg = '%s %s' % (cstr(caller, 'yellow'), args[0])
     logging.warning(msg, *args[1:])
 
-def shell(cmd, cwd=None, env=None, decode_utf8=True):
+def shell(cmd, cwd=None, env=None, decode_utf8=True, timeout=None):
     if type(cmd) not in (tuple, list):
         cmd = shlex.split(cmd)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, cwd=cwd, env=env)
-    stdout, stderr = proc.communicate()
+    stdout, stderr = proc.communicate(timeout=timeout)
     if decode_utf8:
         stdout = stdout.decode('utf-8').strip()
         stderr = stderr.decode('utf-8').strip()
@@ -912,3 +913,19 @@ class GeoLite(object):
             geoip['region_iso_code'] = record.subdivisions[0].iso_code
             geoip['region'] = record.subdivisions[0].name
         return geoip
+
+
+def monitor_shell(cmd, timeout=8):
+    # Run the monitoring command with 8 second timeout. Monitoring should fail fast.
+    try:
+        stdout, stderr, exit_status = shell(cmd, timeout=timeout)
+    except subprocess.TimeoutExpired as ex:
+        logging.exception(ex)
+        stdout = ""
+        stderr = str(ex)
+        exit_status = 1
+    # Write it to the db
+    import aegis.model
+    monitor = {'monitor_host': socket.gethostname(), 'monitor_cmd': cmd, 'monitor_stdout': stdout, 'monitor_stderr': stderr, 'monitor_status': exit_status}
+    monitor_id = aegis.model.Monitor.insert_columns(**monitor)
+    return exit_status == 0

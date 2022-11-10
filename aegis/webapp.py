@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import sys
 import time
 import traceback
@@ -559,7 +560,8 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
             aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
         # Audit Request
-        if self.request.method in ('POST', 'PUT') and self.request.args and not getattr(self, 'no_formpost_audit', False):
+        request_args = {}
+        if self.request.method in ('POST', 'PUT', 'PATCH') and self.request.args:
             post_secret_fields = ['password']
             if config.is_defined('post_secret_fields') and options.post_secret_fields:
                 post_secret_fields += options.post_secret_fields
@@ -602,6 +604,41 @@ class AegisHandler(tornado.web.RequestHandler):
         audit_request_id = aegis.model.AuditRequest.insert_columns(**self.audit_request)
         #aegis.stdlib.logw(audit_request_id, "AUDIT REQUEST ID")
         self.save_audit_relations(audit_request_id)
+        # In some error cases, log all the data from POST, headers, response.
+        if self._status_code >= 400 or (hasattr(self, 'json_resp') and self.json_resp.get('errors')):
+            # Formatting request headers
+            req_headers = json.dumps(str(self.request.headers).splitlines(), cls=aegis.stdlib.DateTimeEncoder)
+            # Formatting response headers
+            resp_headers = []
+            for (k,v) in sorted(self._headers.get_all()):
+                resp_headers.append('%s: %s' % (k,v))
+            resp_headers = json.dumps(resp_headers, cls=aegis.stdlib.DateTimeEncoder)
+            # Wiping user personal fields in JSON body
+            request_body = {}
+            if hasattr(self, 'json_req'):
+                request_body = self.json_req
+            #else:
+            #    request_body = self.request.body
+            #    logging.warning("This may not always be a dictionary")
+            post_secret_fields = ['password']
+            if config.is_defined('post_secret_fields') and options.post_secret_fields:
+                post_secret_fields += options.post_secret_fields
+            for field in post_secret_fields:
+                if field in request_args:
+                    request_body[field] = 'SECRET'
+            # try to convert json_body to dictionary
+            self.audit_request_data = {'audit_request_id': audit_request_id, 'audit_session_id': audit_session_id,
+                                       'request_url': self.request.uri, 'request_method': self.request.method,
+                                       'request_headers': req_headers, 'request_body': request_body,
+                                       'run_host': socket.gethostname(), 'run_env': aegis.config.get('env'),
+                                       'request_bytes': len(self.request.uri) + len(self.request.headers) + len(self.request.body),
+                                       'response_status': self._status_code, 'response_headers': resp_headers, 'response_ms': self.audit_request['exec_time']}
+            if hasattr(self, 'json_resp'):
+                self.audit_request_data['response_body'] = self.json_resp
+                self.audit_request_data['response_bytes'] = len(json.dumps(self.json_resp))
+                self.audit_request_data['response_error'] = json.dumps(self.json_resp.get('errors'), cls=aegis.stdlib.DateTimeEncoder)
+            audit_request_data_id = aegis.model.AuditRequestData.insert_columns(**self.audit_request_data)
+            audit_request_data = aegis.model.AuditRequestData.get_id(audit_request_data_id)
         return audit_request_id
 
     def prepare_audit_relation(self, model_class, row_id):
@@ -800,12 +837,15 @@ def sig_handler(sig, frame):
 
 
 class WebApplication(AegisApplication, tornado.web.Application):
+    application = None
+
     def __init__(self, **kwargs):
         settings = AegisApplication.__init__(self, **kwargs)
         tornado.web.Application.__init__(self, **settings)
 
     @staticmethod
     def start(application):
+        WebApplication.application = application
         host = options.host
         port = options.port
         http_server = tornado.httpserver.HTTPServer(application, xheaders=True, no_keep_alive=True)
@@ -831,8 +871,8 @@ class WebApplication(AegisApplication, tornado.web.Application):
         signal.signal(signal.SIGINT, functools.partial(sig_handler))
         http_server.start()
 
-### Aegis Web Admin
 
+### Aegis Web Admin
 
 class AegisWeb(AegisHandler):
     def prepare(self):

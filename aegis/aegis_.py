@@ -194,7 +194,11 @@ def schema(parser):
         diffs = sorted(diffs, key=functools.cmp_to_key(diff_sort_cmp))
         return diffs
     # Read sql_diffs from filesystem and perform schema migrations
-    sql_dir = os.path.join(options.basedir, 'sql')
+    sql_dir = options.basedir
+    schema_path = aegis.config.get('schema_path')
+    if schema_path:
+        sql_dir = os.path.join(sql_dir, schema_path)
+    sql_dir = os.path.join(sql_dir, 'sql')
     diff_files = patch_diffs(sql_dir)
     # Read state from database, INSERT INTO sql_diff for unknown diffs
     sql_diff_rows = aegis.model.SqlDiff.scan()

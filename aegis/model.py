@@ -762,6 +762,12 @@ class AuditRequestData(aegis.database.Row):
     table_name = 'audit_request_data'
     id_column = 'audit_request_data_id'
 
+    @classmethod
+    def get_audit_request_id(cls, audit_request_id):
+        sql = "SELECT * FROM audit_request_data WHERE audit_request_id=%s"
+        return db().get(sql, audit_request_id, cls=cls)
+
+
 class Monitor(aegis.database.Row):
     table_name = 'monitor'
     id_column = 'monitor_id'

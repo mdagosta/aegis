@@ -247,7 +247,8 @@ class AegisHandler(tornado.web.RequestHandler):
             logging.error("Database is down. Send HTTP 503.")
             self.send_error(503)
             return
-        aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
+        if aegis.config.get('pg_database') or aegis.config.get('mysql_database'):
+            aegis.model.db().close()  # Closing database effectively does a transaction ROLLBACK
         #self.logw(ex, "EX")
         #logging.exception(ex)
         # Remove cookie info to anonymize and make message shorter and more useful. Almost never used in debug.

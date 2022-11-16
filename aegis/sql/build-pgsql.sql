@@ -25,3 +25,7 @@ CREATE TABLE build (
   UNIQUE (version)
 );
 CREATE TRIGGER update_dttm BEFORE UPDATE ON build FOR EACH ROW EXECUTE PROCEDURE update_dttm();
+INSERT INTO public.hydra_type (hydra_type_name, hydra_type_desc, priority_ndx, status) VALUES ('build_build', 'Actual Build Process of the Build System', 3, 'paused');
+INSERT INTO public.hydra_type (hydra_type_name, hydra_type_desc, priority_ndx, status) VALUES ('deploy_build', 'Deploying the Build to this environment', 3, 'paused');
+INSERT INTO public.hydra_type (hydra_type_name, hydra_type_desc, priority_ndx, status) VALUES ('revert_build', 'It happens...', 3, 'paused');
+INSERT INTO public.hydra_type (hydra_type_name, hydra_type_desc, priority_ndx, status) VALUES ('clean_build', 'Clean up old / stale / dead builds', 3, 'paused');

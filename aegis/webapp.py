@@ -944,8 +944,9 @@ class AegisHydra(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
+        self.tmpl['page_title'] = 'Hydra %s' % options.header_logo
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
-        self.tmpl['home_link'] = '/admin/hydra'
+        self.tmpl['home_link'] = '/'
         return self.render_path("hydra.html", **self.tmpl)
 
     @tornado.web.authenticated

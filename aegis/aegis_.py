@@ -238,6 +238,8 @@ def build(parser):
         logging.error('You need root privileges, please run it with sudo.')
         sys.exit(1)
     config.initialize()
+    if args.hostname:
+        config.apply_hostname(args.hostname)
     pw = pwd.getpwnam('www-data')
     os.putenv('HOME', pw.pw_dir)
     os.setregid(pw.pw_gid, pw.pw_gid)
@@ -275,6 +277,8 @@ def deploy(parser):
         logging.error('You need root privileges, please run it with sudo.')
         sys.exit(1)
     config.initialize()
+    if args.hostname:
+        config.apply_hostname(args.hostname)
     pw = pwd.getpwnam('www-data')
     os.putenv('HOME', pw.pw_dir)
     os.setregid(pw.pw_gid, pw.pw_gid)

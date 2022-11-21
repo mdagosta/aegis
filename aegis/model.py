@@ -161,6 +161,10 @@ class Email(aegis.database.Row):
         sql = "UPDATE email SET member_id=%s WHERE email_id=%s"
         return db().execute(sql, member_id, self['email_id'])
 
+    def set_google_user_id(self, google_user_id):
+        sql = "UPDATE email SET google_user_id=%s WHERE email_id=%s"
+        return db().execute(sql, google_user_id, self['email_id'])
+
 
 class Member(aegis.database.Row):
     table_name = 'member'
@@ -185,6 +189,10 @@ class Member(aegis.database.Row):
     def get_email_id(cls, email_id):
         sql = "SELECT * FROM member WHERE email_id = %s"
         return db().get(sql, email_id, cls=cls)
+
+    def set_google_user_id(self, google_user_id):
+        sql = "UPDATE member SET google_user_id=%s WHERE member_id=%s"
+        return db().execute(sql, google_user_id, self['member_id'])
 
     @classmethod
     def get_auth(cls, member_id):
@@ -255,6 +263,29 @@ class MemberAuthType(aegis.database.Row):
     def get_name(cls, member_auth_type_name):
         sql = "SELECT * FROM member_auth_type WHERE member_auth_type_name=%s"
         return db().get(sql, member_auth_type_name, cls=cls)
+
+
+class GoogleUser(aegis.database.Row):
+    table_name = 'google_user'
+    id_column = 'google_user_id'
+
+    @staticmethod
+    def insert(google_id, email_id, member_id, name, picture_url, email_verified):
+        sql = "INSERT INTO google_user (google_id, email_id, member_id, name, picture_url, email_verified) VALUES (%s, %s, %s, %s, %s, %s) RETURNING google_user_id"
+        return db().execute(sql, google_id, email_id, member_id, name, picture_url, email_verified)
+
+    @classmethod
+    def set_google_user(cls, google_id, email_id, member_id, name, picture_url, email_verified):
+        google_user = cls.get_google_id(google_id)
+        if not google_user:
+            google_user_id = cls.insert(google_id, email_id, member_id, name, picture_url, email_verified)
+            google_user = cls.get_id(google_user_id)
+        return google_user
+
+    @classmethod
+    def get_google_id(cls, google_id):
+        sql = "SELECT * FROM google_user WHERE google_id=%s"
+        return db().get(sql, google_id, cls=cls)
 
 
 class EmailType(aegis.database.Row):
@@ -346,20 +377,24 @@ class HydraType(aegis.database.Row):
         return db().get(sql, hydra_type_name, cls=cls)
 
     @classmethod
-    def scan(cls):
+    def scan(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM hydra_type ORDER BY next_run_dttm ASC, status ASC, priority_ndx ASC"
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
     def run_now(self):
         sql = "UPDATE hydra_type SET next_run_dttm=NOW(), status='live', claimed_dttm=NULL WHERE hydra_type_id=%s"
         return db().execute(sql, self['hydra_type_id'])
 
-    def set_status(self, status):
+    def set_status(self, status, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE hydra_type SET status=%s WHERE hydra_type_id=%s"
-        return db().execute(sql, status, self['hydra_type_id'])
+        return dbconn.execute(sql, status, self['hydra_type_id'])
 
     @classmethod
-    def get_runnable(cls, hydra_type_id, env):
+    def get_runnable(cls, hydra_type_id, env, dbconn=None):
         sql = """SELECT hydra_type_id, hydra_type_name, next_run_sql
                    FROM hydra_type
                   WHERE next_run_dttm <= NOW()
@@ -368,9 +403,13 @@ class HydraType(aegis.database.Row):
                     AND run_env=%s
                     AND claimed_dttm IS NULL
                     AND next_run_sql IS NOT NULL"""
-        return db().get(sql, hydra_type_id, env, cls=cls)
+        if not dbconn:
+            dbconn = db()
+        return dbconn.get(sql, hydra_type_id, env, cls=cls)
 
-    def schedule_next(self):
+    def schedule_next(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = """
             UPDATE hydra_type
                SET run_cnt=run_cnt+1,
@@ -379,39 +418,49 @@ class HydraType(aegis.database.Row):
                    next_run_dttm="""+self['next_run_sql']+"""
              WHERE hydra_type_id=%s
                AND status = 'live'"""
-        return db().execute(sql, self['hydra_type_id'])
+        return dbconn.execute(sql, self['hydra_type_id'])
 
     @staticmethod
-    def clear_running():
-        if type(db()) is aegis.database.PostgresConnection:
+    def clear_running(dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL '45 MINUTE'"
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL 45 MINUTE"
-        return db().execute(sql)
+        return dbconn.execute(sql)
 
-    def claim(self):
+    def claim(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = 'UPDATE hydra_type SET claimed_dttm=NOW() WHERE hydra_type_id=%s AND claimed_dttm IS NULL'
-        return db().execute(sql, self['hydra_type_id'])
+        return dbconn.execute(sql, self['hydra_type_id'])
 
-    def unclaim(self):
+    def unclaim(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = 'UPDATE hydra_type SET claimed_dttm=NULL WHERE hydra_type_id=%s AND claimed_dttm IS NOT NULL'
-        return db().execute(sql, self['hydra_type_id'])
+        return dbconn.execute(sql, self['hydra_type_id'])
 
     @classmethod
-    def past_items(cls, minutes=5):
-        if type(db()) is aegis.database.PostgresConnection:
+    def past_items(cls, minutes=5, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "SELECT * FROM hydra_type WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE' AND claimed_dttm > next_run_dttm" % int(minutes)
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "SELECT * FROM hydra_type WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE AND claimed_dttm > next_run_dttm" % int(minutes)
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
     @staticmethod
-    def clear_claims(minutes=5):
-        if type(db()) is aegis.database.PostgresConnection:
+    def clear_claims(minutes=5, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE' AND status='live'" % int(minutes)
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE AND status='live'" % int(minutes)
-        return db().execute(sql)
+        return dbconn.execute(sql)
 
 
 class HydraQueue(aegis.database.Row):
@@ -420,7 +469,7 @@ class HydraQueue(aegis.database.Row):
     data_columns = ('hydra_type_id', 'priority_ndx', 'work_host', 'work_env', 'work_data', 'work_dttm', 'start_dttm', 'claimed_dttm', 'finish_dttm', 'try_cnt', 'error_cnt')
 
     @classmethod
-    def scan_work_priority(cls, limit=10, hostname=None, env=None):
+    def scan_work_priority(cls, limit=10, hostname=None, env=None, dbconn=None):
         sql = """
         SELECT hydra_queue.*,
                hydra_type.hydra_type_name,
@@ -436,10 +485,12 @@ class HydraQueue(aegis.database.Row):
            AND hydra_type.status <> 'paused'
       ORDER BY hydra_queue.priority_ndx ASC
          LIMIT %s"""
-        return db().query(sql, hostname, env, limit, cls=cls)
+        if not dbconn:
+            dbconn = db()
+        return dbconn.query(sql, hostname, env, limit, cls=cls)
 
     @classmethod
-    def scan_work(cls, limit=10, hostname=None, env=None):
+    def scan_work(cls, limit=10, hostname=None, env=None, dbconn=None):
         sql = """
         SELECT hydra_queue.*,
                hydra_type.hydra_type_name,
@@ -455,7 +506,9 @@ class HydraQueue(aegis.database.Row):
            AND hydra_type.status <> 'paused'
       ORDER BY hydra_queue.work_dttm ASC
          LIMIT %s"""
-        return db().query(sql, hostname, env, limit, cls=cls)
+        if not dbconn:
+            dbconn = db()
+        return dbconn.query(sql, hostname, env, limit, cls=cls)
 
     @classmethod
     def scan(cls, limit=100):
@@ -488,73 +541,97 @@ class HydraQueue(aegis.database.Row):
         sql = "SELECT * FROM hydra_queue WHERE finish_dttm IS NULL AND delete_dttm IS NULL AND hydra_type_id=%s"
         return db().query(sql, hydra_type_id, cls=cls)
 
-    def claim(self):
+    def claim(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = 'UPDATE hydra_queue SET claimed_dttm=NOW() WHERE hydra_queue_id=%s AND claimed_dttm IS NULL'
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
-    def unclaim(self):
+    def unclaim(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = 'UPDATE hydra_queue SET claimed_dttm=NULL WHERE hydra_queue_id=%s AND claimed_dttm IS NOT NULL'
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
-    def incr_try_cnt(self):
+    def incr_try_cnt(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         self['try_cnt'] += 1
         sql = 'UPDATE hydra_queue SET try_cnt=try_cnt+1 WHERE hydra_queue_id=%s'
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
-    def incr_error_cnt(self, minutes=1):
+    def incr_error_cnt(self, minutes=1, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         self['error_cnt'] += 1
-        if type(db()) is aegis.database.PostgresConnection:
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=NOW() + INTERVAL '%s MINUTE' WHERE hydra_queue_id=%s"
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_queue SET error_cnt=error_cnt+1, start_dttm=NULL, work_dttm=NOW() + INTERVAL %s MINUTE WHERE hydra_queue_id=%s"
-        return db().execute(sql, minutes, self['hydra_queue_id'])
+        return dbconn.execute(sql, minutes, self['hydra_queue_id'])
 
-    def start(self):
-        hydra_type = HydraType.get_id(self['hydra_type_id'])
+    def start(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        hydra_type = HydraType.get_id(self['hydra_type_id'], dbconn=dbconn)
         if hydra_type['next_run_sql']:
-            hydra_type.set_status('running')
+            hydra_type.set_status('running', dbconn=dbconn)
         sql = 'UPDATE hydra_queue SET start_dttm=NOW() WHERE hydra_queue_id=%s'
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
-    def complete(self):
-        hydra_type = HydraType.get_id(self['hydra_type_id'])
+    def complete(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        hydra_type = HydraType.get_id(self['hydra_type_id'], dbconn=dbconn)
         if hydra_type['next_run_sql'] and hydra_type['status'] == 'running':
-            hydra_type.set_status('live')
+            hydra_type.set_status('live', dbconn=dbconn)
         sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
-    def finish(self):
+    def finish(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = 'UPDATE hydra_queue SET finish_dttm=NOW() WHERE hydra_queue_id=%s'
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
     @staticmethod
-    def purge_completed():
+    def purge_completed(dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "DELETE FROM hydra_queue WHERE finish_dttm IS NOT NULL AND finish_dttm < NOW()"
-        return db().execute(sql)
+        return dbconn.execute(sql)
 
     @staticmethod
-    def clear_claims(minutes=15):
-        if type(db()) is aegis.database.PostgresConnection:
+    def clear_claims(minutes=15, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE' AND finish_dttm IS NULL" % int(minutes)
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE AND finish_dttm IS NULL" % int(minutes)
-        return db().execute(sql)
+        return dbconn.execute(sql)
 
     @classmethod
-    def past_items(cls, minutes=15):
-        if type(db()) is aegis.database.PostgresConnection:
+    def past_items(cls, minutes=15, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE' ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
-    def run_now(self):
+    def run_now(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE hydra_queue SET work_dttm=NOW(), claimed_dttm=NULL WHERE hydra_queue_id=%s"
-        return db().execute(sql, self['hydra_queue_id'])
+        return dbconn.execute(sql, self['hydra_queue_id'])
 
-    def singleton(self):
+    def singleton(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM hydra_queue WHERE hydra_type_id=%s AND hydra_queue_id <> %s AND claimed_dttm IS NOT NULL AND finish_dttm IS NULL AND delete_dttm IS NULL"
-        return db().query(sql, self['hydra_type_id'], self['hydra_queue_id'])
+        return dbconn.query(sql, self['hydra_type_id'], self['hydra_queue_id'])
 
 
 class ReportType(aegis.database.Row):

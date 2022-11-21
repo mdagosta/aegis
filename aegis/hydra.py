@@ -126,31 +126,36 @@ class HydraThread(threading.Thread):
 
 class HydraHead(HydraThread):
 
-    def __init__(self, hydra_head_id, *args, **kwargs):
+    def __init__(self, hydra_head_id, hydra_obj, *args, **kwargs):
         self.hydra_head_id = hydra_head_id
+        self.hydra_obj = hydra_obj
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
         self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
-        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan()]+[8])
+        for dbconn in self.hydra_obj.dbconns:
+            self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
 
 
     def process(self):
         logging.info("Spawning %s", self.name)
         try:
+            db_iter = iter(self.hydra_obj.dbconns)
             while(not HydraThread.quitting.is_set()):
+                # Each iteration, track the next dbconn in the list
+                dbconn, db_iter = aegis.stdlib.loopnext(self.hydra_obj.dbconns, db_iter)
                 # In the case that the database is down, these fail and the HydraHead will die.
                 # The respawning of the head has a 1s sleep to pace out reconnecting to db, and also the new process completely resets aegis.database values.
                 if self.hydra_head_id == 0:
-                    queue_items = aegis.model.HydraQueue.scan_work_priority(hostname=self.hostname, env=aegis.config.get('env'))
+                    queue_items = aegis.model.HydraQueue.scan_work_priority(hostname=self.hostname, env=aegis.config.get('env'), dbconn=dbconn)
                 else:
-                    queue_items = aegis.model.HydraQueue.scan_work(hostname=self.hostname, env=aegis.config.get('env'))
+                    queue_items = aegis.model.HydraQueue.scan_work(hostname=self.hostname, env=aegis.config.get('env'), dbconn=dbconn)
                 for hydra_queue in queue_items:
                     if HydraThread.quitting.is_set(): break
                     try:
                         # Fetch rows from database queue and claim items before processing
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
-                        claimed = hydra_queue.claim()
-                        hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'])
+                        claimed = hydra_queue.claim(dbconn=dbconn)
+                        hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'], dbconn=dbconn)
                         if aegis.config.get('hydra_debug'):
                             self.logw(claimed, "%s CLAIM HYDRA QUEUE: %s  TYPE: %s  HOST: %s  " % (self.name, hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name'], hydra_queue['work_host']))
                         if not claimed: continue
@@ -165,7 +170,6 @@ class HydraHead(HydraThread):
                         self.timer_obj = aegis.stdlib.TimerObj()
                         aegis.stdlib.timer_start(self.timer_obj, 'hydra_queue_run')
                         self.iter_cnt += 1
-                        work_fn = getattr(self, hydra_type['hydra_type_name'])
                         # Allow queue items to specify that they should run in a specific host and environment.
                         # If that's not present, or it matches the current host, run the queue. Otherwise simply unclaim and another process will claim it.
                         work_data = None
@@ -173,24 +177,25 @@ class HydraHead(HydraThread):
                             work_data = json.loads(hydra_queue['work_data'])
                         # Do the work
                         if hydra_type['next_run_sql']:
-                            singleton = hydra_queue.singleton()
+                            singleton = hydra_queue.singleton(dbconn=dbconn)
                             if singleton:
                                 logging.error("%s %s already running" % (self.name, hydra_type['hydra_type_name']))
-                                hydra_queue.finish()    # Not complete, since that affects status
+                                hydra_queue.finish(dbconn=dbconn)    # Not complete, since that affects status
                                 continue
                         if aegis.config.get('hydra_debug'):
                             logging.warning("%s RUN HYDRA QUEUE: %s %s" % (self.name, hydra_queue['hydra_queue_id'], hydra_type['hydra_type_name']))
-                        hydra_queue.incr_try_cnt()
-                        hydra_queue.start()
-                        result, work_cnt = work_fn(hydra_queue, hydra_type)
+                        hydra_queue.incr_try_cnt(dbconn=dbconn)
+                        hydra_queue.start(dbconn=dbconn)
+                        work_fn = getattr(self, hydra_type['hydra_type_name'])
+                        result, work_cnt = work_fn(hydra_queue, hydra_type, dbconn=dbconn)
                         end_t = time.time()
                         exec_t_ms = (end_t - start_t) * 1000
                         if result:
-                            hydra_queue.complete()
+                            hydra_queue.complete(dbconn=dbconn)
                         else:
                             logging.error("%s hydra_queue_id %s failed, will retry every 15m", self.name, hydra_queue['hydra_queue_id'])
-                            hydra_queue.incr_error_cnt(minutes=15)
-                            hydra_queue.unclaim()
+                            hydra_queue.incr_error_cnt(minutes=15, dbconn=dbconn)
+                            hydra_queue.unclaim(dbconn=dbconn)
                             continue
                         aegis.stdlib.timer_stop(self.timer_obj, 'hydra_queue_run')
                         # Worker accounting
@@ -199,8 +204,8 @@ class HydraHead(HydraThread):
                     except Exception as ex:
                         logging.error("Exception when working on hydra_queue_id: %s", hydra_queue['hydra_queue_id'])
                         logging.exception(ex)
-                        hydra_queue.incr_error_cnt()
-                        hydra_queue.unclaim()
+                        hydra_queue.incr_error_cnt(dbconn=dbconn)
+                        hydra_queue.unclaim(dbconn=dbconn)
                         self.exception_alert(ex)
                 # Iterate!
                 time.sleep(options.hydra_sleep)
@@ -323,6 +328,9 @@ class Hydra(HydraThread):
         self.heads = []
         self.hydra_head_cls = HydraHead
         self.stuck_minutes = aegis.config.get('hydra_stuck_minutes') or 15
+        # If a subclass doesn't set dbconns, set the default from aegis.model as before
+        if not hasattr(self, 'dbconns'):
+            self.dbconns = [aegis.model.db()]
 
 
     def spawn_heads(self):
@@ -330,36 +338,41 @@ class Hydra(HydraThread):
         self.heads = [head for head in self.heads if head.is_alive()]
         for ndx in range(0, self.num_heads - len(self.heads)):
             time.sleep(1)
-            head = self.hydra_head_cls(ndx)
+            head = self.hydra_head_cls(ndx, self)
             head.start()
             self.heads.append(head)
 
 
     def process(self):
         logging.info("Spawning %s" % self.name)
+
         # When starting up, hydra_id 0 clears claims before spawning heads.
         if self.hydra_id == 0:
-            logging.warning("%s clearing stale claims" % self.name)
-            aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes)
-            aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes)
-            # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
-            # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
-            logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
-            aegis.model.HydraType.clear_running()
+            for dbconn in self.dbconns:
+                logging.warning("%s clearing stale claims" % self.name)
+                aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+                aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+                # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
+                # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
+                logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
+                aegis.model.HydraType.clear_running(dbconn=dbconn)
         try:
+            db_iter = iter(self.dbconns)
             while(not HydraThread.quitting.is_set()):
                 self.iter_cnt += 1
+                # Iterating through self.dbconns to run each thread against the dbs in order
                 try:
+                    dbconn, db_iter = aegis.stdlib.loopnext(self.dbconns, db_iter)
                     self.spawn_heads()
                     # Batch Loop: scan hydra_type for runnable batches
-                    for hydra_type in aegis.model.HydraType.scan():
+                    for hydra_type in aegis.model.HydraType.scan(dbconn):
                         if HydraThread.quitting.is_set(): break
                         # Check if the task is runnable
-                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'], aegis.config.get('env'))
+                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'], aegis.config.get('env'), dbconn=dbconn)
                         if aegis.config.get('hydra_debug') and runnable:
-                            logging.warning("%s FOUND RUNNABLE %s %s" % (self.name, hydra_type['hydra_type_name'], aegis.config.get('env')))
+                            logging.warning("%s FOUND RUNNABLE %s %s %s" % (self.name, hydra_type['hydra_type_name'], aegis.config.get('env'), dbconn.database))
                         if runnable:
-                            claimed = hydra_type.claim()
+                            claimed = hydra_type.claim(dbconn=dbconn)
                             if aegis.config.get('hydra_debug'):
                                 self.logw(claimed, "%s CLAIM HYDRA TYPE: %s %s  " % (self.name, hydra_type['hydra_type_id'], hydra_type['hydra_type_name']))
                             if not claimed: continue
@@ -371,30 +384,30 @@ class Hydra(HydraThread):
                             hydra_queue['work_env'] = hydra_type.get('run_env', aegis.config.get('env'))
                             if hydra_type.get('run_host'):
                                 hydra_queue['work_host'] = hydra_type['run_host']
-                            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
-                            hydra_type.schedule_next()
-                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'])
+                            hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=dbconn, **hydra_queue)
+                            hydra_type.schedule_next(dbconn=dbconn)
+                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'], dbconn=dbconn)
                             if aegis.config.get('hydra_debug'):
                                 self.logw(_hydra_type['next_run_dttm'], "SCHEDULE NEXT ID: %s  Type: %s  " % (_hydra_type['hydra_type_id'], _hydra_type['hydra_type_name']))
                             # Clean out queue then sleep depending on how much work there is to do
-                            purged_completed = aegis.model.HydraQueue.purge_completed()
+                            purged_completed = aegis.model.HydraQueue.purge_completed(dbconn=dbconn)
                             #if purged_completed:
                             #    logging.warning("%s queue purge deleted %s hydra_queue" % (self.thread_name, purged_completed))
                             # Log if there are expired queue items in the past...
-                            past_items = aegis.model.HydraQueue.past_items(minutes=self.stuck_minutes)
+                            past_items = aegis.model.HydraQueue.past_items(minutes=self.stuck_minutes, dbconn=dbconn)
                             if past_items and len(past_items):
                                 #logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
-                                    past_item_type = aegis.model.HydraType.get_id(past_item['hydra_type_id'])
+                                    past_item_type = aegis.model.HydraType.get_id(past_item['hydra_type_id'], dbconn=dbconn)
                                     logging.error("Running stuck hydra_queue_id: %s  hydra_type_name: %s", past_item['hydra_queue_id'], past_item_type['hydra_type_name'])
-                                    past_item.run_now()
+                                    past_item.run_now(dbconn=dbconn)
                             # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.
-                            past_items = aegis.model.HydraType.past_items(minutes=self.stuck_minutes)
+                            past_items = aegis.model.HydraType.past_items(minutes=self.stuck_minutes, dbconn=dbconn)
                             if past_items and len(past_items):
                                 #logging.error("HydraType has %s stuck items", len(past_items))
                                 for past_item in past_items:
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
-                                    past_item.unclaim()
+                                    past_item.unclaim(dbconn=dbconn)
 
                 # Better handling of AdminShutdown, OperationalError, to capture structured and complete data to logs and alerts.
                 except (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError) as ex:

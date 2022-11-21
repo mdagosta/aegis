@@ -81,7 +81,7 @@ except Exception as ex:
 dbconns = threading.local()
 
 
-def db(use_schema=None, autocommit=True):
+def db(use_schema=None, autocommit=True, **kwargs):
     if not hasattr(dbconns, 'databases'):
         dbconns.databases = {}
     # psycopg and probably mysqldb are thread-safe but not multiprocess-safe. If it's a separate process, create a new connection.
@@ -94,7 +94,7 @@ def db(use_schema=None, autocommit=True):
             return PostgresConnection.connect(autocommit=False)
         # Autocommit==True we can cache the database connection and let autocommit handle cursor-transaction-safety
         if options.pg_database not in dbconns.databases[pid]:
-            dbconns.databases[pid][options.pg_database] = PostgresConnection.connect()
+            dbconns.databases[pid][options.pg_database] = PostgresConnection.connect(**kwargs)
         if not use_schema:
             use_schema = options.pg_database
     if mysql_available:
@@ -108,9 +108,10 @@ def db(use_schema=None, autocommit=True):
     return dbconns.databases[pid][use_schema]
 
 
-def dbnow(use_schema=None):
-    dbconn = db(use_schema)
-    return db(use_schema).get("SELECT NOW() AS now")
+def dbnow(use_schema=None, dbconn=None):
+    if not dbconn:
+        dbconn = db(use_schema)
+    return dbconn.get("SELECT NOW() AS now")
 
 def sql_in_format(lst, cast):
     lst = [cast(lst_item) for lst_item in lst]
@@ -587,9 +588,11 @@ class Row(dict):
         return val
 
     @classmethod
-    def scan(cls):
+    def scan(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = 'SELECT * FROM %s' % cls.table_name
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
     @classmethod
     def scan_ids(cls, row_ids):
@@ -621,20 +624,21 @@ class Row(dict):
         return keys, values, args
 
     @classmethod
-    def insert_columns(cls, sql_txt='INSERT INTO %(db_table)s (%(keys)s) VALUES (%(values)s)', **columns):
+    def insert_columns(cls, sql_txt='INSERT INTO %(db_table)s (%(keys)s) VALUES (%(values)s)', dbconn=None, **columns):
+        if not dbconn:
+            dbconn = db()
         db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
             columns = dict( [ (key, val) for key, val in columns.items() if key in data_columns] )
         keys, values, args = cls.kva_split(columns)
-        use_db = db()
-        if type(use_db) is PostgresConnection:
+        if type(dbconn) is PostgresConnection:
             sql_txt += " RETURNING " + cls.id_column
         sql = sql_txt % {'db_table': db_table, 'keys': ', '.join(keys), 'values': ', '.join(values)}
         #aegis.stdlib.logw(sql, "SQL")
         #aegis.stdlib.logw(args, "ARGS")
-        return use_db.execute(sql, *args)
+        return dbconn.execute(sql, *args)
 
     @classmethod
     def update_columns(cls, columns, where):

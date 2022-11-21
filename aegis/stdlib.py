@@ -140,6 +140,13 @@ def stable_intersection(iter1, iter2):
 def stable_difference(iter_remove, iter_keep):
     return list(itertools.ifilterfalse(set(iter_remove).__contains__, iter_keep))
 
+def loopnext(iterable, itr):
+    try:
+        val = next(itr)
+    except StopIteration:
+        itr = iter(iterable)
+        val = next(itr)
+    return val, itr
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):

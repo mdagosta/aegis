@@ -24,9 +24,10 @@ import aegis.config
 
 
 class Build:
-    def __init__(self, user=None):
+    def __init__(self, user=None, dbconn=None):
         self.logw = aegis.stdlib.logw
         self.user = user
+        self.dbconn = dbconn
 
 
     # Create a new build
@@ -69,7 +70,7 @@ class Build:
                 return
             if self.build_row['revision'] == 'HEAD':
                 commit_hash, stderr, exit_status = aegis.stdlib.shell('git rev-parse HEAD', cwd=self.src_repo)
-                self.build_row.set_revision(commit_hash)
+                self.build_row.set_revision(commit_hash, dbconn=self.dbconn)
             # Generate new version number before cloning the new version tag into build directory
             self._new_version()
             env = {"GIT_COMMITTER_NAME": options.git_committer_name, "GIT_COMMITTER_EMAIL": options.git_committer_email,
@@ -78,7 +79,7 @@ class Build:
                 return
             if self._shell_exec("git push --tags", cwd=self.src_repo, build_step='build'):
                 return
-            self.build_row.set_version(self.next_tag)
+            self.build_row.set_version(self.next_tag, dbconn=self.dbconn)
             # Clone a fresh build into directory named by version tag
             app_dir = os.path.join(options.deploy_dir, options.program_name)
             self.build_dir = os.path.join(app_dir, self.next_tag)
@@ -133,15 +134,15 @@ class Build:
                     return
         except Exception as ex:
             logging.exception(ex)
-            self.build_row.set_output('build', "\n%s" % traceback.format_exc(), 1)
+            self.build_row.set_output('build', "\n%s" % traceback.format_exc(), 1, dbconn=self.dbconn)
             return self._done_exec('build', 1)
         return self._done_exec('build', 0)
 
 
     def deploy(self, version, env, build_step='deploy'):
         # Environment Settings
-        deploy_build = aegis.model.Build.get_version(version)
-        deploy_build = aegis.model.Build.get_id(deploy_build['build_id'])
+        deploy_build = aegis.model.Build.get_version(version, dbconn=self.dbconn)
+        deploy_build = aegis.model.Build.get_id(deploy_build['build_id'], dbconn=self.dbconn)
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, deploy_build['version'])
         live_symlink = os.path.join(app_dir, env)
@@ -172,7 +173,7 @@ class Build:
                 if self._shell_exec("ln -s %s %s" % (link_target, link_file), build_step=build_step, cwd=app_dir):
                     return
                 # Get previous build and its previous version
-                prev_build = aegis.model.Build.get_version(prev_version)
+                prev_build = aegis.model.Build.get_version(prev_version, dbconn=self.dbconn)
                 prev_version = prev_build['previous_version']
                 if not prev_version:
                     break
@@ -224,10 +225,10 @@ class Build:
             # If it was deleted over a month ago and the filesystem files no longer exist, just ignore this.
             elif build_row['delete_dttm'] and build_row['delete_dttm'] < datetime.datetime.utcnow() - datetime.timedelta(days=30):
                 return
-            build_row.set_soft_deleted()
+            build_row.set_soft_deleted(dbconn=self.dbconn)
         elif not build_row['delete_dttm']:
             self.logw(build_row['build_id'], "SOFT DELETE DOA BUILD WITH NO VERSION")
-            build_row.set_soft_deleted()
+            build_row.set_soft_deleted(dbconn=self.dbconn)
         #else:
         #    self.logw(build_row['build_id'], "IS ALL DELETED")
         #self.logw(build_row['build_id'], "DONE PROCESSING BUILD ID")
@@ -248,8 +249,8 @@ class Build:
             logging.error(exec_output.rstrip())
         else:
             logging.info(exec_output.rstrip())
-        self.build_row.set_output(build_step, exec_output)
-        self.build_row = aegis.model.Build.get_id(self.build_row['build_id'])
+        self.build_row.set_output(build_step, exec_output, dbconn=self.dbconn)
+        self.build_row = aegis.model.Build.get_id(self.build_row['build_id'], dbconn=self.dbconn)
         if exit_status:
             self._done_exec(build_step, exit_status)
         return exit_status
@@ -259,13 +260,13 @@ class Build:
     def _done_exec(self, build_step, exit_status):
         end_t = time.time()
         exec_t = end_t - self.start_t
-        self.build_row.set_build_exec_sec(exec_t)
+        self.build_row.set_build_exec_sec(exec_t, self.dbconn)
         exit_line = "\n  [ Exit %s   (%4.2f sec) ]\n" % (exit_status, exec_t)
         if exit_status:
             logging.error(exit_line.rstrip())
         else:
             logging.info(exit_line.rstrip())
-        self.build_row.set_output(build_step, exit_line, exit_status)
+        self.build_row.set_output(build_step, exit_line, exit_status, self.dbconn)
         return exit_status
 
 

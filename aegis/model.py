@@ -372,9 +372,11 @@ class HydraType(aegis.database.Row):
     data_columns = ('hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host', 'run_env')
 
     @classmethod
-    def get_name(cls, hydra_type_name):
+    def get_name(cls, hydra_type_name, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM hydra_type WHERE hydra_type_name=%s"
-        return db().get(sql, hydra_type_name, cls=cls)
+        return dbconn.get(sql, hydra_type_name, cls=cls)
 
     @classmethod
     def scan(cls, dbconn=None):
@@ -666,11 +668,15 @@ class Build(aegis.database.Row):
     id_column = 'build_id'
 
     @classmethod
-    def scan(cls):
+    def scan(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM build ORDER BY build_id DESC"
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
-    def set_output(self, build_step, output_tx, exit_status=None):
+    def set_output(self, build_step, output_tx, exit_status=None, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         # We have to be super explicit because MySQL CONCAT returns NULL if any param is NULL, even though Postgres ignores NULL and concatenates the other arguments
         if build_step == 'build':
             if self['build_output_tx'] is not None:
@@ -690,71 +696,99 @@ class Build(aegis.database.Row):
         else:
             aegis.stdlib.logw(build_step, "BUILD_STEP NOT IN LIST")
             return
-        return db().execute(sql, output_tx, exit_status, self['build_id'])
+        return dbconn.execute(sql, output_tx, exit_status, self['build_id'])
 
-    def set_version(self, version):
+    def set_version(self, version, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET version=%s WHERE build_id=%s AND version IS NULL"
-        return db().execute(sql, version, self['build_id'])
+        return dbconn.execute(sql, version, self['build_id'])
 
-    def set_previous_version(self, previous_version):
+    def set_previous_version(self, previous_version, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET previous_version=%s WHERE build_id=%s AND previous_version IS NULL"
-        return db().execute(sql, previous_version, self['build_id'])
+        return dbconn.execute(sql, previous_version, self['build_id'])
 
-    def set_revision(self, revision):
+    def set_revision(self, revision, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET revision=%s WHERE build_id=%s AND revision IS NULL OR revision = 'HEAD'"
-        return db().execute(sql, revision, self['build_id'])
+        return dbconn.execute(sql, revision, self['build_id'])
 
-    def set_build_size(self, build_size):
+    def set_build_size(self, build_size, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET build_size=%s WHERE build_id=%s AND build_size IS NULL"
-        return db().execute(sql, build_size, self['build_id'])
+        return dbconn.execute(sql, build_size, self['build_id'])
 
-    def set_message(self, message, build_step):
+    def set_message(self, message, build_step, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET " + build_step + "_message=%s WHERE build_id=%s AND " + build_step + "_message IS NULL"
-        return db().execute(sql, message, self['build_id'])
+        return dbconn.execute(sql, message, self['build_id'])
 
-    def set_deployed(self):
+    def set_deployed(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET deploy_dttm=NOW() WHERE build_id=%s AND deploy_dttm IS NULL"
-        return db().execute(sql, self['build_id'])
+        return dbconn.execute(sql, self['build_id'])
 
-    def set_reverted(self):
+    def set_reverted(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET revert_dttm=NOW() WHERE build_id=%s AND revert_dttm IS NULL"
-        return db().execute(sql, self['build_id'])
+        return dbconn.execute(sql, self['build_id'])
 
-    def set_soft_deleted(self):
+    def set_soft_deleted(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET delete_dttm=NOW() WHERE build_id=%s AND delete_dttm IS NULL"
-        return db().execute(sql, self['build_id'])
+        return dbconn.execute(sql, self['build_id'])
 
-    def set_build_exec_sec(self, build_exec_sec):
+    def set_build_exec_sec(self, build_exec_sec, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE build SET build_exec_sec=%s WHERE build_id=%s AND build_exec_sec IS NULL"
-        return db().execute(sql, build_exec_sec, self['build_id'])
+        return dbconn.execute(sql, build_exec_sec, self['build_id'])
 
     @classmethod
-    def get_live_build(cls, env):
+    def get_live_build(cls, env, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM build WHERE deploy_dttm IS NOT NULL AND deploy_exit_status=0 AND revert_dttm IS NULL AND env=%s AND build_target <> 'admin' ORDER BY deploy_dttm DESC LIMIT 1"
-        return db().get(sql, env, cls=cls)
+        return dbconn.get(sql, env, cls=cls)
 
     @classmethod
-    def get_version(cls, version):
+    def get_version(cls, version, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM build WHERE version=%s"
-        return db().get(sql, version, cls=cls)
+        return dbconn.get(sql, version, cls=cls)
 
     @classmethod
-    def scan_dead_builds(cls):
-        if type(db()) is aegis.database.PostgresConnection:
+    def scan_dead_builds(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
             sql = "SELECT * FROM build WHERE delete_dttm IS NOT NULL OR (deploy_dttm IS NULL AND create_dttm < NOW() - INTERVAL '1 WEEK')"
-        elif type(db()) is aegis.database.MysqlConnection:
+        elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "SELECT * FROM build WHERE delete_dttm IS NOT NULL OR (deploy_dttm IS NULL AND create_dttm < NOW() - INTERVAL 1 WEEK)"
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
     @classmethod
-    def scan_stale_builds(cls, env):
+    def scan_stale_builds(cls, env, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT * FROM build WHERE env=%s AND deploy_dttm IS NOT NULL AND delete_dttm IS NULL ORDER BY deploy_dttm DESC"
-        return db().query(sql, env, cls=cls)
+        return dbconn.query(sql, env, cls=cls)
 
     @classmethod
-    def deployed_envs(cls):
+    def deployed_envs(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "SELECT DISTINCT env FROM build WHERE delete_dttm IS NULL"
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
 
 class Cache(aegis.database.Row):

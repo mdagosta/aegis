@@ -187,6 +187,7 @@ class HydraHead(HydraThread):
                         hydra_queue.incr_try_cnt(dbconn=dbconn)
                         hydra_queue.start(dbconn=dbconn)
                         work_fn = getattr(self, hydra_type['hydra_type_name'])
+                        logging.warning(work_fn)
                         result, work_cnt = work_fn(hydra_queue, hydra_type, dbconn=dbconn)
                         end_t = time.time()
                         exec_t_ms = (end_t - start_t) * 1000
@@ -234,27 +235,27 @@ class HydraHead(HydraThread):
         return line
 
 
-    def housekeeping(self, hydra_queue, hydra_type):
+    def housekeeping(self, hydra_queue, hydra_type, dbconn=None):
         logging.warning("HYDRA HOUSEKEEPING")
         # enqueue clean_build for each deploy host
-        hydra_type = aegis.model.HydraType.get_name('clean_build')
+        hydra_type = aegis.model.HydraType.get_name('clean_build', dbconn=dbconn)
         for deploy_host in options.deploy_hosts:
             hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                            'work_host': deploy_host, 'work_env': aegis.config.get('env')}
-            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue, dbconn=dbconn)
 
 
 
-    def build_build(self, hydra_queue, hydra_type):
+    def build_build(self, hydra_queue, hydra_type, dbconn=None):
         # Singleton check - if someone else claimed a different hydra_queue of the same hydra_type, hydra_queue needs to unclaim and stop
-        singleton = hydra_queue.singleton()
+        singleton = hydra_queue.singleton(dbconn=dbconn)
         if singleton:
             logging.error("build_build already running")
             return True, 0
         work_data = json.loads(hydra_queue['work_data'])
-        build_row = aegis.model.Build.get_id(work_data['build_id'])
+        build_row = aegis.model.Build.get_id(work_data['build_id'], dbconn=dbconn)
         # Magic to bind config.write_custom_versions onto the build, to also create the react version
-        new_build = aegis.build.Build()
+        new_build = aegis.build.Build(dbconn=dbconn)
         exit_status = new_build.build_exec(build_row)
         if exit_status:
             logging.error("Build Failed. Version: %s" % build_row['version'])
@@ -264,12 +265,12 @@ class HydraHead(HydraThread):
         return True, 1
 
 
-    def deploy_build(self, hydra_queue, hydra_type):
+    def deploy_build(self, hydra_queue, hydra_type, dbconn=None):
         # host-specific by putting hostname: key in the work_data JSON
         work_data = json.loads(hydra_queue['work_data'])
-        build_row = aegis.model.Build.get_id(work_data['build_id'])
+        build_row = aegis.model.Build.get_id(work_data['build_id'], dbconn=dbconn)
         logging.warning("Hydra Deploy Build: %s" % work_data['build_id'])
-        build = aegis.build.Build()
+        build = aegis.build.Build(dbconn=dbconn)
         exit_status = build.deploy(build_row['version'], env=build_row['env'])
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
@@ -277,12 +278,12 @@ class HydraHead(HydraThread):
         return True, 1
 
 
-    def revert_build(self, hydra_queue, hydra_type):
+    def revert_build(self, hydra_queue, hydra_type, dbconn=None):
         # host-specific by putting hostname: key in the work_data JSON
         work_data = json.loads(hydra_queue['work_data'])
-        build_row = aegis.model.Build.get_id(work_data['build_id'])
+        build_row = aegis.model.Build.get_id(work_data['build_id'], dbconn=dbconn)
         logging.warning("Hydra Revert Build: %s" % work_data['build_id'])
-        build = aegis.build.Build()
+        build = aegis.build.Build(dbconn=dbconn)
         exit_status = build.revert(build_row)
         # Hydra doesn't restart from supervisorctl (see build.py deploy()). Set HydraThread.quitting and allow supervisorctl to restart
         logging.warning('Stop Hydra from Hydra Deploy to let Supervisor restart Hydra')
@@ -290,24 +291,24 @@ class HydraHead(HydraThread):
         return True, 1
 
 
-    def clean_build(self, hydra_queue, hydra_type):
+    def clean_build(self, hydra_queue, hydra_type, dbconn=None):
         # Singleton check - if someone else claimed a different hydra_queue of the same hydra_type, hydra_queue needs to unclaim and stop
-        singleton = hydra_queue.singleton()
+        singleton = hydra_queue.singleton(dbconn=dbconn)
         if singleton:
             logging.error("clean_build already running")
             return True, 0
         # run on every host to clean out builds that are leftover and taking up disk space
         logging.warning("RUNNING clean_build on %s env %s", hydra_queue['work_host'], hydra_queue['work_env'])
-        build = aegis.build.Build()
+        build = aegis.build.Build(dbconn=dbconn)
         # Delete any builds that are undeployed or deleted and older than a week.
-        dead_builds = aegis.model.Build.scan_dead_builds()
+        dead_builds = aegis.model.Build.scan_dead_builds(dbconn=dbconn)
         for dead_build in dead_builds:
             build.clean(dead_build)
         # Keep the 5 most recently deployed builds per environment. Delete the rest.
-        envs = [env['env'] for env in aegis.model.Build.deployed_envs()]
+        envs = [env['env'] for env in aegis.model.Build.deployed_envs(dbconn=dbconn)]
         for env in envs:
             # Don't delete the builds with version <env>-admin
-            stale_builds = [build for build in aegis.model.Build.scan_stale_builds(env) if not build['version'].startswith('%s-admin' % env)]
+            stale_builds = [build for build in aegis.model.Build.scan_stale_builds(env, dbconn=dbconn) if not build['version'].startswith('%s-admin' % env)]
             for stale_build in stale_builds[5:]:
                 #logging.error("STALE BUILDS need to be handled by my recent BY ENV or else we could delete in-use old ones")
                 self.logw(stale_build['build_id'], "STALE BUILD - cleaning it up")

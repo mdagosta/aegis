@@ -11,9 +11,9 @@ CREATE TABLE audit_request_data (
   response_ms BIGINT DEFAULT NULL,
   response_status INTEGER DEFAULT NULL,
   request_headers TEXT NOT NULL,
-  request_body TEXT NOT NULL,
+  request_body MEDIUMTEXT NOT NULL,
   response_headers TEXT DEFAULT NULL,
-  response_body TEXT DEFAULT NULL,
+  response_body MEDIUMTEXT DEFAULT NULL,
   response_error TEXT DEFAULT NULL,
   create_dttm timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_dttm timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -21,4 +21,4 @@ CREATE TABLE audit_request_data (
   PRIMARY KEY (audit_request_data_id),
   KEY audit_session_id (audit_session_id),
   KEY audit_request_id (audit_request_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

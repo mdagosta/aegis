@@ -187,7 +187,6 @@ class HydraHead(HydraThread):
                         hydra_queue.incr_try_cnt(dbconn=dbconn)
                         hydra_queue.start(dbconn=dbconn)
                         work_fn = getattr(self, hydra_type['hydra_type_name'])
-                        logging.warning(work_fn)
                         result, work_cnt = work_fn(hydra_queue, hydra_type, dbconn=dbconn)
                         end_t = time.time()
                         exec_t_ms = (end_t - start_t) * 1000

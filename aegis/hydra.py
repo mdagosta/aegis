@@ -132,17 +132,26 @@ class HydraHead(HydraThread):
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
         self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
-        for dbconn in self.hydra_obj.dbconns:
-            self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
+        if hasattr(self, 'dbconns'):
+            logging.warning('has dbconns')
+            #for dbconn in self.hydra_obj.dbconns:
+            #    self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
+        else:
+            dbconn = aegis.model.db()
+        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
 
 
     def process(self):
         logging.info("Spawning %s", self.name)
         try:
-            db_iter = iter(self.hydra_obj.dbconns)
+            #db_iter = iter(self.hydra_obj.dbconns)
             while(not HydraThread.quitting.is_set()):
                 # Each iteration, track the next dbconn in the list
-                dbconn, db_iter = aegis.stdlib.loopnext(self.hydra_obj.dbconns, db_iter)
+                if hasattr(self, 'dbconns'):
+                    logging.warning('has dbconns')
+                else:
+                    dbconn = aegis.model.db()
+                #dbconn, db_iter = aegis.stdlib.loopnext(self.hydra_obj.dbconns, db_iter)
                 # In the case that the database is down, these fail and the HydraHead will die.
                 # The respawning of the head has a 1s sleep to pace out reconnecting to db, and also the new process completely resets aegis.database values.
                 if self.hydra_head_id == 0:
@@ -154,6 +163,8 @@ class HydraHead(HydraThread):
                     try:
                         # Fetch rows from database queue and claim items before processing
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
+                        aegis.stdlib.logw(dbconn, "DBCONN")
+                        aegis.stdlib.logw(hydra_queue, "QUEUE")
                         claimed = hydra_queue.claim(dbconn=dbconn)
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'], dbconn=dbconn)
                         if aegis.config.get('hydra_debug'):
@@ -328,9 +339,6 @@ class Hydra(HydraThread):
         self.heads = []
         self.hydra_head_cls = HydraHead
         self.stuck_minutes = aegis.config.get('hydra_stuck_minutes') or 15
-        # If a subclass doesn't set dbconns, set the default from aegis.model as before
-        if not hasattr(self, 'dbconns'):
-            self.dbconns = [aegis.model.db()]
 
 
     def spawn_heads(self):
@@ -343,26 +351,35 @@ class Hydra(HydraThread):
             self.heads.append(head)
 
 
+    def clear(self, dbconn):
+        logging.warning("%s clearing stale claims" % self.name)
+        aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+        aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+        # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
+        # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
+        logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
+        aegis.model.HydraType.clear_running(dbconn=dbconn)
+
+
     def process(self):
         logging.info("Spawning %s" % self.name)
 
         # When starting up, hydra_id 0 clears claims before spawning heads.
         if self.hydra_id == 0:
-            for dbconn in self.dbconns:
-                logging.warning("%s clearing stale claims" % self.name)
-                aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
-                aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
-                # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
-                # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
-                logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
-                aegis.model.HydraType.clear_running(dbconn=dbconn)
+            if hasattr(self, 'dbconns'):
+                for dbconn in self.dbconns:
+                    self.clear(dbconn)
+            else:
+                dbconn = aegis.model.db()
+                self.clear(dbconn)
         try:
-            db_iter = iter(self.dbconns)
+            #db_iter = iter(self.dbconns)
             while(not HydraThread.quitting.is_set()):
                 self.iter_cnt += 1
                 # Iterating through self.dbconns to run each thread against the dbs in order
                 try:
-                    dbconn, db_iter = aegis.stdlib.loopnext(self.dbconns, db_iter)
+                    #dbconn, db_iter = aegis.stdlib.loopnext(self.dbconns, db_iter)
+                    #dbconn = self.dbconns[0]
                     self.spawn_heads()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan(dbconn):

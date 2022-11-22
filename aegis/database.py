@@ -93,15 +93,17 @@ def db(use_schema=None, autocommit=True, **kwargs):
         if not autocommit:
             return PostgresConnection.connect(autocommit=False)
         # Autocommit==True we can cache the database connection and let autocommit handle cursor-transaction-safety
-        if options.pg_database not in dbconns.databases[pid]:
-            dbconns.databases[pid][options.pg_database] = PostgresConnection.connect(**kwargs)
+        pg_database = kwargs.get('pg_database') or options.pg_database
+        if pg_database not in dbconns.databases[pid]:
+            dbconns.databases[pid][pg_database] = PostgresConnection.connect(**kwargs)
         if not use_schema:
-            use_schema = options.pg_database
+            use_schema = pg_database
     if mysql_available:
-        if options.mysql_schema not in dbconns.databases[pid]:
-            dbconns.databases[pid][options.mysql_schema] = MysqlConnection.connect()
+        mysql_database = kwargs.get('mysql_database') or options.mysql_schema
+        if mysql_database not in dbconns.databases[pid]:
+            dbconns.databases[pid][mysql_database] = MysqlConnection.connect(**kwargs)
         if not use_schema:
-            use_schema = options.mysql_schema
+            use_schema = mysql_database
     # Default situation - much better to be explicit which database we're connecting to!
     if not use_schema and len(dbconns.databases[pid]) == 1:
         use_schema = [dbconn for dbconn in dbconns.databases[pid].keys()][0]

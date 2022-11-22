@@ -132,26 +132,29 @@ class HydraHead(HydraThread):
         self.thread_name = 'HydraHead-%02d' % self.hydra_head_id
         self.hostname = socket.gethostname()
         HydraThread.__init__(self, name=self.thread_name)
-        if hasattr(self, 'dbconns'):
-            logging.warning('has dbconns')
-            #for dbconn in self.hydra_obj.dbconns:
-            #    self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
+        if hasattr(self.hydra_obj, 'dbparams'):
+            self.hydra_type_maxlen = 8
+            for dbargs in self.hydra_obj.dbparams:
+                dbconn = aegis.model.db(**dbargs)
+                dbmaxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
+                self.hydra_type_maxlen = max(self.hydra_type_maxlen, dbmaxlen)
         else:
             dbconn = aegis.model.db()
-        self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
+            self.hydra_type_maxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
 
 
     def process(self):
         logging.info("Spawning %s", self.name)
         try:
-            #db_iter = iter(self.hydra_obj.dbconns)
+            if hasattr(self.hydra_obj, 'dbparams'):
+                db_iter = iter(self.hydra_obj.dbparams)
             while(not HydraThread.quitting.is_set()):
-                # Each iteration, track the next dbconn in the list
-                if hasattr(self, 'dbconns'):
-                    logging.warning('has dbconns')
+                if hasattr(self.hydra_obj, 'dbparams'):
+                    # Each iteration, track the next dbconn in the list
+                    dbargs, db_iter = aegis.stdlib.loopnext(self.hydra_obj.dbparams, db_iter)
+                    dbconn = aegis.model.db(**dbargs)
                 else:
                     dbconn = aegis.model.db()
-                #dbconn, db_iter = aegis.stdlib.loopnext(self.hydra_obj.dbconns, db_iter)
                 # In the case that the database is down, these fail and the HydraHead will die.
                 # The respawning of the head has a 1s sleep to pace out reconnecting to db, and also the new process completely resets aegis.database values.
                 if self.hydra_head_id == 0:
@@ -352,12 +355,12 @@ class Hydra(HydraThread):
 
 
     def clear(self, dbconn):
-        logging.warning("%s clearing stale claims" % self.name)
+        logging.warning("%s clearing stale claims for db: %s" % (self.name, dbconn.database))
         aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
         aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
         # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
         # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
-        logging.warning("%s clearing running jobs over 45 minutes old" % self.name)
+        logging.warning("%s clearing running jobs over 45 minutes old for db: %s" % (self.name, dbconn.database))
         aegis.model.HydraType.clear_running(dbconn=dbconn)
 
 
@@ -366,20 +369,23 @@ class Hydra(HydraThread):
 
         # When starting up, hydra_id 0 clears claims before spawning heads.
         if self.hydra_id == 0:
-            if hasattr(self, 'dbconns'):
-                for dbconn in self.dbconns:
+            if hasattr(self, 'dbparams'):
+                for dbargs in self.dbparams:
+                    dbconn = aegis.model.db(**dbargs)
                     self.clear(dbconn)
             else:
                 dbconn = aegis.model.db()
                 self.clear(dbconn)
         try:
-            #db_iter = iter(self.dbconns)
+            if hasattr(self, 'dbparams'):
+                db_iter = iter(self.dbparams)
             while(not HydraThread.quitting.is_set()):
                 self.iter_cnt += 1
-                # Iterating through self.dbconns to run each thread against the dbs in order
+                # Iterating through self.dbparams to run each thread against the dbs in order
                 try:
-                    #dbconn, db_iter = aegis.stdlib.loopnext(self.dbconns, db_iter)
-                    #dbconn = self.dbconns[0]
+                    if hasattr(self, 'dbparams'):
+                        dbargs, db_iter = aegis.stdlib.loopnext(self.dbparams, db_iter)
+                        dbconn = aegis.model.db(**dbargs)
                     self.spawn_heads()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan(dbconn):

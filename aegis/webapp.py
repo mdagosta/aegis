@@ -20,6 +20,7 @@ import traceback
 import urllib
 
 # Extern Imports
+import pkg_resources
 import requests
 from tornado.options import options
 import tornado.web
@@ -947,6 +948,8 @@ class AegisHydra(AegisWeb):
         self.tmpl['page_title'] = 'Hydra %s' % options.header_logo
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
         self.tmpl['home_link'] = '/'
+        self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version
+        self.tmpl['app_version'] = pkg_resources.require(aegis.config.get('program_name'))[0].version
         return self.render_path("hydra.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -1104,6 +1107,8 @@ class AegisBuild(AegisWeb):
         if env.endswith('-admin'):
             env = env.rsplit('-', maxsplit=1)[0]
         self.tmpl['live_build'] = aegis.model.Build.get_live_build(env)
+        self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version
+        self.tmpl['app_version'] = pkg_resources.require(aegis.config.get('program_name'))[0].version
         return self.render_path("build.html", **self.tmpl)
 
     @tornado.web.authenticated

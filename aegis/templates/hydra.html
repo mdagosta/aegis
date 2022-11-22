@@ -6,38 +6,45 @@
 <h4><a href="/admin/hydra/queue" class="w3-text-blue">Queue</a></h4>
 {% if hydra_types %}
 <form action="{{request.uri}}" method="POST">
-  {% raw xsrf_form_html() %}
-  <table class="w3-table-all w3-responsive w3-medium">
-    <tr>
-      <th>ID</th>
-      <th>Work Type</th>
-      <th>Priority</th>
-      <th>Status</th>
-      <th>Last Run</th>
-      <th>Next Run</th>
-      <th>Pause</th>
-      <th>Run Now</th>
-      <th>Next Run SQL</th>
-    </tr>
+    {% raw xsrf_form_html() %}
+    <table class="w3-table-all w3-responsive w3-medium">
+        <tr>
+            <th>ID</th>
+            <th>Work Type</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Last Run</th>
+            <th>Next Run</th>
+            <th>Pause</th>
+            <th>Run Now</th>
+            <th>Next Run SQL</th>
+        </tr>
 
-    {% for hydra_type in hydra_types %}
-    <tr>
-      <td>{{hydra_type['hydra_type_id']}}</td>
-      <td><a class="w3-text-blue" href="{{request.uri}}/{{hydra_type['hydra_type_id']}}">{{hydra_type['hydra_type_name']}}</a></td>
-      <td>{{hydra_type['priority_ndx']}}</td>
-      <td>{{hydra_type['status']}}</td>
-      <td>{{hydra_type['last_run_dttm'] and hydra_type['last_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
-      <td>{{hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
-      <td><input type="submit" class="w3-button w3-light-blue w3-small" style="padding: 5px 6px" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}P{% end %}ause"/></td>
-      <td><input type="submit" class="w3-button w3-light-blue w3-small" style="padding: 5px 6px" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
-      <td>{{hydra_type['next_run_sql']}}</td>
-    </tr>
-    {% end %}
+        {% for hydra_type in hydra_types %}
+        <tr>
+            <td>{{hydra_type['hydra_type_id']}}</td>
+            <td><a class="w3-text-blue" href="{{request.uri}}/{{hydra_type['hydra_type_id']}}">{{hydra_type['hydra_type_name']}}</a></td>
+            <td>{{hydra_type['priority_ndx']}}</td>
+            <td>{{hydra_type['status']}}</td>
+            <td>{{hydra_type['last_run_dttm'] and hydra_type['last_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
+            <td>{{hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
+            <td><input type="submit" class="w3-button w3-light-blue w3-small" style="padding: 5px 6px" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}P{% end %}ause"/></td>
+            <td><input type="submit" class="w3-button w3-light-blue w3-small" style="padding: 5px 6px" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
+            <td>{{hydra_type['next_run_sql']}}</td>
+        </tr>
+        {% end %}
 
-  </table>
+    </table>
 </form>
 
-<div>UTC Now: {{datetime.datetime.utcnow()}}</div>
+<div style="margin-top: 1em; background: #ddd; font-size: 14px;">
+    Debug Info<br/>
+    UTC Now: {{datetime.datetime.utcnow()}}<br/>
+    Env: {{env}}<br/>
+    Hostname: {{options.hostname}}<br/>
+    Aegis Version: {{aegis_version}}<br/>
+    App Version: {{app_version}}
+</div>
 {% end %}
 
 {% end %}

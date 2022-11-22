@@ -732,6 +732,7 @@ class RobotValidator:
         'ReverseGet',
         'Robot',
         'search.goo.ne.jp',
+        'SeekportBot',
         'SeznamBot',
         'SISTRIX crawler',
         'SiteIntel.net Bot',

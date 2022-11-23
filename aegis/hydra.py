@@ -166,8 +166,6 @@ class HydraHead(HydraThread):
                     try:
                         # Fetch rows from database queue and claim items before processing
                         if not hydra_queue: time.sleep(options.hydra_sleep); continue
-                        aegis.stdlib.logw(dbconn, "DBCONN")
-                        aegis.stdlib.logw(hydra_queue, "QUEUE")
                         claimed = hydra_queue.claim(dbconn=dbconn)
                         hydra_type = aegis.model.HydraType.get_id(hydra_queue['hydra_type_id'], dbconn=dbconn)
                         if aegis.config.get('hydra_debug'):

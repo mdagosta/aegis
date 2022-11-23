@@ -386,6 +386,8 @@ class Hydra(HydraThread):
                     if hasattr(self, 'dbparams'):
                         dbargs, db_iter = aegis.stdlib.loopnext(self.dbparams, db_iter)
                         dbconn = aegis.model.db(**dbargs)
+                    else:
+                        dbconn = aegis.model.db()
                     self.spawn_heads()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan(dbconn):

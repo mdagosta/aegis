@@ -244,6 +244,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def _handle_request_exception(self, ex):
         if type(ex) in (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError):
+            logging.error("Error connecting to: %s", aegis.config.get('pg_database') or aegis.config.get('mysql_database'))
             logging.exception(ex)
             logging.error("Database is down. Send HTTP 503.")
             self.send_error(503)

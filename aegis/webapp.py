@@ -620,16 +620,19 @@ class AegisHandler(tornado.web.RequestHandler):
             request_body = {}
             if hasattr(self, 'json_req'):
                 request_body = self.json_req
-            #else:
+            # Needs Testing - maybe against HTML form
+            #elif self.request.body:
             #    request_body = self.request.body
+            #    aegis.stdlib.logw(request_body, "REQUEST BODY ")
             #    logging.warning("This may not always be a dictionary")
-            post_secret_fields = ['password']
+            post_secret_fields = ['password', 'accessToken', 'idToken']
             if config.is_defined('post_secret_fields') and options.post_secret_fields:
                 post_secret_fields += options.post_secret_fields
             for field in post_secret_fields:
                 if field in request_args:
                     request_body[field] = 'SECRET'
-            # try to convert json_body to dictionary
+            # convert request_body to json for writing to db
+            request_body = json.dumps(request_body)
             self.audit_request_data = {'audit_request_id': audit_request_id, 'audit_session_id': audit_session_id,
                                        'request_url': self.request.uri, 'request_method': self.request.method,
                                        'request_headers': req_headers, 'request_body': request_body,

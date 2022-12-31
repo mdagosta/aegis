@@ -702,10 +702,9 @@ class JsonRestApi(AegisHandler):
                 json_req = json.loads(self.request.body.decode("utf-8"))
                 return json_req or {}
             except json.decoder.JSONDecodeError:
-                #return None  ??
                 raise tornado.web.HTTPError(401, 'Bad JSON Value')
         else:
-            return dict(self.request.arguments)
+            return dict(self.request.args)
 
     def json_debug(self, debug=True):
         if options.env == 'prod':

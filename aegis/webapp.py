@@ -326,7 +326,11 @@ class AegisHandler(tornado.web.RequestHandler):
             cookie_flags['secure'] = False
         # XXX Way to not set httponly for reading in javascript
         cookie_val = self.cookie_encode(value)
-        self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
+        if aegis.config.exists('cookie_domain'):
+            cookie_domain = aegis.config.get('cookie_domain')
+        else:
+            cookie_domain = options.hostname
+        self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=cookie_domain, **cookie_flags)
 
     def cookie_get(self, name, cookie_duration=None):
         # Session cookie is set to 30 since browser should expire session cookie not time-limit

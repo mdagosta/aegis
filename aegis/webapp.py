@@ -508,6 +508,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_dttm)')
             self.audit_session['request_cnt'] = aegis.database.Literal('request_cnt+1')
             self.audit_request['request_nbr'] = audit_session_row['request_cnt'] + 1
+            self.audit_session['marketing_id'] = audit_session_row['marketing_id']
         else:
             self.audit_session['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
             self.audit_session['request_cnt'] = 1

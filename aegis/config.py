@@ -22,6 +22,9 @@ def get(config_name):
     if config_val:
         return config_val.value()
 
+def exists(config_name):
+    config_name = tornado.options.options._normalize_name(config_name)
+    return config_name in options._options
 
 def aegis_dir():
     return aegis.stdlib.absdir(__file__)

@@ -326,7 +326,11 @@ class AegisHandler(tornado.web.RequestHandler):
             cookie_flags['secure'] = False
         # XXX Way to not set httponly for reading in javascript
         cookie_val = self.cookie_encode(value)
-        self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=options.hostname, **cookie_flags)
+        if aegis.config.exists('cookie_domain'):
+            cookie_domain = aegis.config.get('cookie_domain')
+        else:
+            cookie_domain = options.hostname
+        self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=cookie_domain, **cookie_flags)
 
     def cookie_get(self, name, cookie_duration=None):
         # Session cookie is set to 30 since browser should expire session cookie not time-limit
@@ -575,7 +579,7 @@ class AegisHandler(tornado.web.RequestHandler):
                     request_args[field] = 'SECRET'
             try:
                 #self.logw(request_args, "ARGS")
-                self.audit_request['formpost_tx'] = json.dumps(request_args)[:65535]
+                self.audit_request['formpost_tx'] = json.dumps(request_args, cls=aegis.stdlib.DateTimeEncoder)[:65535]
             except UnicodeDecodeError:
                 self.audit_request['formpost_tx'] = str(request_args)[:65535]
         self.audit_request['member_id'] = self.get_member_id()
@@ -633,7 +637,7 @@ class AegisHandler(tornado.web.RequestHandler):
                 if field in request_args:
                     request_body[field] = 'SECRET'
             # convert request_body to json for writing to db
-            request_body = json.dumps(request_body)
+            request_body = json.dumps(request_body, cls=aegis.stdlib.DateTimeEncoder)
             self.audit_request_data = {'audit_request_id': audit_request_id, 'audit_session_id': audit_session_id,
                                        'request_url': self.request.uri, 'request_method': self.request.method,
                                        'request_headers': req_headers, 'request_body': request_body,
@@ -642,7 +646,7 @@ class AegisHandler(tornado.web.RequestHandler):
                                        'response_status': self._status_code, 'response_headers': resp_headers, 'response_ms': self.audit_request['exec_time']}
             if hasattr(self, 'json_resp'):
                 self.audit_request_data['response_body'] = self.json_resp
-                self.audit_request_data['response_bytes'] = len(json.dumps(self.json_resp))
+                self.audit_request_data['response_bytes'] = len(json.dumps(self.json_resp, cls=aegis.stdlib.DateTimeEncoder))
                 self.audit_request_data['response_error'] = json.dumps(self.json_resp.get('errors'), cls=aegis.stdlib.DateTimeEncoder)
             audit_request_data_id = aegis.model.AuditRequestData.insert_columns(**self.audit_request_data)
             audit_request_data = aegis.model.AuditRequestData.get_id(audit_request_data_id)

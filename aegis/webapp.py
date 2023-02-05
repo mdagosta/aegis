@@ -526,8 +526,11 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
             self.audit_session['request_cnt'] = 1
             self.audit_request['request_nbr'] = 1
-            self.audit_session['view_cnt'] = 1 if self.view_ind else 0
-            self.audit_session['api_cnt'] = 1 if self.api_ind else 0
+            self.audit_session['view_cnt'] = 0
+            if hasattr(self, 'view_ind') and self.view_ind:
+                self.audit_session['view_cnt'] = 1
+            if hasattr(self, 'api_ind') and self.api_ind:
+                self.audit_session['api_cnt'] = 1
             self.audit_session['first_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
@@ -572,9 +575,9 @@ class AegisHandler(tornado.web.RequestHandler):
         self.audit_session['user_id'] = self.get_user_id()
         self.audit_session['member_id'] = self.get_member_id()
         if audit_session_id:
-            if self.view_ind:
+            if hasattr(self, 'view_ind') and self.view_ind:
                 self.audit_session['view_cnt'] = aegis.database.Literal('view_cnt+1')
-            if self.api_ind:
+            if hasattr(self, 'api_ind') and self.api_ind:
                 self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
             aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
         # Audit Request
@@ -596,8 +599,8 @@ class AegisHandler(tornado.web.RequestHandler):
         self.audit_request['member_id'] = self.get_member_id()
         self.audit_request['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
         self.audit_request['audit_session_id'] = audit_session_id
-        self.audit_request['view_ind'] = self.view_ind
-        self.audit_request['api_ind'] = self.api_ind
+        self.audit_request['view_ind'] = hasattr(self, 'view_ind') and self.view_ind
+        self.audit_request['api_ind'] = hasattr(self, 'api_ind') and self.api_ind
         self.audit_request['http_status_nbr'] = self._status_code
         # Optional application-specific columns
         if aegis.config.exists('audit_request_columns'):

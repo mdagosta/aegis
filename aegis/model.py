@@ -201,10 +201,13 @@ class Member(aegis.database.Row):
         member = cls.get_id(member_id)
         if not member:
             return None
-        if member.get('email_id'):   # In case member table doesn't have email_id
+        if member.get('email_id'):
             email = Email.get_id(member['email_id'])
             if email:
                 member['email'] = email
+        if member.get('google_user_id'):
+            member['google_user'] = GoogleUser.get_id(member['google_user_id'])
+            member['picture_url'] = member['google_user']['picture_url']
         return member
 
 

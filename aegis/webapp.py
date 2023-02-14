@@ -83,6 +83,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['get_member_email'] = self.get_member_email
         self.tmpl['get_current_user'] = self.get_current_user
         self.tmpl['utcnow'] = datetime.datetime.utcnow()
+        self.tmpl['start_t'] = time.time()
         if self.cookie_get('session'):
             self.tmpl['session_ck'] = self.cookie_get('session')
         self.audit_session = {}
@@ -110,7 +111,12 @@ class AegisHandler(tornado.web.RequestHandler):
         super(AegisHandler, self).prepare()
         if self._parent_timer:
             aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
-        if aegis.config.get('use_audit') and options.use_audit:
+        if aegis.config.exists('use_audit') and hasattr(config, 'hostnames'):
+            self.use_audit = config.hostnames[self.tmpl['host']].get('use_audit')
+        else:
+            self.use_audit = (aegis.config.exists('use_audit') and options.use_audit)
+        if self.use_audit:
+            self.set_marketing_id()
             self.audit_start()
 
     def finish(self, chunk=None):
@@ -155,7 +161,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def on_finish(self):
         # This runs after the response has been sent to the client, intended for cleanup.
-        if aegis.config.get('use_audit') and options.use_audit:
+        if self.use_audit:
             self.audit_request_id = self.audit_finish()
 
     def debug_request(self):
@@ -509,7 +515,10 @@ class AegisHandler(tornado.web.RequestHandler):
             audit_session_row = aegis.model.AuditSession.get_id(audit_session_id)
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
-            self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_dttm)')
+            if aegis.database.mysql_available:
+                self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_dttm)')
+            elif aegis.database.pgsql_available:
+                self.audit_session['session_time'] = aegis.database.Literal('EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM create_dttm)')
             self.audit_session['request_cnt'] = aegis.database.Literal('request_cnt+1')
             self.audit_request['request_nbr'] = audit_session_row['request_cnt'] + 1
             self.audit_session['marketing_id'] = audit_session_row['marketing_id']
@@ -517,8 +526,11 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
             self.audit_session['request_cnt'] = 1
             self.audit_request['request_nbr'] = 1
-            self.audit_session['view_cnt'] = self.view_ind
-            self.audit_session['api_cnt'] = self.api_ind
+            self.audit_session['view_cnt'] = 0
+            if hasattr(self, 'view_ind') and self.view_ind:
+                self.audit_session['view_cnt'] = 1
+            if hasattr(self, 'api_ind') and self.api_ind:
+                self.audit_session['api_cnt'] = 1
             self.audit_session['first_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
@@ -560,18 +572,19 @@ class AegisHandler(tornado.web.RequestHandler):
         # Audit Session - takes 10ms !!
         audit_session_id = self.tmpl.get('session_ck', {}).get('audit_session_id')
         #aegis.stdlib.logw(audit_session_id, "AUDIT SESSION ID")
+        self.audit_session['user_id'] = self.get_user_id()
         self.audit_session['member_id'] = self.get_member_id()
         if audit_session_id:
-            if self.view_ind:
+            if hasattr(self, 'view_ind') and self.view_ind:
                 self.audit_session['view_cnt'] = aegis.database.Literal('view_cnt+1')
-            if self.api_ind:
+            if hasattr(self, 'api_ind') and self.api_ind:
                 self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
             aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
         # Audit Request
         request_args = {}
         if self.request.method in ('POST', 'PUT', 'PATCH') and self.request.args:
             post_secret_fields = ['password']
-            if config.is_defined('post_secret_fields') and options.post_secret_fields:
+            if aegis.config.exists('post_secret_fields') and options.post_secret_fields:
                 post_secret_fields += options.post_secret_fields
             request_args = dict(self.request.args)
             for field in post_secret_fields:
@@ -582,19 +595,20 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_request['formpost_tx'] = json.dumps(request_args, cls=aegis.stdlib.DateTimeEncoder)[:65535]
             except UnicodeDecodeError:
                 self.audit_request['formpost_tx'] = str(request_args)[:65535]
+        self.audit_request['user_id'] = self.get_user_id()
         self.audit_request['member_id'] = self.get_member_id()
         self.audit_request['marketing_id'] = aegis.stdlib.validate_int(self.get_marketing_id())
         self.audit_request['audit_session_id'] = audit_session_id
-        self.audit_request['view_ind'] = self.view_ind
-        self.audit_request['api_ind'] = self.api_ind
+        self.audit_request['view_ind'] = hasattr(self, 'view_ind') and self.view_ind
+        self.audit_request['api_ind'] = hasattr(self, 'api_ind') and self.api_ind
         self.audit_request['http_status_nbr'] = self._status_code
         # Optional application-specific columns
-        if config.is_defined('audit_request_columns'):
+        if aegis.config.exists('audit_request_columns'):
             for column in options.audit_request_columns:
                 if hasattr(self, column):
                     self.audit_request[column] = getattr(self, column)
         # Make the finish time the very last thing
-        self.audit_request['exec_time'] = int((time.time() - self.local_data['start_t']) * 1000)
+        self.audit_request['exec_time'] = int((time.time() - self.tmpl['start_t']) * 1000)
         # getting the database, memcache, render times on the timer - will be higher than during aegis.webapp.log_request because of above auditing
         timer_obj = aegis.stdlib.get_timer()
         if timer_obj and timer_obj._timers:
@@ -631,7 +645,7 @@ class AegisHandler(tornado.web.RequestHandler):
             #    aegis.stdlib.logw(request_body, "REQUEST BODY ")
             #    logging.warning("This may not always be a dictionary")
             post_secret_fields = ['password', 'accessToken', 'idToken']
-            if config.is_defined('post_secret_fields') and options.post_secret_fields:
+            if aegis.config.exists('post_secret_fields') and options.post_secret_fields:
                 post_secret_fields += options.post_secret_fields
             for field in post_secret_fields:
                 if field in request_args:
@@ -665,6 +679,14 @@ class AegisHandler(tornado.web.RequestHandler):
         self.cookie_clear('session')
         if hasattr(self.tmpl, 'session_ck'):
             del self.tmpl['session_ck']
+
+    def get_marketing_id(self):
+        return self.audit_session.get('marketing_id')
+
+    def set_marketing_id(self):
+        mid = aegis.stdlib.validate_int(self.request.args.get('mid'))
+        if mid:
+            self.audit_session['marketing_id'] = mid
 
 
 class JsonRestApi(AegisHandler):

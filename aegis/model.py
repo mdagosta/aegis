@@ -882,3 +882,8 @@ class AuditRequestData(aegis.database.Row):
 class Monitor(aegis.database.Row):
     table_name = 'monitor'
     id_column = 'monitor_id'
+
+    @classmethod
+    def get_host_cmd(host, cmd):
+        sql = "SELECT * FROM monitor WHERE monitor_host=%s AND monitor_cmd=%s ORDER BY monitor_id DESC LIMIT 1"
+        return db().get(sql, host, cmd, cls=cls)

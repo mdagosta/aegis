@@ -247,14 +247,13 @@ class HydraHead(HydraThread):
 
 
     def housekeeping(self, hydra_queue, hydra_type, dbconn=None):
-        logging.warning("HYDRA HOUSEKEEPING")
         # enqueue clean_build for each deploy host
         hydra_type = aegis.model.HydraType.get_name('clean_build', dbconn=dbconn)
-        for deploy_host in options.deploy_hosts:
-            hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
-                           'work_host': deploy_host, 'work_env': aegis.config.get('env')}
-            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue, dbconn=dbconn)
-
+        if hydra_type:
+            for deploy_host in options.deploy_hosts:
+                hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
+                               'work_host': deploy_host, 'work_env': aegis.config.get('env')}
+                hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue, dbconn=dbconn)
 
 
     def build_build(self, hydra_queue, hydra_type, dbconn=None):

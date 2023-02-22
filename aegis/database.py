@@ -598,6 +598,8 @@ class Row(dict):
 
     @classmethod
     def scan_ids(cls, row_ids, dbconn=None):
+        if not row_ids:
+            return []
         if not dbconn:
             dbconn = db()
         # Fail fast if any of the data are bad, to not return confusing results

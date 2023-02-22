@@ -597,7 +597,9 @@ class Row(dict):
         return dbconn.query(sql, cls=cls)
 
     @classmethod
-    def scan_ids(cls, row_ids):
+    def scan_ids(cls, row_ids, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         # Fail fast if any of the data are bad, to not return confusing results
         try:
             args, fmt = aegis.database.sql_in_format(row_ids, int)
@@ -606,7 +608,7 @@ class Row(dict):
             logging.error("Bad arguments passed from %s to aegis.database.Row.scan_ids(): %s", aegis.stdlib.get_caller(), row_ids)
             return []
         sql = "SELECT * FROM "+cls._table_name()+" WHERE "+cls.id_column+" IN ("+fmt+")"
-        return db().query(sql, *args, cls=cls)
+        return dbconn.query(sql, *args, cls=cls)
 
     # kva_split(), insert(), update() together are a mini-ORM in processing arbitrary column-value combinations on a row.
     # define table_name and data_columns to know which are allowed to be set along with user action

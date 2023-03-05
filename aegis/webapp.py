@@ -327,7 +327,7 @@ class AegisHandler(tornado.web.RequestHandler):
             if not cookie_durations:
                 cookie_durations = {'user': 3650, 'session': None, 'auth': 90}
             cookie_duration = cookie_durations[name]
-        cookie_flags = {'httponly': True, 'secure': True, 'samesite': 'None'}
+        cookie_flags = {'httponly': True, 'secure': True, 'samesite': 'Lax'}
         if options.hostname == 'localhost':
             cookie_flags['secure'] = False
         # XXX Way to not set httponly for reading in javascript

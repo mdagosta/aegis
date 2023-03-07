@@ -111,10 +111,13 @@ class AegisHandler(tornado.web.RequestHandler):
         super(AegisHandler, self).prepare()
         if self._parent_timer:
             aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
-        if aegis.config.exists('use_audit') and hasattr(config, 'hostnames'):
-            self.use_audit = config.hostnames[self.tmpl['host']].get('use_audit')
-        else:
-            self.use_audit = (aegis.config.exists('use_audit') and options.use_audit)
+        # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False.
+        self.use_audit = False
+        if aegis.config.exists('use_audit'):
+            if hasattr(config, 'hostnames') and 'use_audit' in config.hostnames[self.tmpl['host']]:
+                self.use_audit = config.hostnames[self.tmpl['host']].get('use_audit')
+            else:
+                self.use_audit = options.use_audit
         if self.use_audit:
             self.set_marketing_id()
             self.audit_start()

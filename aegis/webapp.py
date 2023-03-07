@@ -108,9 +108,6 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['next_url'] = self.get_next_url()
         self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
         self.setup_user()
-        super(AegisHandler, self).prepare()
-        if self._parent_timer:
-            aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
         # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False.
         self.use_audit = False
         if aegis.config.exists('use_audit'):
@@ -121,6 +118,9 @@ class AegisHandler(tornado.web.RequestHandler):
         if self.use_audit:
             self.set_marketing_id()
             self.audit_start()
+        super(AegisHandler, self).prepare()
+        if self._parent_timer:
+            aegis.stdlib.timer_stop(self.timer_obj, 'prepare')
 
     def finish(self, chunk=None):
         # Fail fast for maintenance errors
@@ -164,7 +164,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def on_finish(self):
         # This runs after the response has been sent to the client, intended for cleanup.
-        if self.use_audit:
+        if hasattr(self, 'use_audit') and self.use_audit:
             self.audit_request_id = self.audit_finish()
 
     def debug_request(self):
@@ -266,10 +266,16 @@ class AegisHandler(tornado.web.RequestHandler):
         if self.request.headers.get('Cookie'):
             del self.request.headers['Cookie']
         # Don't post boring pseudo-errors to channels
+        if isinstance(ex, tornado.web.HTTPError) and ex.status_code == 400:
+            #tornado.web.HTTPError: HTTP 400: Bad Request (No CSRF token in Cookie.)
+            logging.warning("Prevent CSRF token errors from POSTing to Chat")
+            aegis.stdlib.logw(ex, "EX")
+            aegis.stdlib.logw(dir(ex), "EX")
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
-            logging.warning("Prevent too-annoying errors from POSTing to Chat")
+            logging.warning("Prevent annoying errors from POSTing to Chat")
             super(AegisHandler, self)._handle_request_exception(ex)
             return
+
         # Send errors to chat hooks, based on them being configured for the environment
         header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}

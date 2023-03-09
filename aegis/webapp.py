@@ -266,11 +266,10 @@ class AegisHandler(tornado.web.RequestHandler):
         if self.request.headers.get('Cookie'):
             del self.request.headers['Cookie']
         # Don't post boring pseudo-errors to channels
-        if isinstance(ex, tornado.web.HTTPError) and ex.status_code == 400:
-            #tornado.web.HTTPError: HTTP 400: Bad Request (No CSRF token in Cookie.)
-            logging.warning("Prevent CSRF token errors from POSTing to Chat")
-            aegis.stdlib.logw(ex, "EX")
-            aegis.stdlib.logw(dir(ex), "EX")
+        if isinstance(ex, tornado.web.HTTPError) and ex.status_code == 400 and 'No CSRF token in Cookie' in ex.log_message:
+            #logging.warning("Prevent CSRF token errors from POSTing to Chat")
+            super(AegisHandler, self)._handle_request_exception(ex)
+            return
         if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
             logging.warning("Prevent annoying errors from POSTing to Chat")
             super(AegisHandler, self)._handle_request_exception(ex)

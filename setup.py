@@ -43,7 +43,7 @@ setuptools.setup (
         'pympler',
         'python-dateutil',
         'requests',
-        'tornado == 6.1.0',
+        'tornado == 6.2.0',
         'user_agents',
     ]
 )

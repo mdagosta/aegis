@@ -647,7 +647,9 @@ class Row(dict):
         return dbconn.execute(sql, *args)
 
     @classmethod
-    def update_columns(cls, columns, where):
+    def update_columns(cls, columns, where, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         if not columns:
             logging.debug('Nothing to update. Skipping query')
             return
@@ -667,4 +669,4 @@ class Row(dict):
         sql = 'UPDATE %s SET %s WHERE %s' % (db_table, set_clause, where_clause)
         #aegis.stdlib.logw(sql, "SQL")
         #aegis.stdlib.logw(args, "ARGS")
-        return db().execute_rowcount(sql, *args)
+        return dbconn.execute_rowcount(sql, *args)

@@ -4,8 +4,8 @@
         {% block title %}<title>{{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</title>{% end %}
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
-        <style>
+        <style nonce="aegis-webapp-frame-rstlne">
+         {% include w3.css %}
          @media only screen and (max-device-width: 418px), only screen and (max-width: 418px) {
              #top-bar {font-size: 14px!important; }
              #top-bar .w3-bar-item {padding: 5px!important;}

@@ -5,7 +5,7 @@
 {% end %}
 
 {% block body %}
-<h1 style="margin-top: 1em;">Builds    <a href="/admin/build/add" class="w3-right w3-btn w3-blue w3-large">+ New Build</a></h1>
+<h1>Builds    <a href="/admin/build/add" class="w3-right w3-btn w3-blue w3-large">+ New Build</a></h1>
 
 <form action="{{request.uri}}" method="POST">
     {% raw xsrf_form_html() %}
@@ -51,7 +51,7 @@
     </table>
 </form>
 
-<div style="margin-top: 1em; background: #ddd; font-size: 14px;">
+<div class="debug-panel">
     Debug Info<br/>
     Env: {{env}}<br/>
     Hostname: {{options.hostname}}<br/>

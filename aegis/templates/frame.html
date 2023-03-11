@@ -5,12 +5,21 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <style nonce="aegis-webapp-frame-rstlne">
-         {% include w3.css %}
+          {% include w3.css %}
+          h3 { margin: 5px 0; }
+          form p {margin: 10px 0; }
+         #menu-bar span { margin: 0 .5em;}}
+         #home-link {text-decoration: none;}
+         #page-content {margin-top: 80px; max-width: initial;}
+         .top-element {margin-top: 50px;}
+         input.aegis-button {padding: 5px 6px;}
+         div.debug-panel {margin-top: 1em; background: #ddd; font-size: 14px;}
+         .aegis-shell { overflow-x: scroll; }
          @media only screen and (max-device-width: 418px), only screen and (max-width: 418px) {
              #top-bar {font-size: 14px!important; }
              #top-bar .w3-bar-item {padding: 5px!important;}
              #menu-bar {padding: 5px!important;}
-             #menu-bar span {margin: 0 .3em!important;}
+             #menu-bar span { margin: 0 .3em;}}
              .w3-large {font-size: 18px!important;}
              h1 {font-size: 24px!important;}
              .w3-table-all th:first-child, .w3-table-all td:first-child {padding-left: 8px;}
@@ -25,20 +34,20 @@
         <div class="w3-top">
             <div class="w3-gray w3-large" id="top-bar">
                 <div class="w3-bar">
-                    <a href="{{home_link}}" class="w3-bar-item w3-padding-medium" style="text-decoration: none;">{{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</a>
+                    <a id="home-link" href="{{home_link}}" class="w3-bar-item w3-padding-medium">{{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</a>
                     <div class="w3-right w3-bar-item w3-padding-medium">{{get_member_email()}}</div>
                 </div>
             </div>
             <div class="w3-bar w3-light-gray w3-padding-small w3-card" id="menu-bar">
-                <span style="margin: 0 1em;"><a href="/admin">Admin</a></span>
-                <span style="margin: 0 1em;"><a href="/admin/build">Builds</a></span>
-                <span style="margin: 0 1em;"><a href="/admin/hydra">Hydra</a></span>
-                <span style="margin: 0 1em;"><a href="/admin/report">Reports</a></span>
+                <span><a href="/admin">Admin</a></span>
+                <span><a href="/admin/build">Builds</a></span>
+                <span><a href="/admin/hydra">Hydra</a></span>
+                <span><a href="/admin/report">Reports</a></span>
             </div>
         </div>
 
         {# Page content #}
-        <div class="w3-content w3-padding w3-light-grey" style="margin-top: 50px; max-width: initial;">
+        <div id="page-content" class="w3-content w3-padding w3-light-grey">
             {% block body %} {% end %}
         </div>
 

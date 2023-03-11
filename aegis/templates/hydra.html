@@ -1,7 +1,7 @@
 {% extends frame.html %}
 
 {% block body %}
-<h1 style="margin-top: 1em;">Hydra     <a href="/admin/hydra/add" class="w3-right w3-btn w3-blue w3-large">+ New Work Type</a></h1>
+<h1>Hydra     <a href="/admin/hydra/add" class="w3-right w3-btn w3-blue w3-large">+ New Work Type</a></h1>
 
 <h4><a href="/admin/hydra/queue" class="w3-text-blue">Queue</a></h4>
 {% if hydra_types %}
@@ -28,8 +28,8 @@
             <td>{{hydra_type['status']}}</td>
             <td>{{hydra_type['last_run_dttm'] and hydra_type['last_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
             <td>{{hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
-            <td><input type="submit" class="w3-button w3-light-blue w3-small" style="padding: 5px 6px" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}P{% end %}ause"/></td>
-            <td><input type="submit" class="w3-button w3-light-blue w3-small" style="padding: 5px 6px" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
+            <td><input type="submit" class="w3-button w3-light-blue w3-small aegis-button" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}P{% end %}ause"/></td>
+            <td><input type="submit" class="w3-button w3-light-blue w3-small aegis-button" name="run_{{hydra_type['hydra_type_id']}}" value="Run Now" {% if not hydra_type['next_run_sql'] %}disabled="disabled" {% end %}/></td>
             <td>{{hydra_type['next_run_sql']}}</td>
         </tr>
         {% end %}
@@ -37,7 +37,7 @@
     </table>
 </form>
 
-<div style="margin-top: 1em; background: #ddd; font-size: 14px;">
+<div class="debug-panel">
     Debug Info<br/>
     UTC Now: {{datetime.datetime.utcnow()}}<br/>
     Env: {{env}}<br/>

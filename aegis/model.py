@@ -291,6 +291,37 @@ class GoogleUser(aegis.database.Row):
         return db().get(sql, google_id, cls=cls)
 
 
+class GoogleAccess(aegis.database.Row):
+    table_name = 'google_access'
+    id_column = 'google_access_id'
+    primary_key = ('google_access_id')
+
+    @classmethod
+    def get_google_user_id(cls, google_user_id):
+        sql = "SELECT * FROM google_access WHERE google_user_id=%s ORDER BY expire_dttm DESC LIMIT 1"
+        return db().get(sql, google_user_id, cls=cls)
+
+    @classmethod
+    def purge_expired(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "DELETE FROM google_access WHERE expire_dttm < NOW()"
+        return dbconn.execute(sql)
+
+
+class GooglePicture(aegis.database.Row):
+    table_name = 'google_picture'
+    id_column = 'google_picture_id'
+    primary_key = ('google_picture_id')
+
+    @classmethod
+    def get_google_user_id(cls, google_user_id, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "SELECT * FROM google_picture WHERE google_user_id=%s"
+        return dbconn.get(sql, google_user_id, cls=cls)
+
+
 class EmailType(aegis.database.Row):
     table_name = 'email_type'
     id_column = 'email_type_id'

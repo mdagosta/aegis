@@ -127,6 +127,11 @@ class User(aegis.database.Row):
         sql = 'UPDATE '+self.table_name+' SET member_id=%s WHERE user_id=%s'
         return db().execute(sql, member_id, self['user_id'])
 
+    def set_preferences(self, preferences):
+        preferences = json.dumps(preferences, cls=aegis.stdlib.DateTimeEncoder)
+        sql = "UPDATE "+self.table_name+" SET preferences=%s WHERE user_id=%s"
+        return db().execute(sql, preferences, self['user_id'])
+
 
 class Email(aegis.database.Row):
     table_name = 'email'
@@ -164,6 +169,11 @@ class Email(aegis.database.Row):
     def set_google_user_id(self, google_user_id):
         sql = "UPDATE email SET google_user_id=%s WHERE email_id=%s"
         return db().execute(sql, google_user_id, self['email_id'])
+
+    def deidentify(self, email_addr):
+        # overwrite email with email_addr, stop referencing google_user.google_user_id, and mark deleted
+        sql = "UPDATE email SET email=%s, google_user_id=NULL, delete_dttm=NOW() WHERE email_id=%s"
+        return db().execute(sql, email_addr, self['email_id'])
 
 
 class Member(aegis.database.Row):
@@ -209,6 +219,11 @@ class Member(aegis.database.Row):
             member['google_user'] = GoogleUser.get_id(member['google_user_id'])
             member['picture_url'] = member['google_user']['picture_url']
         return member
+
+    def deidentify(self):
+        # stop referencing google_user.google_user_id, and mark deleted
+        sql = "UPDATE member SET google_user_id=NULL, delete_dttm=NOW() WHERE member_id=%s"
+        return db().execute(sql, self['member_id'])
 
 
 class MemberAuth(aegis.database.Row):
@@ -290,6 +305,15 @@ class GoogleUser(aegis.database.Row):
         sql = "SELECT * FROM google_user WHERE google_id=%s"
         return db().get(sql, google_id, cls=cls)
 
+    @classmethod
+    def get_member_id(cls, member_id):
+        sql = "SELECT * FROM google_user WHERE member_id=%s"
+        return db().get(sql, member_id, cls=cls)
+
+    def hard_delete(self):
+        sql = "DELETE FROM google_user WHERE google_user_id=%s"
+        return db().execute(sql, self['google_user_id'])
+
 
 class GoogleAccess(aegis.database.Row):
     table_name = 'google_access'
@@ -308,6 +332,10 @@ class GoogleAccess(aegis.database.Row):
         sql = "DELETE FROM google_access WHERE expire_dttm < NOW()"
         return dbconn.execute(sql)
 
+    def hard_delete(self):
+        sql = "DELETE FROM google_access WHERE google_access_id=%s"
+        return db().execute(sql, self['google_access_id'])
+
 
 class GooglePicture(aegis.database.Row):
     table_name = 'google_picture'
@@ -320,6 +348,10 @@ class GooglePicture(aegis.database.Row):
             dbconn = db()
         sql = "SELECT * FROM google_picture WHERE google_user_id=%s"
         return dbconn.get(sql, google_user_id, cls=cls)
+
+    def hard_delete(self):
+        sql = "DELETE FROM google_picture WHERE google_picture_id=%s"
+        return db().execute(sql, self['google_picture_id'])
 
 
 class EmailType(aegis.database.Row):

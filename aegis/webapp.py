@@ -203,16 +203,19 @@ class AegisHandler(tornado.web.RequestHandler):
                 user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
             user = self.models['User'].get_id(user_agent['robot_user_id'])
             user_ck = {}
+            self.tmpl['user_row'] = user
         else:
             # Check if the cookie exists, and if the record exists. If either doesn't exist, start a new user record.
             user_ck = self.cookie_get('user')
             if user_ck and user_ck.get('user_id'):
                 user = self.models['User'].get_id(user_ck['user_id'])
+                self.tmpl['user_row'] = user
                 if user:
                     self.cookie_set('user', user_ck)
             if not user:
                 user_id = self.models['User'].insert(user_agent['user_agent_id'])
                 user = self.models['User'].get_id(user_id)
+                self.tmpl['user_row'] = user
                 if user_ck:
                     user_ck['user_id'] = user_id
                 else:
@@ -223,6 +226,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.tmpl['user']['user_id'] = user['user_id']
         # At the end leave the row behind for later use in the request
         self.tmpl['user_agent_row'] = user_agent
+        self.tmpl['show_cookie_banner'] = not (self.tmpl.get('user_row') and self.tmpl['user_row'].get('preferences') and self.tmpl['user_row']['preferences'].get('cookie_ok_dttm'))
 
     def enforce_admin(self):
         if not self.is_super_admin():

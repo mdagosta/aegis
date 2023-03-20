@@ -188,10 +188,13 @@ class Member(aegis.database.Row):
         return db().execute(sql, email_id)
 
     @classmethod
-    def set_member(cls, email_id):
+    def set_member(cls, email_id, marketing_id=None):
         member = cls.get_email_id(email_id)
         if not member:
-            member_id = cls.insert(email_id)
+            columns = {'email_id': email_id}
+            if marketing_id:
+                columns['marketing_id'] = marketing_id
+            member_id = cls.insert_columns(**columns)
             member = cls.get_id(member_id)
         return member
 

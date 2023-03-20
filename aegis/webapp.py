@@ -696,19 +696,24 @@ class AegisHandler(tornado.web.RequestHandler):
         return self.audit_session.get('marketing_id')
 
     def set_marketing_id(self):
-        # This runs before self.audit_session gets initialized from database. But skip if session_ck has audit_session_id.
-        ck_session_id = self.tmpl.get('session_ck', {}).get('audit_session_id')
-        if ck_session_id:
+        # This runs before self.audit_session gets initialized from database, but skip if session_ck has audit_session_id.
+        if self.tmpl.get('session_ck', {}).get('audit_session_id'):
             return
+        # If there's an mid in request args, use if it's in the marketing table
         mid = aegis.stdlib.validate_int(self.request.args.get('mid'))
+        if mid:
+            marketing = aegis.model.Marketing.get_id(mid)
+            if not marketing:
+                mid = None
+        # Without explicit mid, infer from Referer header
         if not mid:
             marketing_name = 'direct'
             referer = self.request.headers.get('Referer')
             if referer:
                 marketing_name = 'referral'
                 url_parts = urllib.parse.urlparse(referer)
-                organic_netlocs = ['google.com', 'www.google.com', 'www.aol.com', 'aol.com', 'www.ask.com', 'ask.com', 'www.bing.com', 'bing.com',
-                                   'www.daum.net', 'daum.net', 'duckduckgo.com', 'ecosia.org', 'www.ecosia.org', 'www.lycos.com', 'www.msn.com',
+                organic_netlocs = ['google.com', 'www.google.com', 'www.aol.com', 'aol.com', 'www.ask.com', 'ask.com', 'baidu.com', 'www.bing.com', 'bing.com',
+                                   'www.daum.net', 'daum.net', 'duckduckgo.com', 'ecosia.org', 'search.brave.com', 'www.ecosia.org', 'www.lycos.com', 'www.msn.com',
                                    'www.yahoo.com', 'm.yahoo.com', 'yahoo.com', 'yandex.ru', 'www.yandex.com']
                 if url_parts.netloc in organic_netlocs:
                     marketing_name = 'organic'

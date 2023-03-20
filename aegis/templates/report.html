@@ -2,7 +2,7 @@
 
 {% block body %}
 <div style="overflow-x: auto;">
-    <h1 style="margin-top: 1em;">{{report['report_type_name']}} Report          <a href="/aegis/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
+    <h1 style="margin-top: 1em;">{{report['report_type_name']}} Report          <a href="/admin/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
 
     {% if output %}
     <div class="w3-container" style="max-height: calc(60vh);">
@@ -42,7 +42,7 @@
 </div>
 
 <br/>
-<h2 class="w3-border-top w3-border-blue w3-margin-top">SQL       <a href="/aegis/report/form/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Edit</a></h2>
+<h2 class="w3-border-top w3-border-blue w3-margin-top">SQL       <a href="/admin/report/form/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Edit</a></h2>
 
 <pre>
 {{report['report_sql']}}

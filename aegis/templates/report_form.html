@@ -1,9 +1,7 @@
 {% extends frame.html %}
 
 {% block body %}
-<div class="w3-container w3-blue" style="margin-top: 32px;">
-    <h3>{% if report_type %}Edit{% else %}New{% end %} Report</h3>
-</div>
+<div class="w3-container w3-blue"><h1>{% if report_type %}Edit{% else %}New{% end %} Report</h1></div>
 
 <form id="report_add" class="w3-card w3-padding" action="{{request.path}}" method="POST">
     {% raw xsrf_form_html() %}
@@ -33,13 +31,13 @@
 
     <p>
         <label><b>Report SQL</b> {% if errors.get('report_sql') %}<span class="w3-text-red">{{errors['report_sql']}}</span>{% end %}</label>
-        <textarea class="w3-input" style="font-family: monospace" name="report_sql" rows="20">
+        <textarea class="w3-input" id="report-textarea" name="report_sql" rows="20">
           {{report_type.get('report_sql', '')}}
         </textarea>
     </p>
 
     <div class="w3-center w3-padding">
-        <a class="w3-left w3-text-blue" href="/aegis/report">Cancel</a>
+        <a class="w3-left w3-text-blue" href="/admin/report">Cancel</a>
         <input type="submit" class="w3-button w3-blue w3-center" value="{% if report_type %}Update{% else %}Add{% end %} Report"/>
     </div>
 </form>

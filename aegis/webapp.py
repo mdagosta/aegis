@@ -1121,7 +1121,7 @@ class AegisReportForm(AegisWeb):
             sql_error = [str(arg) for arg in ex.args]
             self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
             return self.screen()
-        return self.redirect('/aegis/report/%s' % report_type_id)
+        return self.redirect('/admin/report/%s' % report_type_id)
 
     def screen(self):
         self.tmpl['schemas'] = []

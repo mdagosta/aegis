@@ -953,3 +953,13 @@ class Monitor(aegis.database.Row):
     def get_host_cmd(cls, host, cmd):
         sql = "SELECT * FROM monitor WHERE monitor_host=%s AND monitor_cmd=%s ORDER BY monitor_id DESC LIMIT 1"
         return db().get(sql, host, cmd, cls=cls)
+
+
+class Marketing(aegis.database.Row):
+    table_name = 'marketing'
+    id_column = 'marketing_id'
+
+    @classmethod
+    def get_name(cls, name):
+        sql = 'SELECT * FROM marketing WHERE marketing_name=%s'
+        return db().get(sql, name, cls=cls)

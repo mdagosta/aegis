@@ -300,11 +300,30 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def get_next_url(self, default_url='/'):
         next_url = self.get_argument('next', None)
-        if next_url:
-            return tornado.escape.url_unescape(next_url)
-        if self.tmpl['referer']:
-            return tornado.escape.url_unescape(self.tmpl['referer'])
+        url_parts = aegis.stdlib.validate_url(next_url)
+        if not url_parts:
+            return default_url
+        url_str = urllib.parse.urlunparse(url_parts)
+        if url_str:
+            return tornado.escape.url_unescape(url_str)
         return default_url
+
+    def get_url_next(self, url):
+        # Validate and parse uri
+        url_parts = urllib.parse.urlparse(url)
+        url_parts = url_parts._replace(scheme='https', netloc=self.tmpl['domain'])
+        url_str = urllib.parse.urlunparse(url_parts)
+        url_parts = aegis.stdlib.validate_url(url_str)
+        if not url_parts:
+            return
+        # Remove ?next= param in query string to prevent looping
+        query_dict = urllib.parse.parse_qs(url_parts.query)
+        if 'next' in query_dict:
+            del query_dict['next']
+        query_params = urllib.parse.urlencode(query_dict, doseq=True)
+        url_parts = url_parts._replace(query=query_params)
+        next_url = urllib.parse.urlunparse(url_parts)
+        return next_url
 
 
     # Cookie Handling

@@ -21,6 +21,7 @@ import string
 import subprocess
 import sys
 import time
+import urllib
 import xml
 
 # Extern Imports
@@ -348,6 +349,15 @@ def validate_json(self, value):
         return json.loads(value)
     except ValueError:
         return None
+
+def validate_url(url):
+    try:
+        result = urllib.parse.urlparse(url)
+        if all([result.scheme, result.netloc, result.path]):
+            return result
+    except Exception as ex:
+        logging.exception(ex)
+        return False
 
 
 email_validator = None

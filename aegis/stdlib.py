@@ -21,7 +21,7 @@ import string
 import subprocess
 import sys
 import time
-import urllib
+import urllib.parse
 import xml
 
 # Extern Imports
@@ -353,6 +353,8 @@ def validate_json(self, value):
 def validate_url(url):
     try:
         result = urllib.parse.urlparse(url)
+        if not result.path:
+            result = result._replace(path='/')
         if all([result.scheme, result.netloc, result.path]):
             return result
     except Exception as ex:

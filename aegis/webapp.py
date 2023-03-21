@@ -729,13 +729,17 @@ class AegisHandler(tornado.web.RequestHandler):
             marketing_name = 'direct'
             referer = self.request.headers.get('Referer')
             if referer:
-                marketing_name = 'referral'
-                url_parts = urllib.parse.urlparse(referer)
-                organic_netlocs = ['google.com', 'www.google.com', 'www.aol.com', 'aol.com', 'www.ask.com', 'ask.com', 'baidu.com', 'www.bing.com', 'bing.com',
-                                   'www.daum.net', 'daum.net', 'duckduckgo.com', 'ecosia.org', 'search.brave.com', 'www.ecosia.org', 'www.lycos.com', 'www.msn.com',
-                                   'www.yahoo.com', 'm.yahoo.com', 'yahoo.com', 'yandex.ru', 'www.yandex.com']
-                if url_parts.netloc in organic_netlocs:
-                    marketing_name = 'organic'
+                # Leave it as 'direct' if the referer netloc matches domain
+                url_parts = aegis.stdlib.validate_url(referer)
+                if url_parts:
+                    netloc_match = (url_parts.netloc == self.tmpl['domain'])
+                    if not netloc_match:
+                        marketing_name = 'referral'
+                        organic_netlocs = ['google.com', 'www.google.com', 'www.aol.com', 'aol.com', 'www.ask.com', 'ask.com', 'baidu.com', 'www.bing.com', 'bing.com',
+                                           'www.daum.net', 'daum.net', 'duckduckgo.com', 'ecosia.org', 'search.brave.com', 'www.ecosia.org', 'www.lycos.com', 'www.msn.com',
+                                           'www.yahoo.com', 'm.yahoo.com', 'yahoo.com', 'yandex.ru', 'www.yandex.com']
+                        if url_parts.netloc in organic_netlocs:
+                            marketing_name = 'organic'
             marketing = aegis.model.Marketing.get_name(marketing_name)
             if marketing:
                 mid = marketing['marketing_id']

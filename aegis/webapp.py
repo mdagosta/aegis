@@ -101,7 +101,7 @@ class AegisHandler(tornado.web.RequestHandler):
     def prepare(self):
         if self._parent_timer:
             aegis.stdlib.timer_start(self.timer_obj, 'prepare')
-        self.set_header('Cache-Control', 'no-cache, no-store')
+        self.set_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         self.set_header('Pragma', 'no-cache')
         self.set_header('Expires', 'Fri, 21 Dec 2012 03:08:13 GMT')
         self.tmpl['request_name'] = self.page_name = '%s.%s' % (self.__class__.__name__, self.request.method)

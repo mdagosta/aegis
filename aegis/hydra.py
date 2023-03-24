@@ -329,6 +329,11 @@ class HydraHead(HydraThread):
         return True, 1
 
 
+    def mailer(self, hydra_queue, hydra_type, dbconn=None):
+        aegis.stdlib.logw(dbconn, "MAILER BATCH CONN")
+        # Scan email_queue for something to send
+
+
 class Hydra(HydraThread):
 
     def __init__(self):

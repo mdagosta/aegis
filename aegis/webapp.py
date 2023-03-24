@@ -541,9 +541,11 @@ class AegisHandler(tornado.web.RequestHandler):
         is_robot = self.user_is_robot()
         audit_session_id = None
         audit_session_row = None
+        # If session_ck has audit_session_id, also try to fetch it to make sure it exists.
         if self.tmpl.get('session_ck', {}).get('audit_session_id'):
             audit_session_id = self.tmpl['session_ck']['audit_session_id']
             audit_session_row = aegis.model.AuditSession.get_id(audit_session_id)
+        if audit_session_row:
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
             if aegis.database.mysql_available:

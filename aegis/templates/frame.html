@@ -8,26 +8,34 @@
           {% include w3.css %}
           h3 { margin: 5px 0; }
           form p {margin: 10px 0; }
-         #menu-bar span { margin: 0 .5em;}}
-         #home-link {text-decoration: none;}
-         #page-content {margin-top: 80px; max-width: initial;}
-         .top-element {margin-top: 50px;}
-         input.aegis-button {padding: 5px 6px;}
-         div.debug-panel {margin-top: 1em; background: #ddd; font-size: 14px;}
-         .aegis-shell { overflow-x: scroll; }
-         #report-textarea { font-family: monospace; }
-         #report-outer { overflow-x: auto; }
-         #report-body { max-height: calc(60vh); }
-         @media only screen and (max-device-width: 418px), only screen and (max-width: 418px) {
-             #top-bar {font-size: 14px!important; }
-             #top-bar .w3-bar-item {padding: 5px!important;}
-             #menu-bar {padding: 5px!important;}
-             #menu-bar span { margin: 0 .3em;}}
-             .w3-large {font-size: 18px!important;}
-             h1 {font-size: 24px!important;}
-             .w3-table-all th:first-child, .w3-table-all td:first-child {padding-left: 8px;}
-             .w3-table-all th, .w3-table-all td {padding-left: 4px; padding-right: 4px;}
-         }
+          #menu-bar span { margin: 0 .5em;}}
+          #home-link {text-decoration: none;}
+          #page-content {margin-top: 80px; max-width: initial; }
+          .top-element {margin-top: 50px;}
+          input.aegis-button {padding: 5px 6px;}
+          div.debug-panel {margin-top: 1em; background: #ddd; font-size: 14px;}
+          .aegis-shell { overflow-x: scroll; }
+          #report-textarea { font-family: monospace; }
+          #report-outer { overflow-x: auto; }
+          #report-body { max-height: calc(60vh); margin-top: 0;}
+          #report-body .w3-container { padding: 0; }
+          #report-body table { margin-top: 5px; }
+          #report-body table th { padding: 6px 8px; }
+          #report-body table td { padding: 4px 8px; }
+          #report-sql { background: #f8fcff; padding: 0px 5px; width: fit-content; }
+          @media only screen and (max-device-width: 418px), only screen and (max-width: 418px) {
+          #top-bar {font-size: 14px!important; }
+          #top-bar .w3-bar-item {padding: 5px!important;}
+          #menu-bar {padding: 5px!important;}
+          #menu-bar span { margin: 0 .3em;}}
+          #page-content {margin-top: 60px; }
+          .w3-large {font-size: 16px!important;}
+          h1 {font-size: 24px!important;}
+          #report-body h1 { font-size: 14pt!important; }
+          #report-body .report-name { max-width: calc(50vw); }
+          .w3-table-all th:first-child, .w3-table-all td:first-child {padding-left: 8px;}
+          .w3-table-all th, .w3-table-all td {padding-left: 4px; padding-right: 4px;}
+          }
         </style>
         {% block head %}{% end %}
     </head>

@@ -739,7 +739,9 @@ class AegisHandler(tornado.web.RequestHandler):
                         marketing_name = 'referral'
                         organic_netlocs = ['google.com', 'www.google.com', 'www.aol.com', 'aol.com', 'www.ask.com', 'ask.com', 'baidu.com', 'www.bing.com', 'bing.com',
                                            'www.daum.net', 'daum.net', 'duckduckgo.com', 'ecosia.org', 'search.brave.com', 'www.ecosia.org', 'www.lycos.com', 'www.msn.com',
-                                           'www.yahoo.com', 'm.yahoo.com', 'yahoo.com', 'yandex.ru', 'www.yandex.com']
+                                           'www.yahoo.com', 'm.yahoo.com', 'yahoo.com', 'yandex.ru', 'www.yandex.com',
+                                           'com.google.android.googlequicksearchbox',   # android-app://com.google.android.googlequicksearchbox
+                                               ]
                         if url_parts.netloc in organic_netlocs:
                             marketing_name = 'organic'
             marketing = aegis.model.Marketing.get_name(marketing_name)

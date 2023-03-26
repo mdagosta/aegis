@@ -2,13 +2,13 @@
 
 {% block body %}
 <div id="report-body">
-    <h1>{{report['report_type_name']}} Report          <a href="/admin/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
+    <h1><div class="report-name w3-left">{{report['report_type_name']}}</div>          <a href="/admin/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
 
     {% if output %}
     <div class="w3-container">
         {# Combined with timeframe/rollup and table sorting, this could be super powerful      #}
         {# Simple Sort HTML Table:   https://www.w3schools.com/howto/howto_js_sort_table.asp   #}
-        <table class="w3-table-all w3-hoverable w3-border w3-border-blue-grey">
+        <table class="w3-table-all w3-hoverable w3-border w3-border-blue-grey w3-medium">
             <tr>
                 {% for name in column_names %}
                 <th>{{name}}</th>
@@ -22,15 +22,15 @@
             </tr>
             {% end %}
             <tr>
-                <th class="w3-border-top w3-border-cyan">TOTALS</th>
+                <td class="w3-border-top w3-border-cyan">TOTALS</td>
                 {% for name in column_names[1:] %}
                 <td class="w3-border-top w3-border-cyan">{{name}}</td>
                 {% end %}
             </tr>
             <tr>
-                <th class="w3-border-bottom w3-border-blue-grey">{{num_rows}} Rows</th>
+                <td class="w3-border-bottom w3-border-blue-grey">{{num_rows}} Rows</td>
                 {% for column_name in column_names[1:] %}
-                <th class="w3-border-bottom w3-border-blue-grey">{{report_totals.get(column_name, '')}}</th>
+                <td class="w3-border-bottom w3-border-blue-grey">{{report_totals.get(column_name, '')}}</td>
                 {% end %}
             </tr>
         </table>
@@ -42,11 +42,12 @@
 </div>
 
 <br/>
-<h2 class="w3-border-top w3-border-blue w3-margin-top">SQL       <a href="/admin/report/form/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Edit</a></h2>
-
-<pre>
-{{report['report_sql']}}
-</pre>
+<div id="report-sql" class="w3-card w3-border-top w3-border-blue">
+  <h2>SQL       <a href="/admin/report/form/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Edit</a></h2>
+  <pre>
+  {{report['report_sql']}}
+  </pre>
+</div>
 
 
 {% end %}

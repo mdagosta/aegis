@@ -1,11 +1,11 @@
 {% extends frame.html %}
 
 {% block body %}
-<div style="overflow-x: auto;">
-    <h1 style="margin-top: 1em;">{{report['report_type_name']}} Report          <a href="/admin/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
+<div id="report-body">
+    <h1>{{report['report_type_name']}} Report          <a href="/admin/report/{{report['report_type_id']}}" class="w3-right w3-btn w3-blue w3-large">Run Report</a></h1>
 
     {% if output %}
-    <div class="w3-container" style="max-height: calc(60vh);">
+    <div class="w3-container">
         {# Combined with timeframe/rollup and table sorting, this could be super powerful      #}
         {# Simple Sort HTML Table:   https://www.w3schools.com/howto/howto_js_sort_table.asp   #}
         <table class="w3-table-all w3-hoverable w3-border w3-border-blue-grey">

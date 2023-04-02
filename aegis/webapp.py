@@ -21,6 +21,7 @@ import urllib
 
 # Extern Imports
 import pkg_resources
+import pyreferrer
 import requests
 from tornado.options import options
 import tornado.web
@@ -724,30 +725,47 @@ class AegisHandler(tornado.web.RequestHandler):
         mid = aegis.stdlib.validate_int(self.request.args.get('mid'))
         if mid:
             marketing = aegis.model.Marketing.get_id(mid)
-            if not marketing:
-                mid = None
-        # Without explicit mid, infer from Referer header
-        if not mid:
-            marketing_name = 'direct'
-            referer = self.request.headers.get('Referer')
-            if referer:
-                # Leave it as 'direct' if the referer netloc matches domain
-                url_parts = aegis.stdlib.validate_url(referer)
-                if url_parts:
-                    netloc_match = (url_parts.netloc == self.tmpl['domain'])
-                    if not netloc_match:
-                        marketing_name = 'referral'
-                        organic_netlocs = ['google.com', 'www.google.com', 'www.aol.com', 'aol.com', 'www.ask.com', 'ask.com', 'baidu.com', 'www.bing.com', 'bing.com',
-                                           'www.daum.net', 'daum.net', 'duckduckgo.com', 'ecosia.org', 'search.brave.com', 'www.ecosia.org', 'www.lycos.com', 'www.msn.com',
-                                           'www.yahoo.com', 'm.yahoo.com', 'yahoo.com', 'yandex.ru', 'www.yandex.com',
-                                           'com.google.android.googlequicksearchbox',   # android-app://com.google.android.googlequicksearchbox
-                                               ]
-                        if url_parts.netloc in organic_netlocs:
-                            marketing_name = 'organic'
-            marketing = aegis.model.Marketing.get_name(marketing_name)
             if marketing:
-                mid = marketing['marketing_id']
-        self.audit_session['marketing_id'] = mid
+                self.audit_session['marketing_id'] = mid
+                return
+        # Without explicit mid, infer from Referer header
+        referer = self.request.headers.get('Referer')
+        # Is 'direct' with no referer
+        if not referer:
+            logging.warning("No Referer -> Direct")
+            return self.finish_marketing('direct')
+        # Is 'direct' if the referer netloc endswith the domain
+        url_parts = aegis.stdlib.validate_url(referer)
+        if url_parts and url_parts.netloc.endswith(self.tmpl['domain']):
+            logging.warning("Referer endswith domain -> direct")
+            return self.finish_marketing('direct')
+        # Run it through pyreferrer
+        pr = pyreferrer.Referrer.parse(referer)
+        if pr and pr['type'] == 'search':
+            logging.warning("Pyreferrer type is search -> organic")
+            return self.finish_marketing('organic')
+        if pr and pr['type'] == 'social':
+            logging.warning("Pyreferrer type is social -> social")
+            return self.finish_marketing('social')
+        aegis.stdlib.logw(pr, "Pyreferrer")
+        # Custom organic "netlocs" not (yet) in pyreferrer
+        organic_netlocs = ['aol.com', 'baidu.com', 'www.daum.net', 'daum.net', 'search.brave.com', 'www.ecosia.org', 'www.msn.com',
+                           'com.google.android.googlequicksearchbox']   # android-app://com.google.android.googlequicksearchbox
+        for organic_netloc in organic_netlocs:
+            if url_parts.netloc.endswith(organic_netloc):
+                logging.warning("Netloc endswith organic domain -> organic")
+                return self.finish_marketing('organic')
+        # Mark it as an unknown referral
+        logging.warning("Url unknown: %s" % referer)
+        return self.finish_marketing('referral')
+
+    def finish_marketing(self, marketing_name):
+        marketing = aegis.model.Marketing.get_name(marketing_name)
+        if marketing:
+            mid = marketing['marketing_id']
+            self.audit_session['marketing_id'] = mid
+        else:
+            logging.error("finish_marketing() marketing_name slipping through cracks: %s" % marketing_name)
 
 
 class JsonRestApi(AegisHandler):

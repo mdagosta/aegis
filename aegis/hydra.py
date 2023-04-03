@@ -26,6 +26,7 @@ import pympler.summary
 # Project Imports
 import aegis.stdlib
 import aegis.database
+import aegis.mailer
 import aegis.model
 import aegis.build
 import config
@@ -136,6 +137,7 @@ class HydraHead(HydraThread):
             self.hydra_type_maxlen = 8
             for dbargs in self.hydra_obj.dbparams:
                 dbconn = aegis.model.db(**dbargs)
+                dbconn.domain = dbargs['domain']
                 dbmaxlen = max([len(ht['hydra_type_name']) for ht in aegis.model.HydraType.scan(dbconn)]+[8])
                 self.hydra_type_maxlen = max(self.hydra_type_maxlen, dbmaxlen)
         else:
@@ -153,6 +155,7 @@ class HydraHead(HydraThread):
                     # Each iteration, track the next dbconn in the list
                     dbargs, db_iter = aegis.stdlib.loopnext(self.hydra_obj.dbparams, db_iter)
                     dbconn = aegis.model.db(**dbargs)
+                    dbconn.domain = dbargs['domain']
                 else:
                     dbconn = aegis.model.db()
                 # In the case that the database is down, these fail and the HydraHead will die.
@@ -330,8 +333,23 @@ class HydraHead(HydraThread):
 
 
     def mailer(self, hydra_queue, hydra_type, dbconn=None):
-        aegis.stdlib.logw(dbconn, "MAILER BATCH CONN")
-        # Scan email_queue for something to send
+        # Singleton check - if someone else claimed a different email_tracking, just skip it here and let Hydra handle it.
+        singleton = hydra_queue.singleton(dbconn=dbconn)
+        if singleton:
+            logging.error("mailer already running")
+            return True, 0
+        work_cnt = 0
+        # Scan send_dttm, sent_dttm for something to send
+        email_queue = aegis.model.EmailTracking.scan_mailer(dbconn=dbconn)
+        for email_tracking in email_queue:
+            claimed = email_tracking.claim(dbconn=dbconn)
+            if not claimed: continue
+            aegis.mailer.send_mailer(email_tracking['email_tracking_id'], dbconn=dbconn)
+            work_cnt += 1
+        # Clear any stale claims
+        cleared = aegis.model.EmailTracking.clear_claims(minutes=1, dbconn=dbconn)
+        work_cnt += cleared
+        return True, work_cnt
 
 
 class Hydra(HydraThread):

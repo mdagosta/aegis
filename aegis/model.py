@@ -208,18 +208,20 @@ class Member(aegis.database.Row):
         return db().execute(sql, google_user_id, self['member_id'])
 
     @classmethod
-    def get_auth(cls, member_id):
+    def get_auth(cls, member_id, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         if not member_id:
             return None
-        member = cls.get_id(member_id)
+        member = cls.get_id(member_id, dbconn=dbconn)
         if not member:
             return None
         if member.get('email_id'):
-            email = Email.get_id(member['email_id'])
+            email = Email.get_id(member['email_id'], dbconn=dbconn)
             if email:
                 member['email'] = email
         if member.get('google_user_id'):
-            member['google_user'] = GoogleUser.get_id(member['google_user_id'])
+            member['google_user'] = GoogleUser.get_id(member['google_user_id'], dbconn=dbconn)
             member['picture_url'] = member['google_user']['picture_url']
         return member
 
@@ -383,9 +385,34 @@ class EmailTracking(aegis.database.Row):
             sql += ' RETURNING email_tracking_id'
         return db().execute(sql, email_type_id, from_email_id, to_email_id, uuid.uuid4().hex, email_data)
 
-    def mark_sent(self):
+    def mark_sent(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
         sql = "UPDATE email_tracking SET sent_dttm=NOW() WHERE email_tracking_id=%s AND sent_dttm IS NULL"
-        return db().execute(sql, self['email_tracking_id'])
+        return dbconn.execute(sql, self['email_tracking_id'])
+
+    @classmethod
+    def scan_mailer(cls, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "SELECT * FROM email_tracking WHERE send_dttm < NOW() AND sent_dttm IS NULL AND delete_dttm IS NULL AND claimed_dttm IS NULL"
+        return dbconn.query(sql, cls=cls)
+
+    def claim(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = 'UPDATE email_tracking SET claimed_dttm=NOW() WHERE email_tracking_id=%s AND claimed_dttm IS NULL'
+        return dbconn.execute(sql, self['email_tracking_id'])
+
+    @staticmethod
+    def clear_claims(minutes=1, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        if type(dbconn) is aegis.database.PostgresConnection:
+            sql = "UPDATE email_tracking SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE'" % int(minutes)
+        elif type(dbconn) is aegis.database.MysqlConnection:
+            sql = "UPDATE email_tracking SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE" % int(minutes)
+        return dbconn.execute_rowcount(sql)
 
 
 class EmailLink(aegis.database.Row):

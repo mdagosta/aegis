@@ -1072,25 +1072,21 @@ class AegisHydra(AegisWeb):
         pause_ids = [aegis.stdlib.validate_int(k.replace('pause_', '')) for k in self.request.args.keys() if k.startswith('pause_')]
         unpause_ids = [aegis.stdlib.validate_int(k.replace('unpause_', '')) for k in self.request.args.keys() if k.startswith('unpause_')]
         run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
-
         # Do Pause
         if pause_ids:
             hydra_type = aegis.model.HydraType.get_id(pause_ids[0])
             self.logw(hydra_type, "HYDRA TYPE")
             hydra_type.set_status('paused')
-
         # Do Unpause
         if unpause_ids:
             hydra_type = aegis.model.HydraType.get_id(unpause_ids[0])
             self.logw(hydra_type, "HYDRA TYPE")
             hydra_type.set_status('live')
-
         # Do Run --- hooks over to batch!
         if run_ids:
             hydra_type = aegis.model.HydraType.get_id(run_ids[0])
             self.logw(hydra_type, "HYDRA TYPE")
             hydra_type.run_now()
-
         return self.redirect(self.request.uri)
 
 

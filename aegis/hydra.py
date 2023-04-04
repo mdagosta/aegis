@@ -344,7 +344,7 @@ class HydraHead(HydraThread):
         for email_tracking in email_queue:
             claimed = email_tracking.claim(dbconn=dbconn)
             if not claimed: continue
-            aegis.mailer.send_mailer(email_tracking['email_tracking_id'], dbconn=dbconn)
+            aegis.mailer.Mailer.send_mailer(email_tracking['email_tracking_id'], dbconn=dbconn)
             work_cnt += 1
         # Clear any stale claims
         cleared = aegis.model.EmailTracking.clear_claims(minutes=1, dbconn=dbconn)

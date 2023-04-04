@@ -109,6 +109,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['next_url'] = self.get_next_url()
         self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
         self.setup_user()
+        self.track_email()
         # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False.
         self.use_audit = False
         if aegis.config.exists('use_audit'):
@@ -461,8 +462,9 @@ class AegisHandler(tornado.web.RequestHandler):
             return None
         if self.tmpl.get('member'):
             return self.tmpl['member']
-        self.tmpl['member'] = get_auth_fn(self.get_member_id())
-        return self.tmpl['member']
+        if self.get_member_id():
+            self.tmpl['member'] = get_auth_fn(self.get_member_id())
+            return self.tmpl['member']
 
     def get_member_email(self, get_auth_fn=aegis.model.Member.get_auth):
         if not aegis.database.pgsql_available and not aegis.database.mysql_available:
@@ -732,7 +734,7 @@ class AegisHandler(tornado.web.RequestHandler):
         referer = self.request.headers.get('Referer')
         # Is 'direct' with no referer
         if not referer:
-            logging.warning("No Referer -> Direct")
+            logging.warning("No Referer -> direct")
             return self.finish_marketing('direct')
         # Is 'direct' if the referer netloc endswith the domain
         url_parts = aegis.stdlib.validate_url(referer)
@@ -765,7 +767,28 @@ class AegisHandler(tornado.web.RequestHandler):
             mid = marketing['marketing_id']
             self.audit_session['marketing_id'] = mid
         else:
-            logging.error("finish_marketing() marketing_name slipping through cracks: %s" % marketing_name)
+            logging.error("%s finish_marketing() marketing_name slipping through cracks: %s" % (self.tmpl['host'], marketing_name))
+
+    def track_email(self):
+        if not self.request.args.get('t') or not self.request.args.get('e'):
+            return
+        email_tracking = aegis.model.EmailTracking.get_params(aegis.stdlib.validate_int(self.request.args['t']), self.request.args['e'])
+        if not email_tracking:
+            return
+        if not email_tracking['deliver_dttm']:
+            email_tracking.mark_delivered()
+        if not email_tracking['open_dttm']:
+            email_tracking.mark_opened()
+        if not email_tracking['click_dttm']:
+            email_tracking.mark_clicked()
+        # Mark email and member verified
+        email = aegis.model.Email.get_id(email_tracking['to_email_id'])
+        if email:
+            email.mark_verified()
+            if email['member_id'] and email['member_id'] == self.get_member_id():
+                self.get_current_user().mark_verified()
+        self.tmpl['email_tracking'] = email_tracking
+        return email_tracking
 
 
 class JsonRestApi(AegisHandler):

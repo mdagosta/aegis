@@ -175,6 +175,10 @@ class Email(aegis.database.Row):
         sql = "UPDATE email SET email=%s, google_user_id=NULL, delete_dttm=NOW() WHERE email_id=%s"
         return db().execute(sql, email_addr, self['email_id'])
 
+    def mark_verified(self):
+        sql = "UPDATE email SET verify_dttm=NOW() WHERE email_id=%s AND verify_dttm IS NULL"
+        return db().execute(sql, self['email_id'])
+
 
 class Member(aegis.database.Row):
     table_name = 'member'
@@ -228,6 +232,10 @@ class Member(aegis.database.Row):
     def deidentify(self):
         # stop referencing google_user.google_user_id, and mark deleted
         sql = "UPDATE member SET google_user_id=NULL, delete_dttm=NOW() WHERE member_id=%s"
+        return db().execute(sql, self['member_id'])
+
+    def mark_verified(self):
+        sql = "UPDATE member SET verify_dttm=NOW() WHERE member_id=%s AND verify_dttm IS NULL"
         return db().execute(sql, self['member_id'])
 
 
@@ -385,11 +393,12 @@ class EmailTracking(aegis.database.Row):
             sql += ' RETURNING email_tracking_id'
         return db().execute(sql, email_type_id, from_email_id, to_email_id, uuid.uuid4().hex, email_data)
 
-    def mark_sent(self, dbconn=None):
+    @classmethod
+    def get_params(cls, email_tracking_id, email_uuid, dbconn=None):
         if not dbconn:
             dbconn = db()
-        sql = "UPDATE email_tracking SET sent_dttm=NOW() WHERE email_tracking_id=%s AND sent_dttm IS NULL"
-        return dbconn.execute(sql, self['email_tracking_id'])
+        sql = "SELECT * FROM email_tracking WHERE email_tracking_id=%s AND email_uuid=%s"
+        return dbconn.get(sql, email_tracking_id, email_uuid, cls=cls)
 
     @classmethod
     def scan_mailer(cls, dbconn=None):
@@ -409,10 +418,34 @@ class EmailTracking(aegis.database.Row):
         if not dbconn:
             dbconn = db()
         if type(dbconn) is aegis.database.PostgresConnection:
-            sql = "UPDATE email_tracking SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE'" % int(minutes)
+            sql = "UPDATE email_tracking SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE' AND sent_dttm IS NULL" % int(minutes)
         elif type(dbconn) is aegis.database.MysqlConnection:
-            sql = "UPDATE email_tracking SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE" % int(minutes)
+            sql = "UPDATE email_tracking SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE AND sent_dttm IS NULL" % int(minutes)
         return dbconn.execute_rowcount(sql)
+
+    def mark_sent(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "UPDATE email_tracking SET sent_dttm=NOW() WHERE email_tracking_id=%s AND sent_dttm IS NULL"
+        return dbconn.execute(sql, self['email_tracking_id'])
+
+    def mark_delivered(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "UPDATE email_tracking SET deliver_dttm=NOW() WHERE email_tracking_id=%s AND deliver_dttm IS NULL"
+        return dbconn.execute(sql, self['email_tracking_id'])
+
+    def mark_opened(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "UPDATE email_tracking SET open_dttm=NOW() WHERE email_tracking_id=%s AND open_dttm IS NULL"
+        return dbconn.execute(sql, self['email_tracking_id'])
+
+    def mark_clicked(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "UPDATE email_tracking SET click_dttm=NOW() WHERE email_tracking_id=%s AND click_dttm IS NULL"
+        return dbconn.execute(sql, self['email_tracking_id'])
 
 
 class EmailLink(aegis.database.Row):

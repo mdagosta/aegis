@@ -754,7 +754,7 @@ class AegisHandler(tornado.web.RequestHandler):
         organic_netlocs = ['aol.com', 'baidu.com', 'www.daum.net', 'daum.net', 'search.brave.com', 'www.ecosia.org', 'www.msn.com',
                            'com.google.android.googlequicksearchbox']   # android-app://com.google.android.googlequicksearchbox
         for organic_netloc in organic_netlocs:
-            if url_parts.netloc.endswith(organic_netloc):
+            if url_parts and url_parts.netloc.endswith(organic_netloc):
                 logging.warning("Netloc endswith organic domain -> organic")
                 return self.finish_marketing('organic')
         # Mark it as an unknown referral

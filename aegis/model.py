@@ -148,8 +148,12 @@ class Email(aegis.database.Row):
     def set_email(cls, email):
         email_row = cls.get_email(email)
         if not email_row:
-            email_id = cls.insert(email)
-            email_row = cls.get_id(email_id)
+            try:
+                email_id = cls.insert(email)
+                email_row = cls.get_id(email_id)
+            except (aegis.database.PgsqlUniqueViolation, aegis.database.MysqlIntegrityError) as ex:
+                logging.error("Duplicate Key Error   aegis.model.Email.set_email(%s). Very unlikely. Read from DB and carry one.", email)
+                email_row = cls.get_email(email)
         return email_row
 
     @classmethod

@@ -779,7 +779,7 @@ class AegisHandler(tornado.web.RequestHandler):
             email_tracking.mark_delivered()
         if not email_tracking['open_dttm']:
             email_tracking.mark_opened()
-        if not email_tracking['click_dttm']:
+        if self.request.args.get('c') and not email_tracking['click_dttm']:
             email_tracking.mark_clicked()
         # Mark email and member verified
         email = aegis.model.Email.get_id(email_tracking['to_email_id'])

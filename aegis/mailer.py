@@ -5,6 +5,7 @@
 
 # Python Imports
 import datetime
+import email.charset
 import email.header
 import email.mime.multipart
 import email.mime.text
@@ -23,6 +24,9 @@ import tornado.template
 # Project Imports
 import config
 
+
+# Use Quoted-printable encoding instead of base64 since it's far more legible at a glance! From https://bugs.python.org/issue12552
+email.charset.add_charset('utf-8', email.charset.SHORTEST, email.charset.QP)
 
 class Mailer(object):
     template_registry = {}
@@ -87,14 +91,14 @@ class Mailer(object):
             html = ''
             try:
                 plain = template_loader.load(template+'.txt').generate(**email_opts)
-            except:
-                logging.exception("Couldn't render plaintext email for template: %s" % template)
-                pass
+            except FileNotFoundError as ex:
+                if kwargs.get('debug'):
+                    logging.exception("Couldn't render plaintext email for template: %s" % template)
             try:
                 html = template_loader.load(template+'.html').generate(**email_opts)
-            except:
-                logging.exception("Couldn't render HTML email for template: %s" % template)
-                pass
+            except FileNotFoundError as ex:
+                if kwargs.get('debug'):
+                    logging.exception("Couldn't render HTML email for template: %s" % template)
         else:
             plain = handler.render_string('%s.txt' % template, **email_opts)
             html =  handler.render_string('%s.html' % template, **email_opts)
@@ -141,9 +145,10 @@ class Mailer(object):
         email_data['email_tracking_id'] = email_tracking_id
         email_data['email_uuid'] = email_tracking['email_uuid']
         email_template = 'email/%s' % email_type['template_name']
+        #kwargs['debug'] = True
         email_msg = cls.render_email(None, email_data['from_addr'], email_data['to_addr'], email_data['subject'], email_template, email_data, **kwargs)
         if email_msg:
-            logging.warning(email_msg)
+            #logging.warning(email_msg)
             sent = cls.sendmail(from_email['email'], to_email['email'], email_msg)
             # Record email_tracking as sent
             if sent:

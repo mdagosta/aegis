@@ -355,7 +355,7 @@ class GoogleAccess(aegis.database.Row):
 
     @classmethod
     def hard_delete_google_user(cls, google_user_id):
-        sql = "DELETE FROM gmail_access WHERE google_user_id=%s"
+        sql = "DELETE FROM google_access WHERE google_user_id=%s"
         return db().execute(sql, google_user_id)
 
 

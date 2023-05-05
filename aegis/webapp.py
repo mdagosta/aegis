@@ -751,7 +751,7 @@ class AegisHandler(tornado.web.RequestHandler):
             return self.finish_marketing('social')
         aegis.stdlib.logw(pr, "Pyreferrer")
         # Custom organic "netlocs" not (yet) in pyreferrer
-        organic_netlocs = ['aol.com', 'baidu.com', 'www.daum.net', 'daum.net', 'search.brave.com', 'www.ecosia.org', 'www.msn.com',
+        organic_netlocs = ['aol.com', 'baidu.com', 'www.daum.net', 'daum.net', 'presearch.com', 'search.brave.com', 'www.ecosia.org', 'www.msn.com',
                            'com.google.android.googlequicksearchbox']   # android-app://com.google.android.googlequicksearchbox
         for organic_netloc in organic_netlocs:
             if url_parts and url_parts.netloc.endswith(organic_netloc):
@@ -1078,7 +1078,11 @@ class AegisHydra(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        self.tmpl['page_title'] = 'Hydra %s' % options.header_logo
+        if options.header_logo.endswith('svg'):
+            logging.warning("DO SVG")
+            self.tmpl['page_title'] = 'Hydra %s' % options.domain
+        else:
+            self.tmpl['page_title'] = 'Hydra %s' % options.domain
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
         self.tmpl['home_link'] = '/'
         self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version

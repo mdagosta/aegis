@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        {% block title %}<title>{{page_title}} {% if options.env != 'prod' %}({{ options.env }}){% end %}</title>{% end %}
+        {% block title %}<title>{{page_title}} {% if options.env != 'prod' %}[{{ options.env }}]{% end %}</title>{% end %}
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <style nonce="aegis-webapp-frame-rstlne">

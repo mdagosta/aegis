@@ -353,6 +353,11 @@ class GoogleAccess(aegis.database.Row):
         sql = "DELETE FROM google_access WHERE google_access_id=%s"
         return db().execute(sql, self['google_access_id'])
 
+    @classmethod
+    def hard_delete_google_user(cls, google_user_id):
+        sql = "DELETE FROM gmail_access WHERE google_user_id=%s"
+        return db().execute(sql, google_user_id)
+
 
 class GooglePicture(aegis.database.Row):
     table_name = 'google_picture'
@@ -369,6 +374,11 @@ class GooglePicture(aegis.database.Row):
     def hard_delete(self):
         sql = "DELETE FROM google_picture WHERE google_picture_id=%s"
         return db().execute(sql, self['google_picture_id'])
+
+    @classmethod
+    def hard_delete_google_user(cls, google_user_id):
+        sql = "DELETE FROM google_picture WHERE google_user_id=%s"
+        return db().execute(sql, google_user_id)
 
 
 class EmailType(aegis.database.Row):

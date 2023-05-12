@@ -98,18 +98,24 @@ class Build:
                 return
             if self._shell_exec("virtualenv/bin/pip --cache-dir .cache install -e .", cwd=self.build_dir, build_step='build'):
                 return
-            # Set up and run yarn if it's installed
+            # Set up and run npm if it's installed TODO and package.lock file exists in the root of repository
+            package_lock = os.path.exists(os.path.join(self.build_dir, 'package-lock.json'))
+            self.npm, stderr, exit_status = aegis.stdlib.shell('which npm', cwd=self.src_dir)
+            if self.npm and package_lock:
+                if self._shell_exec("npm install", cwd=self.build_dir, build_step='build'):
+                    return
+                if self._shell_exec("npm run %s" % self.build_row['env'], cwd=self.build_dir, build_step='build'):
+                    return
+            # Set up and run yarn if it's installed TODO and yarn.lock file exists in the root of repository
+            yarn_lock = os.path.exists(os.path.join(self.build_dir, 'yarn.lock'))
             self.yarn, stderr, exit_status = aegis.stdlib.shell('which yarn', cwd=self.src_dir)
-            if self.yarn:
-                yarn_dir = aegis.config.get('yarn_dir')
-                if yarn_dir:
-                    yarn_dir = os.path.join(self.build_dir, yarn_dir)
-                else:
-                    yarn_dir = self.build_dir
-                if self._shell_exec("yarn install", cwd=yarn_dir, build_step='build'):
+            if self.yarn and yarn_lock:
+                if self._shell_exec("yarn install", cwd=self.build_dir, build_step='build'):
                     return
-                if self._shell_exec("yarn run %s" % self.build_row['env'], cwd=yarn_dir, build_step='build'):
+                if self._shell_exec("yarn run %s" % self.build_row['env'], cwd=self.build_dir, build_step='build'):
                     return
+            # If we (essentially) ran webpack, build a version file and check file size
+            if (self.yarn and yarn_lock) or (self.npm and package_lock):
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
                     build_file_version = 'local'

@@ -118,6 +118,10 @@ class Mailer(object):
         from_email = aegis.model.Email.get_id(email_tracking['from_email_id'], dbconn=dbconn)
         email_data['from_addr'] = from_email['email']
         to_email = aegis.model.Email.get_id(email_tracking['to_email_id'], dbconn=dbconn)
+        if to_email['delete_dttm']:
+            logging.error("Not sending to deleted email_id: %s", to_email['to_email_id'])
+            email_tracking.mark_deleted(dbconn=dbconn)
+            return False
         email_data['to_addr'] = to_email['email']
         # Turn this into a (first_name or email) if it's a member
         if to_email['member_id']:
@@ -139,6 +143,7 @@ class Mailer(object):
         email_data['nl2br'] = aegis.stdlib.nl2br
         email_data['format_integer'] = aegis.stdlib.format_integer
         # It's a mouthful to convert this to Pacific time
+        # XXX TODO this should be on UTC, maybe without timezone information
         email_data['send_dttm_str'] = email_tracking['send_dttm'].astimezone(pytz.timezone('US/Pacific')).strftime('%b %d, %Y, %-H:%-M %p')
         email_data['options'] = options
         email_data['current_year'] = datetime.date.today().year

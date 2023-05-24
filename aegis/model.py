@@ -466,6 +466,12 @@ class EmailTracking(aegis.database.Row):
         sql = "UPDATE email_tracking SET click_dttm=NOW() WHERE email_tracking_id=%s AND click_dttm IS NULL"
         return dbconn.execute(sql, self['email_tracking_id'])
 
+    def mark_deleted(self, dbconn=None):
+        if not dbconn:
+            dbconn = db()
+        sql = "UPDATE email_tracking SET delete_dttm=NOW() WHERE email_tracking_id=%s AND delete_dttm IS NULL"
+        return dbconn.execute(sql, self['email_tracking_id'])
+
 
 class EmailLink(aegis.database.Row):
     table_name = 'email_link'

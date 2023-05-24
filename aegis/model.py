@@ -196,10 +196,11 @@ class Member(aegis.database.Row):
         return db().execute(sql, email_id)
 
     @classmethod
-    def set_member(cls, email_id, marketing_id=None):
+    def set_member(cls, email_id, marketing_id=None, **kwargs):
         member = cls.get_email_id(email_id)
         if not member:
             columns = {'email_id': email_id}
+            columns.update(kwargs)
             if marketing_id:
                 columns['marketing_id'] = marketing_id
             member_id = cls.insert_columns(**columns)
@@ -330,6 +331,10 @@ class GoogleUser(aegis.database.Row):
     def hard_delete(self):
         sql = "DELETE FROM google_user WHERE google_user_id=%s"
         return db().execute(sql, self['google_user_id'])
+
+    def set_scopes(self, scopes):
+        sql = "UPDATE google_user SET scopes=%s WHERE google_user_id=%s"
+        return db().execute(sql, scopes, self['google_user_id'])
 
 
 class GoogleAccess(aegis.database.Row):

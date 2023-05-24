@@ -69,6 +69,7 @@ class AegisHandler(tornado.web.RequestHandler):
         config.apply_hostname(self.tmpl['host'])
         if not aegis.config.get('skip_hostname_check'):
             self.tmpl['domain'] = options.domain
+        self.tmpl['host_config'] = config.hostnames[self.tmpl['host']]
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
         self.tmpl['app_name'] = options.app_name
@@ -113,8 +114,8 @@ class AegisHandler(tornado.web.RequestHandler):
         # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False.
         self.use_audit = False
         if aegis.config.exists('use_audit'):
-            if hasattr(config, 'hostnames') and 'use_audit' in config.hostnames[self.tmpl['host']]:
-                self.use_audit = config.hostnames[self.tmpl['host']].get('use_audit')
+            if hasattr(config, 'hostnames') and 'use_audit' in self.tmpl['host_config']:
+                self.use_audit = self.tmpl['host_config'].get('use_audit')
             else:
                 self.use_audit = options.use_audit
         if self.use_audit:
@@ -245,7 +246,8 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def render(self, template_name, **kwargs):
         aegis.stdlib.timer_start(self.timer_obj, 'render')
-        template_path = os.path.join(options.template_path, template_name)
+        template_path = self.tmpl['host_config'].get('template_path') or options.template_path
+        template_path = os.path.join(template_path, template_name)
         # Override parent class render to remove the embeds and instrument a timer here. Copied in from tornado/web.py render()
         if self._finished:
             raise RuntimeError("Cannot render() after finish()")
@@ -286,6 +288,11 @@ class AegisHandler(tornado.web.RequestHandler):
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}
         template_opts['kwargs']['user_agent'] = self.tmpl['user_agent']
         template_opts['kwargs']['remote_ip'] = self.request.remote_ip
+        if hasattr(self, 'audit_request'):
+            template_opts['kwargs']['country_cd'] = self.audit_request['country_cd']
+            template_opts['kwargs']['region_cd'] = self.audit_request['region_cd']
+        if hasattr(self, 'audit_session'):
+            template_opts['kwargs']['audit_session_id'] = self.audit_session.get('audit_session_id')
         template_opts['kwargs']['robot'] = self.user_is_robot()
         template_opts['kwargs']['Python UTC Now'] = self.tmpl['utcnow'].strftime('%Y-%m-%dT%H:%M:%S')
         error_message = self.render_string("error_message.txt", **template_opts).decode('utf-8')

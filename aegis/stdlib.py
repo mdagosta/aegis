@@ -10,6 +10,7 @@ import functools
 import hashlib
 import inspect
 import ipaddress
+import itertools
 import json
 import logging
 import os
@@ -136,11 +137,11 @@ def unique_list(iterable):
 # From the accepted answer on http://stackoverflow.com/questions/642763/python-intersection-of-two-lists
 # Preserves order of the items in the second iterable
 def stable_intersection(iter1, iter2):
-    return list(itertools.ifilter(set(iter1).__contains__, iter2))
+    return list(filter(set(iter1).__contains__, iter2))
 
 # Modified from above - remove items in 'iter_remove' from items in 'iter_keep'
 def stable_difference(iter_remove, iter_keep):
-    return list(itertools.ifilterfalse(set(iter_remove).__contains__, iter_keep))
+    return list(itertools.filterfalse(set(iter_remove).__contains__, iter_keep))
 
 def loopnext(iterable, itr):
     try:

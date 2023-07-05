@@ -246,6 +246,7 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def render(self, template_name, **kwargs):
         aegis.stdlib.timer_start(self.timer_obj, 'render')
+        # XXX template_path seems unused...
         template_path = self.tmpl['host_config'].get('template_path') or options.template_path
         template_path = os.path.join(template_path, template_name)
         # Override parent class render to remove the embeds and instrument a timer here. Copied in from tornado/web.py render()
@@ -278,7 +279,7 @@ class AegisHandler(tornado.web.RequestHandler):
             #logging.warning("Prevent CSRF token errors from POSTing to Chat")
             super(AegisHandler, self)._handle_request_exception(ex)
             return
-        if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405]:
+        if isinstance(ex, tornado.web.HTTPError) and ex.status_code in [401, 403, 404, 405, 410]:
             logging.warning("Prevent annoying errors from POSTing to Chat")
             super(AegisHandler, self)._handle_request_exception(ex)
             return
@@ -289,8 +290,8 @@ class AegisHandler(tornado.web.RequestHandler):
         template_opts['kwargs']['user_agent'] = self.tmpl['user_agent']
         template_opts['kwargs']['remote_ip'] = self.request.remote_ip
         if hasattr(self, 'audit_request'):
-            template_opts['kwargs']['country_cd'] = self.audit_request['country_cd']
-            template_opts['kwargs']['region_cd'] = self.audit_request['region_cd']
+            template_opts['kwargs']['country_cd'] = self.audit_request.get('country_cd', 'N/A')
+            template_opts['kwargs']['region_cd'] = self.audit_request.get('region_cd', 'N/A')
         if hasattr(self, 'audit_session'):
             template_opts['kwargs']['audit_session_id'] = self.audit_session.get('audit_session_id')
         template_opts['kwargs']['robot'] = self.user_is_robot()

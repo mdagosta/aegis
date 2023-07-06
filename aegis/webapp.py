@@ -849,7 +849,14 @@ class JsonRestApi(AegisHandler):
         self.debug = debug
         if self.debug:
             self.logw(self.request, "REQ")
-            self.logw(self.request.headers, "REQ HEADERS")
+            req_str = 'REQ HEADERS'
+            req_headers = ["%s: %s" % (item[0], item[1]) for item in sorted(self.request.headers.items())]
+            if req_headers:
+                req_str += '\n'
+                req_str += '\n'.join(req_headers)
+            else:
+                req_str += ' ()'
+            logging.warning(req_str)
             self.logw(self.request.args, "ARGS")
             self.logw(self.json_req, "JSON REQ")
 

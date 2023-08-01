@@ -409,6 +409,7 @@ class Hydra(HydraThread):
                     else:
                         dbconn = aegis.model.db()
                     self.spawn_heads()
+                    utcnow = datetime.datetime.utcnow()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan(dbconn):
                         if HydraThread.quitting.is_set(): break
@@ -453,6 +454,12 @@ class Hydra(HydraThread):
                                 for past_item in past_items:
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim(dbconn=dbconn)
+                        elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < utcnow:
+                            aegis.stdlib.loge(hydra_type, "NO RUNNABLE FOR TYPE")
+                            aegis.stdlib.loge(aegis.config.get('env'), "CONFIG ENV")
+                            aegis.stdlib.loge(hydra_type['next_run_dttm'], "NEXT RUN")
+                            aegis.stdlib.loge(utcnow, "UTCNOW")
+
 
                 # Better handling of AdminShutdown, OperationalError, to capture structured and complete data to logs and alerts.
                 except (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError) as ex:

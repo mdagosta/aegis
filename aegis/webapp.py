@@ -1026,11 +1026,12 @@ class WebApplication(AegisApplication, tornado.web.Application):
 
 class AegisWeb(AegisHandler):
     def prepare(self):
+        # Need template_dir before calling super prepare, in case it breaks.
+        self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
+        self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
         super(AegisWeb, self).prepare()
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
         self.tmpl['home_link'] = '/admin'
-        self.tmpl['aegis_dir'] = aegis.config.aegis_dir()
-        self.tmpl['template_dir'] = os.path.join(self.tmpl['aegis_dir'], 'templates')
 
     def get_template_path(self):
         return self.tmpl.get('template_dir')

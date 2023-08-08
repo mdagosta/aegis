@@ -577,13 +577,13 @@ class HydraType(aegis.database.Row):
         return dbconn.execute(sql, self['hydra_type_id'])
 
     @staticmethod
-    def clear_running(dbconn=None):
+    def clear_running(minutes=45, dbconn=None):
         if not dbconn:
             dbconn = db()
         if type(dbconn) is aegis.database.PostgresConnection:
-            sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL '45 MINUTE'"
+            sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL '%s MINUTE'" % int(minutes)
         elif type(dbconn) is aegis.database.MysqlConnection:
-            sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL 45 MINUTE"
+            sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL %s MINUTE" % int(minutes)
         return dbconn.execute(sql)
 
     def claim(self, dbconn=None):

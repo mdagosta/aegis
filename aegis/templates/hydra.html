@@ -13,6 +13,7 @@
             <th>Work Type</th>
             <th>Priority</th>
             <th>Status</th>
+            <th>Claimed</th>
             <th>Last Run</th>
             <th>Next Run</th>
             <th>Pause</th>
@@ -26,6 +27,7 @@
             <td><a class="w3-text-blue" href="{{request.uri}}/{{hydra_type['hydra_type_id']}}">{{hydra_type['hydra_type_name']}}</a></td>
             <td>{{hydra_type['priority_ndx']}}</td>
             <td>{{hydra_type['status']}}</td>
+            <td>{{hydra_type['claimed_dttm'] and hydra_type['last_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
             <td>{{hydra_type['last_run_dttm'] and hydra_type['last_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
             <td>{{hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'].strftime("%Y-%m-%d %H:%M:%S")}}</td>
             <td><input type="submit" class="w3-button w3-light-blue w3-small aegis-button" name="{% if hydra_type['status'] == 'paused' %}un{% end %}pause_{{hydra_type['hydra_type_id']}}" value="{% if hydra_type['status'] == 'paused' %}Unp{% else %}P{% end %}ause"/></td>

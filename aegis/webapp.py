@@ -11,6 +11,7 @@ import datetime
 import functools
 import json
 import logging
+import operator
 import os
 import signal
 import socket
@@ -1032,6 +1033,12 @@ class AegisWeb(AegisHandler):
         super(AegisWeb, self).prepare()
         self.tmpl['page_title'] = self.tmpl['request_name'].split('.')[0].replace('Aegis', '')
         self.tmpl['home_link'] = '/admin'
+        self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version
+        try:
+            self.tmpl['app_version'] = pkg_resources.require(aegis.config.get('program_name'))[0].version
+        except pkg_resources.ContextualVersionConflict as ex:
+            logging.exception(ex)
+            self.tmpl['app_version'] = 'N/A'
 
     def get_template_path(self):
         return self.tmpl.get('template_dir')
@@ -1099,14 +1106,12 @@ class AegisHydra(AegisWeb):
             self.tmpl['page_title'] = 'Hydra %s' % options.domain
         else:
             self.tmpl['page_title'] = 'Hydra %s' % options.domain
-        self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
         self.tmpl['home_link'] = '/'
-        self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version
-        try:
-            self.tmpl['app_version'] = pkg_resources.require(aegis.config.get('program_name'))[0].version
-        except pkg_resources.ContextualVersionConflict as ex:
-            logging.exception(ex)
-            self.tmpl['app_version'] = 'N/A'
+        # Hydra Types sorted by status, priority, importance
+        self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
+        self.tmpl['hydra_types'] = sorted(self.tmpl['hydra_types'], key=lambda x: x.get('next_run_dttm') is None)
+        self.tmpl['hydra_types'] = sorted(self.tmpl['hydra_types'], key=lambda x: x.get('status') == 'paused')
+        self.tmpl['hydra_types'] = sorted(self.tmpl['hydra_types'], key=lambda x: x.get('status') != 'running')
         return self.render_path("hydra.html", **self.tmpl)
 
     @tornado.web.authenticated
@@ -1139,8 +1144,16 @@ class AegisHydraQueue(AegisWeb):
         self.enforce_admin()
         self.tmpl['page_title'] = 'Hydra'
         self.tmpl['home_link'] = '/admin/hydra'
-        self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
         self.tmpl['queue_cnt'] = aegis.model.HydraQueue.count_live()
+        self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
+        # Sort by priority that will run, then by if the item is claimed
+        self.tmpl['hydra_queues'] = sorted(self.tmpl['hydra_queues'], key=operator.itemgetter('priority_ndx'))
+        self.tmpl['hydra_queues'] = sorted(self.tmpl['hydra_queues'], key=lambda x: x.get('claimed_dttm') is None)
+        # If the queue item is running internally, sort it to the top
+        for hydra_queue in self.tmpl['hydra_queues']:
+            hydra_queue['_running'] = (hydra_queue['next_run_sql'] and hydra_queue['status'] == 'running') or (not hydra_queue['next_run_sql'] and hydra_queue['claimed_dttm'])
+            logging.warning("RUNNING: %s", hydra_queue['hydra_type_name'])
+        self.tmpl['hydra_queues'] = sorted(self.tmpl['hydra_queues'], key=lambda x: x.get('_running') is True, reverse=True)
         return self.render_path("hydra_queue.html", **self.tmpl)
 
     @tornado.web.authenticated

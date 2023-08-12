@@ -15,6 +15,7 @@
     <table class="w3-table-all w3-responsive w3-medium">
         <tr>
             <th>Queue ID</th>
+            <th>Priority</th>
             <th>Type Name</th>
             <th>Work Env</th>
             <th>Work Host</th>
@@ -30,6 +31,7 @@
         {% for hydra_queue in hydra_queues %}
         <tr>
             <td>{{hydra_queue['hydra_queue_id']}}</td>
+            <td>{{hydra_queue['priority_ndx']}}</td>
             <td>{{hydra_queue['hydra_type_name']}}</td>
             <td>{{hydra_queue['work_env']}}</td>
             <td>{{hydra_queue['work_host']}}</td>
@@ -39,12 +41,21 @@
             <td>{{hydra_queue['try_cnt']}}</td>
             <td>{{hydra_queue['error_cnt']}}</td>
             <td>{{hydra_queue['finish_dttm']}}</td>
-            <td>{% if (hydra_queue['next_run_sql'] and hydra_queue['status'] == 'running') or (not hydra_queue['next_run_sql'] and hydra_queue['claimed_dttm']) %}running...{% else %}    <input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/> {% end %}</td>
+            <td>{% if hydra_queue['_running'] %}running...{% else %}    <input type="submit" class="w3-button w3-light-blue w3-small" name="run_{{hydra_queue['hydra_queue_id']}}" value="Run Now"/> {% end %}</td>
         </tr>
         {% end %}
 
     </table>
 </form>
 {% end %}
+
+<div class="debug-panel">
+    Debug Info<br/>
+    UTC Now: {{datetime.datetime.utcnow()}}<br/>
+    Env: {{env}}<br/>
+    Hostname: {{options.hostname}}<br/>
+    Aegis Version: {{aegis_version}}<br/>
+    App Version: {{app_version}}
+</div>
 
 {% end %}

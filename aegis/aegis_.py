@@ -134,6 +134,21 @@ def install(parser):
     aegis.stdlib.logw(parser, "INSTALL ARG PARSER")
 
 
+# Prep aegis release and distribute onn pypi
+def release(parser):
+    args = parser.parse_args()
+    aegis.stdlib.logw(args, "AEGIS RELEASE")
+    """
+    To build aegis for PyPi:
+    Increment version number in version.json and load in setup.py
+    git tag <new_version>
+    git commit -m "<new_version>"
+    rm aegis/dist/*
+    python3 setup.py sdist bdist_wheel
+    python3 -m twine upload dist/*
+    """
+
+
 def schema(parser):
     # Argument Handling
     args = parser.parse_args()
@@ -378,6 +393,8 @@ def main():
         return deploy(parser)
     elif cmd == 'revert':
         return revert(parser)
+    elif cmd == 'release':
+        return release(parser)
     else:
         logging.error("NOT IMPLEMENTED... YET")
         return 127

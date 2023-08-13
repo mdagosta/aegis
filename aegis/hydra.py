@@ -438,11 +438,13 @@ class Hydra(HydraThread):
                             hydra_queue['work_env'] = hydra_type.get('run_env', aegis.config.get('env'))
                             if hydra_type.get('run_host'):
                                 hydra_queue['work_host'] = hydra_type['run_host']
-                            hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=dbconn, **hydra_queue)
-                            hydra_type.schedule_next(dbconn=dbconn)
-                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'], dbconn=dbconn)
+                            # Schedule the next run before inserting on queue to prevent super weird race conditions.
+                            scheduled = hydra_type.schedule_next(dbconn=dbconn)
+                            _hydra_type = aegis.model.HydraType.get_id(hydra_type['hydra_type_id'], dbconn=dbconn)    # read back a clean version from db
                             if aegis.config.get('hydra_debug'):
-                                self.logw(_hydra_type['next_run_dttm'], "SCHEDULE NEXT ID: %s  Type: %s  " % (_hydra_type['hydra_type_id'], _hydra_type['hydra_type_name']))
+                                self.logw(_hydra_type['next_run_dttm'], "%s SCHEDULE NEXT RESULT: %s  ID: %s  Type: %s  " % (self.name, scheduled, _hydra_type['hydra_type_id'], _hydra_type['hydra_type_name']))
+                            # Actually create the job and put on the queue
+                            hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=dbconn, **hydra_queue)
                             # Clean out queue then sleep depending on how much work there is to do
                             purged_completed = aegis.model.HydraQueue.purge_completed(dbconn=dbconn)
                             #if purged_completed:
@@ -464,8 +466,8 @@ class Hydra(HydraThread):
                                     past_item.unclaim(dbconn=dbconn)
                         elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < utcnow:
                             # If status is 'running' and not claimed, try clear_running like at start time
-                            if hydra_type['status'] == 'running' and not hydra_type['claimed_dttm']:
-                                aegis.stdlib.loge(hydra_type, "NO RUNNABLE FOR TYPE")
+                            if (hydra_type['status'] == 'running' and not hydra_type['claimed_dttm']) or (hydra_type['claimed_dttm'] and hydra_type['status'] == 'live'):
+                                aegis.stdlib.loge(hydra_type, "TYPE NOT RUNNABLE")
                                 aegis.stdlib.loge(aegis.config.get('env'), "CONFIG ENV")
                                 aegis.stdlib.loge(hydra_type['next_run_dttm'], "NEXT RUN")
                                 aegis.stdlib.loge(utcnow, "UTCNOW")

@@ -1039,6 +1039,8 @@ class AegisWeb(AegisHandler):
         except pkg_resources.ContextualVersionConflict as ex:
             logging.exception(ex)
             self.tmpl['app_version'] = 'N/A'
+        self.tmpl['favicon_url'] = aegis.config.get('aegis_favicon_url') or '/favicon.ico'
+        aegis.stdlib.logw(self.tmpl['favicon_url'], "FAVICON URL")
 
     def get_template_path(self):
         return self.tmpl.get('template_dir')

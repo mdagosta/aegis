@@ -134,10 +134,33 @@ def install(parser):
     aegis.stdlib.logw(parser, "INSTALL ARG PARSER")
 
 
+version_str = None
+## Duplicated with setup.read_version() by copy-paste, because of import config and import setup
+def read_version():
+    # Set in memory once at startup time
+    global version_str
+    if version_str:
+        return version_str
+    try:
+        aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+        version_file = os.path.join(aegis_dir, 'version.json')
+        if os.path.exists(version_file):
+            fp = open(version_file)
+            version_json = json.loads(fp.read())
+            version_str = version_json['version']
+        else:
+            version_str = 'N/A'
+        return version_str
+    except Exception as ex:
+        logging.exception(ex)
+        return 'N/A'
+
 # Prep aegis release and distribute onn pypi
 def release(parser):
     args = parser.parse_args()
     aegis.stdlib.logw(args, "AEGIS RELEASE")
+    aegis.stdlib.logw(read_version(), "READ VERSION")
+
     """
     To build aegis for PyPi:
     Increment version number in version.json and load in setup.py

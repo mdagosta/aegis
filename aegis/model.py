@@ -572,8 +572,7 @@ class HydraType(aegis.database.Row):
                    last_run_dttm=next_run_dttm,
                    claimed_dttm=NULL,
                    next_run_dttm="""+self['next_run_sql']+"""
-             WHERE hydra_type_id=%s
-               AND status = 'live'"""
+             WHERE hydra_type_id=%s"""
         return dbconn.execute(sql, self['hydra_type_id'])
 
     @staticmethod

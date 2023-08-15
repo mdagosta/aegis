@@ -971,3 +971,43 @@ def submit_mailer(email_type_id, from_addr, to_addr, email_data):
     to_email = aegis.model.Email.set_email(to_email)
     email_data = json.dumps(email_data, cls=aegis.stdlib.DateTimeEncoder)
     return aegis.model.EmailTracking.insert(email_type_id, from_email['email_id'], to_email['email_id'], email_data)
+
+
+version_str = None
+## Duplicated with setup.read_version() by copy-paste, because of import config and import setup
+def read_version():
+    # Set in memory once at startup time
+    global version_str
+    if version_str:
+        return version_str
+    try:
+        aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+        version_file = os.path.join(aegis_dir, 'version.json')
+        if os.path.exists(version_file):
+            fp = open(version_file)
+            version_json = json.loads(fp.read())
+            version_str = version_json['version']
+        else:
+            version_str = 'N/A'
+        return version_str
+    except Exception as ex:
+        logging.exception(ex)
+        return 'N/A'
+
+# Increment minor (z) number up to z_ct (use only 99 or 9) and the major numbers x and y to 10
+def incr_version(x, y, z, z_ct=99):
+    if z < z_ct:
+        return x, y, z+1
+    z = 0
+    if y < 9:
+        return x, y+1, z
+    y = 0
+    return x+1, y, z
+
+def write_version(version_str):
+    # write config files into the build directory and not version control
+    aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    version_file = os.path.join(aegis_dir, 'version.json')
+    version_json = open(version_file, 'w')
+    version_json.write('{"version": "%s"}\n' % version_str)
+    version_json.close()

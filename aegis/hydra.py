@@ -195,7 +195,7 @@ class HydraHead(HydraThread):
                             singleton = hydra_queue.singleton(dbconn=dbconn)
                             if singleton:
                                 logging.error("%s %s already running" % (self.name, hydra_type['hydra_type_name']))
-                                hydra_queue.finish(dbconn=dbconn)    # Not complete, since that affects status
+                                hydra_queue.complete(dbconn=dbconn)    # Same as below
                                 continue
 
 # What happened in the logs before hydra stopped running the batch:
@@ -410,7 +410,7 @@ class Hydra(HydraThread):
                     if self.hydra_id == 0 and not aegis.stdlib.rate_limit(self, 'clear_hydra', '', delta_sec=300):
                         self.clear(dbconn)
                     self.spawn_heads()
-                    #utcnow = datetime.datetime.utcnow()
+                    utcnow = datetime.datetime.utcnow()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan(dbconn):
                         if HydraThread.quitting.is_set(): break
@@ -458,7 +458,9 @@ class Hydra(HydraThread):
                                 for past_item in past_items:
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim(dbconn=dbconn)
-                        #elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < utcnow:
+                        elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < (utcnow - datetime.timedelta(seconds=30)):
+                            self.logw(hydra_type, "HYDRA TYPE BEHIND ON RUNNING")
+                            # maybe try to run_now?
                         #    # If status is 'running' and not claimed, try clear_running like at start time
                         #    if hydra_type['status'] == 'running' and not hydra_type['claimed_dttm']:
                         #        aegis.stdlib.loge(hydra_type, "TYPE IS RUNNING AND NOT CLAIMED")

@@ -138,17 +138,28 @@ def install(parser):
 # Prep aegis release and distribute onn pypi
 def release(parser):
     args = parser.parse_args()
+    # Increment version number in version.json
     version = aegis.stdlib.read_version()
     x, y, z = [int(ver) for ver in version.split('.')]
     new_version = "%s.%s.%s" % aegis.stdlib.incr_version(x, y, z, z_ct=9)
-    aegis.stdlib.logw(version, "VERSION")
-    aegis.stdlib.logw(new_version, "NEW VERSION")
     aegis.stdlib.write_version(new_version)
+    logging.info("New Version: %s", new_version)
+    aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    version_file = os.path.join(aegis_dir, 'version.json')
+    #aegis.stdlib.logw(version_file, "VERSION FILE")
+    # Commit version and tag to git
+    def log_cmd(cmd):
+        logging.info(cmd)
+        stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=aegis_dir)
+        logging.info(stdout)
+        if stderr:
+            logging.error(stderr)
+    log_cmd("git commit %s -m '%s'" % (version_file, new_version))
+    log_cmd("git tag %s" % new_version)
+    log_cmd("git push")
+    log_cmd("git push --tags")
+    # Packaging for Pypi
     """
-    To build aegis for PyPi:
-    X Increment version number in version.json and load in setup.py
-    git tag <new_version>
-    git commit -m "<new_version>"
     rm aegis/dist/*
     python3 setup.py sdist bdist_wheel
     python3 -m twine upload dist/*

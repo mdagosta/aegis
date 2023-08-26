@@ -67,7 +67,8 @@ class AegisHandler(tornado.web.RequestHandler):
             if self.tmpl['host'] not in config.hostnames.keys():
                 logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
                 raise tornado.web.HTTPError(404)
-        config.apply_hostname(self.tmpl['host'])
+        if not aegis.config.get('skip_apply_hostname'):
+            config.apply_hostname(self.tmpl['host'])
         self.tmpl['host_config'] = config.hostnames[self.tmpl['host']]
         if not aegis.config.get('skip_hostname_check'):
             self.tmpl['domain'] = self.tmpl['host_config'].get('domain') or options.domain
@@ -1458,7 +1459,7 @@ class AegisBuildConfirm(AegisWeb):
     def screen(self):
         self.tmpl['home_link'] = '/admin/build'
         self.tmpl['page_title'] = 'Build'
-        self.tmpl['commits'] = aegis.build.Build.commit_diff(self.tmpl['build_row'])
+        self.tmpl['commits'] = aegis.build.Build.commit_diff(self.tmpl['build_row'], dbconn=self.dbconn)
         self.tmpl['live_build'] = aegis.model.Build.get_live_build(self.tmpl['build_row']['env'], dbconn=self.dbconn)
         return self.render_path("build_confirm.html", **self.tmpl)
 

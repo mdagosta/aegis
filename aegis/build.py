@@ -36,8 +36,8 @@ class Build:
             return {'error': "aegis.build.Build.create(build_args) must have 'env' and one of 'branch' or 'revision'"}
         if not build_args['revision']:
             build_args['revision'] = 'HEAD'
-        self.build_id = aegis.model.Build.insert_columns(**build_args)
-        self.build_row = aegis.model.Build.get_id(self.build_id)
+        self.build_id = aegis.model.Build.insert_columns(dbconn=self.dbconn, **build_args)
+        self.build_row = aegis.model.Build.get_id(self.build_id, dbconn=self.dbconn)
         return self.build_row
 
 
@@ -308,10 +308,10 @@ class Build:
 
     # Get the commits between two versions
     @classmethod
-    def commit_diff(cls, build_row):
+    def commit_diff(cls, build_row, dbconn=None):
         app_dir = os.path.join(options.deploy_dir, options.program_name)
         build_dir = os.path.join(app_dir, build_row['version'])
-        live_build = aegis.model.Build.get_live_build(build_row['env'])
+        live_build = aegis.model.Build.get_live_build(build_row['env'], dbconn=dbconn)
         if live_build:
             commits, stderr, exit_status = aegis.stdlib.shell('git log --oneline --decorate %s..%s' % (live_build['version'], build_row['version']), cwd=build_dir)
             commits = commits.splitlines()

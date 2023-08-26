@@ -1295,7 +1295,7 @@ class AegisBuild(AegisWeb):
             if build_id:
                 # Set output to '' so the web can see that it's started
                 build_row = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
-                build_row.set_output('deploy', '')
+                build_row.set_output('deploy', '', dbconn=self.dbconn)
                 hydra_type = aegis.model.HydraType.get_name('deploy_build', dbconn=self.dbconn)
                 # Put an item on the work queue to signal each host to deploy
                 for deploy_host in options.deploy_hosts:
@@ -1312,7 +1312,7 @@ class AegisBuild(AegisWeb):
             if build_id:
                 # Set output to '' so the web can see that it's started
                 build_row = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
-                build_row.set_output('revert', '')
+                build_row.set_output('revert', '', dbconn=self.dbconn)
                 hydra_type = aegis.model.HydraType.get_name('revert_build', dbconn=self.dbconn)
                 # Put an item on the work queue to signal each host to deploy
                 for deploy_host in options.deploy_hosts:
@@ -1437,7 +1437,7 @@ class AegisBuildConfirm(AegisWeb):
             self.tmpl['errors']['message'] = '** required (string)'
             return self.screen()
         # Save the user message and start the deploy/revert
-        self.tmpl['build_row'].set_message(message, build_step)
+        self.tmpl['build_row'].set_message(message, build_step, dbconn=self.dbconn)
         self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         if build_step == 'deploy':
             aegis.build.Build.start_deploy(self.tmpl['build_row'], self.get_member_email())
@@ -1445,7 +1445,7 @@ class AegisBuildConfirm(AegisWeb):
             aegis.build.Build.start_revert(self.tmpl['build_row'], self.get_member_email())
         # Set output to '' so the web can see that it's started
         self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
-        self.tmpl['build_row'].set_output(build_step, '')
+        self.tmpl['build_row'].set_output(build_step, '', dbconn=self.dbconn)
         hydra_type = aegis.model.HydraType.get_name('%s_build' % build_step, dbconn=self.dbconn)
         # Put an item on the work queue to signal each host to deploy
         for deploy_host in options.deploy_hosts:

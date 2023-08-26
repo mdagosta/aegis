@@ -322,15 +322,15 @@ class Build:
 
     # Set previous version and send notifications
     @classmethod
-    def start_deploy(cls, build_row, user):
+    def start_deploy(cls, build_row, user, dbconn=None):
         # Set the previous version so we know what to revert back to, and mark it deployed, if this isn't happening to revert a build
-        live_build = aegis.model.Build.get_live_build(build_row['env'])
+        live_build = aegis.model.Build.get_live_build(build_row['env'], dbconn=dbconn)
         if live_build:
-            build_row.set_previous_version(live_build['version'])
-            build_row = aegis.model.Build.get_id(build_row['build_id'])
-        build_row.set_deployed()
+            build_row.set_previous_version(live_build['version'], dbconn=dbconn)
+            build_row = aegis.model.Build.get_id(build_row['build_id'], dbconn=dbconn)
+        build_row.set_deployed(dbconn=dbconn)
         # Set notifications
-        commits = cls.commit_diff(build_row)
+        commits = cls.commit_diff(build_row, dbconn=dbconn)
         notification_body = "Release Notes by %s:  %s\n\n" % (user, build_row['deploy_message'])
         notification_body += "Release Version: %s\n\n" % build_row['version']
         notification_body += "React Size: %s\n\n" % build_row['build_size']

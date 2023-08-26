@@ -197,7 +197,7 @@ class AegisHandler(tornado.web.RequestHandler):
             ua_json = json.dumps(ua_json, cls=aegis.stdlib.DateTimeEncoder)
             user_agent.set_ua_json(ua_json, dbconn=self.dbconn)
         if self.user_is_robot():
-            self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True)
+            self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True, dbconn=self.dbconn)
             user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'], dbconn=self.dbconn)
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
@@ -268,6 +268,7 @@ class AegisHandler(tornado.web.RequestHandler):
             logging.error("Error connecting to: %s", aegis.config.get('pg_database') or aegis.config.get('mysql_database'))
             logging.exception(ex)
             logging.error("Database is down. Send HTTP 503.")
+            self.exception_alert(ex)
             self.send_error(503)
             return
         if aegis.config.get('pg_database') or aegis.config.get('mysql_database'):
@@ -286,7 +287,9 @@ class AegisHandler(tornado.web.RequestHandler):
             logging.warning("Prevent annoying errors from POSTing to Chat")
             super(AegisHandler, self)._handle_request_exception(ex)
             return
+        self.exception_alert(ex)
 
+    def exception_alert(self, ex):
         # Send errors to chat hooks, based on them being configured for the environment
         header = "`[%s ENV   %s   %s   uid: %s   mid: %s]`" % (config.get_env().upper(), self.request.uri, self.tmpl['request_name'], self.get_user_id() or '-', self.get_member_id() or '-')
         template_opts = {'handler': self, 'traceback': traceback.format_exc(), 'kwargs': {}, 'header': header}

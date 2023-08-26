@@ -974,7 +974,6 @@ def submit_mailer(email_type_id, from_addr, to_addr, email_data):
 
 
 version_str = None
-## Duplicated with setup.read_version() by copy-paste, because of import config and import setup
 def read_version():
     # Set in memory once at startup time
     global version_str

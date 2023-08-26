@@ -68,9 +68,9 @@ class AegisHandler(tornado.web.RequestHandler):
                 logging.warning("Ignore hostname not specified in config.py: %s", self.tmpl['host'])
                 raise tornado.web.HTTPError(404)
         config.apply_hostname(self.tmpl['host'])
-        if not aegis.config.get('skip_hostname_check'):
-            self.tmpl['domain'] = options.domain
         self.tmpl['host_config'] = config.hostnames[self.tmpl['host']]
+        if not aegis.config.get('skip_hostname_check'):
+            self.tmpl['domain'] = self.tmpl['host_config'].get('domain') or options.domain
         self.tmpl['options'] = options
         self.tmpl['program_name'] = options.program_name
         self.tmpl['app_name'] = options.app_name
@@ -89,6 +89,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['start_t'] = time.time()
         if self.cookie_get('session'):
             self.tmpl['session_ck'] = self.cookie_get('session')
+        self.dbconn = None    # Set this to use it in model calls in webapp.py
         self.audit_session = {}
         self.audit_request = {}
         self.audit_relations = []
@@ -187,24 +188,24 @@ class AegisHandler(tornado.web.RequestHandler):
                    'is_email': ua.is_email_client, 'is_robot': ua.is_bot,
                    'os_name': ua.get_os(), 'os_family': ua.os.family, 'os_version': ua.os.version_string,
                    'browser_name': ua.get_browser(), 'browser_family': ua.browser.family, 'browser_version': ua.browser.version_string}
-        if not (aegis.config.get('pg_database') or aegis.config.get('mysql_database')):
+        if not (aegis.config.get('pg_database') or aegis.config.get('mysql_database')) and not self.dbconn:
             return
-        user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'])
+        user_agent = self.models['UserAgent'].set_user_agent(self.tmpl['user_agent'], dbconn=self.dbconn)
         # if ua_json not set, set it
         if not user_agent['user_agent_json'] and ua_json:
             ua_json = json.dumps(ua_json, cls=aegis.stdlib.DateTimeEncoder)
-            user_agent.set_ua_json(ua_json)
+            user_agent.set_ua_json(ua_json, dbconn=self.dbconn)
         if self.user_is_robot():
             self.models['UserAgent'].set_robot_ind(user_agent['user_agent_id'], True)
-            user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
+            user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'], dbconn=self.dbconn)
         # Set up all robots to use the same user_id, based on the user-agent string, and don't bother with cookies.
         # Regular users just get tagged with a user cookie matching a row.
         user = None
         if user_agent['robot_ind']:
             if not user_agent['robot_user_id']:
-                user_id = self.models['User'].insert(user_agent['user_agent_id'])
-                self.models['UserAgent'].set_robot_user_id(user_agent['user_agent_id'], user_id)
-                user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'])
+                user_id = self.models['User'].insert(user_agent['user_agent_id'], dbconn=self.dbconn)
+                self.models['UserAgent'].set_robot_user_id(user_agent['user_agent_id'], user_id, dbconn=self.dbconn)
+                user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'], dbconn=self.dbconn)
             user = self.models['User'].get_id(user_agent['robot_user_id'])
             user_ck = {}
             self.tmpl['user_row'] = user
@@ -212,13 +213,13 @@ class AegisHandler(tornado.web.RequestHandler):
             # Check if the cookie exists, and if the record exists. If either doesn't exist, start a new user record.
             user_ck = self.cookie_get('user')
             if user_ck and user_ck.get('user_id'):
-                user = self.models['User'].get_id(user_ck['user_id'])
+                user = self.models['User'].get_id(user_ck['user_id'], dbconn=self.dbconn)
                 self.tmpl['user_row'] = user
                 if user:
                     self.cookie_set('user', user_ck)
             if not user:
-                user_id = self.models['User'].insert(user_agent['user_agent_id'])
-                user = self.models['User'].get_id(user_id)
+                user_id = self.models['User'].insert(user_agent['user_agent_id'], dbconn=self.dbconn)
+                user = self.models['User'].get_id(user_id, dbconn=self.dbconn)
                 self.tmpl['user_row'] = user
                 if user_ck:
                     user_ck['user_id'] = user_id
@@ -243,7 +244,7 @@ class AegisHandler(tornado.web.RequestHandler):
         return bool(self.tmpl['user_agent_obj'].is_bot or aegis.stdlib.is_robot(self.tmpl['user_agent']))
 
     def get_template_path(self):
-        return options.template_path
+        return self.tmpl['host_config'].get('template_path') or options.template_path
 
     def render(self, template_name, **kwargs):
         aegis.stdlib.timer_start(self.timer_obj, 'render')
@@ -472,7 +473,7 @@ class AegisHandler(tornado.web.RequestHandler):
         if self.tmpl.get('member'):
             return self.tmpl['member']
         if self.get_member_id():
-            self.tmpl['member'] = get_auth_fn(self.get_member_id())
+            self.tmpl['member'] = get_auth_fn(self.get_member_id(), dbconn=self.dbconn)
             return self.tmpl['member']
 
     def get_member_email(self, get_auth_fn=aegis.model.Member.get_auth):
@@ -556,7 +557,7 @@ class AegisHandler(tornado.web.RequestHandler):
         # If session_ck has audit_session_id, also try to fetch it to make sure it exists.
         if self.tmpl.get('session_ck', {}).get('audit_session_id'):
             audit_session_id = self.tmpl['session_ck']['audit_session_id']
-            audit_session_row = aegis.model.AuditSession.get_id(audit_session_id)
+            audit_session_row = aegis.model.AuditSession.get_id(audit_session_id, dbconn=self.dbconn)
         if audit_session_row:
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
@@ -587,7 +588,7 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_session['user_agent_id'] = self.tmpl['user_agent_row']['user_agent_id']
             self.audit_session['robot_ind'] = is_robot
             self.audit_session['referer_tx'] = self.request.headers.get('Referer')
-            audit_session_id = aegis.model.AuditSession.insert_columns(**self.audit_session)
+            audit_session_id = aegis.model.AuditSession.insert_columns(dbconn=self.dbconn, **self.audit_session)
             self.tmpl['session_ck'] = {'audit_session_id': audit_session_id}
             self.cookie_set('session', self.tmpl['session_ck'])
         # Audit Request
@@ -601,7 +602,7 @@ class AegisHandler(tornado.web.RequestHandler):
         if aegis.config.get('geolite_path') and self.tmpl['geoip']:
             self.audit_request['country_cd'] = self.tmpl['geoip'].get('country_iso_code')
             self.audit_request['region_cd'] = self.tmpl['geoip'].get('region_iso_code')
-        user_agent = aegis.model.UserAgent.get_agent(self.tmpl['user_agent'])
+        user_agent = aegis.model.UserAgent.get_agent(self.tmpl['user_agent'], dbconn=self.dbconn)
         if user_agent:
             self.audit_request['user_agent_id'] = user_agent['user_agent_id']
         self.audit_request['robot_ind'] = self.audit_request['robot_ind'] = is_robot
@@ -624,7 +625,7 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_session['view_cnt'] = aegis.database.Literal('view_cnt+1')
             if hasattr(self, 'api_ind') and self.api_ind:
                 self.audit_session['api_cnt'] = aegis.database.Literal('api_cnt+1')
-            aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id})
+            aegis.model.AuditSession.update_columns(self.audit_session, {'audit_session_id': audit_session_id}, dbconn=self.dbconn)
         # Audit Request
         request_args = {}
         if self.request.method in ('POST', 'PUT', 'PATCH') and self.request.args:
@@ -668,7 +669,7 @@ class AegisHandler(tornado.web.RequestHandler):
             render_time_s = timer_obj._timers.get('_render_exec_s')
             if render_time_s:
                 self.audit_request['render_time'] = render_time_s * 1000
-        audit_request_id = aegis.model.AuditRequest.insert_columns(**self.audit_request)
+        audit_request_id = aegis.model.AuditRequest.insert_columns(dbconn=self.dbconn, **self.audit_request)
         #aegis.stdlib.logw(audit_request_id, "AUDIT REQUEST ID")
         self.save_audit_relations(audit_request_id)
         # In some error cases, log all the data from POST, headers, response.
@@ -707,8 +708,8 @@ class AegisHandler(tornado.web.RequestHandler):
                 self.audit_request_data['response_body'] = self.json_resp
                 self.audit_request_data['response_bytes'] = len(json.dumps(self.json_resp, cls=aegis.stdlib.DateTimeEncoder))
                 self.audit_request_data['response_error'] = json.dumps(self.json_resp.get('errors'), cls=aegis.stdlib.DateTimeEncoder)
-            audit_request_data_id = aegis.model.AuditRequestData.insert_columns(**self.audit_request_data)
-            audit_request_data = aegis.model.AuditRequestData.get_id(audit_request_data_id)
+            audit_request_data_id = aegis.model.AuditRequestData.insert_columns(dbconn=self.dbconn, **self.audit_request_data)
+            audit_request_data = aegis.model.AuditRequestData.get_id(audit_request_data_id, dbconn=self.dbconn)
         return audit_request_id
 
     def prepare_audit_relation(self, model_class, row_id):
@@ -771,7 +772,7 @@ class AegisHandler(tornado.web.RequestHandler):
         return self.finish_marketing('referral')
 
     def finish_marketing(self, marketing_name):
-        marketing = aegis.model.Marketing.get_name(marketing_name)
+        marketing = aegis.model.Marketing.get_name(marketing_name, dbconn=self.dbconn)
         if marketing:
             mid = marketing['marketing_id']
             self.audit_session['marketing_id'] = mid
@@ -1061,7 +1062,7 @@ class AegisHydraForm(AegisWeb):
         self.tmpl['errors'] = {}
         hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
         if hydra_type_id:
-            self.tmpl['hydra_type'] = aegis.model.HydraType.get_id(hydra_type_id)
+            self.tmpl['hydra_type'] = aegis.model.HydraType.get_id(hydra_type_id, dbconn=self.dbconn)
         else:
             self.tmpl['hydra_type'] = {}
         self.tmpl['home_link'] = '/admin/hydra'
@@ -1090,10 +1091,10 @@ class AegisHydraForm(AegisWeb):
         hydra_type_id = aegis.stdlib.validate_int(hydra_type_id)
         if hydra_type_id:
             where = {'hydra_type_id': hydra_type_id}
-            aegis.model.HydraType.update_columns(hydra_type, where)
+            aegis.model.HydraType.update_columns(hydra_type, where, dbconn=self.dbconn)
         else:
-            hydra_type_id = aegis.model.HydraType.insert_columns(**hydra_type)
-            hydra_type_row = aegis.model.HydraType.get_id(hydra_type_id)
+            hydra_type_id = aegis.model.HydraType.insert_columns(dbconn=self.dbconn, **hydra_type)
+            hydra_type_row = aegis.model.HydraType.get_id(hydra_type_id, dbconn=self.dbconn)
             hydra_type_row.set_status('paused')
         return self.redirect('/admin/hydra')
 
@@ -1109,7 +1110,7 @@ class AegisHydra(AegisWeb):
             self.tmpl['page_title'] = 'Hydra %s' % options.domain
         self.tmpl['home_link'] = '/'
         # Hydra Types sorted by status, priority, importance
-        self.tmpl['hydra_types'] = aegis.model.HydraType.scan()
+        self.tmpl['hydra_types'] = aegis.model.HydraType.scan(dbconn=self.dbconn)
         self.tmpl['hydra_types'] = sorted(self.tmpl['hydra_types'], key=lambda x: x.get('next_run_dttm') is None)
         self.tmpl['hydra_types'] = sorted(self.tmpl['hydra_types'], key=lambda x: x.get('status') == 'paused')
         self.tmpl['hydra_types'] = sorted(self.tmpl['hydra_types'], key=lambda x: x.get('status') != 'running')
@@ -1123,19 +1124,19 @@ class AegisHydra(AegisWeb):
         run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
         # Do Pause
         if pause_ids:
-            hydra_type = aegis.model.HydraType.get_id(pause_ids[0])
+            hydra_type = aegis.model.HydraType.get_id(pause_ids[0], dbconn=self.dbconn)
             self.logw(hydra_type, "HYDRA TYPE")
-            hydra_type.set_status('paused')
+            hydra_type.set_status('paused', dbconn=self.dbconn)
         # Do Unpause
         if unpause_ids:
-            hydra_type = aegis.model.HydraType.get_id(unpause_ids[0])
+            hydra_type = aegis.model.HydraType.get_id(unpause_ids[0], dbconn=self.dbconn)
             self.logw(hydra_type, "HYDRA TYPE")
-            hydra_type.set_status('live')
+            hydra_type.set_status('live', dbconn=self.dbconn)
         # Do Run --- hooks over to batch!
         if run_ids:
-            hydra_type = aegis.model.HydraType.get_id(run_ids[0])
+            hydra_type = aegis.model.HydraType.get_id(run_ids[0], dbconn=self.dbconn)
             self.logw(hydra_type, "HYDRA TYPE")
-            hydra_type.run_now()
+            hydra_type.run_now(dbconn=self.dbconn)
         return self.redirect(self.request.uri)
 
 
@@ -1145,8 +1146,8 @@ class AegisHydraQueue(AegisWeb):
         self.enforce_admin()
         self.tmpl['page_title'] = 'Hydra'
         self.tmpl['home_link'] = '/admin/hydra'
-        self.tmpl['queue_cnt'] = aegis.model.HydraQueue.count_live()
-        self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan()
+        self.tmpl['queue_cnt'] = aegis.model.HydraQueue.count_live(dbconn=self.dbconn)
+        self.tmpl['hydra_queues'] = aegis.model.HydraQueue.scan(dbconn=self.dbconn)
         # Sort by priority that will run, then by if the item is claimed
         self.tmpl['hydra_queues'] = sorted(self.tmpl['hydra_queues'], key=operator.itemgetter('priority_ndx'))
         self.tmpl['hydra_queues'] = sorted(self.tmpl['hydra_queues'], key=lambda x: x.get('claimed_dttm') is None)
@@ -1162,10 +1163,10 @@ class AegisHydraQueue(AegisWeb):
         self.enforce_admin()
         run_ids = [aegis.stdlib.validate_int(k.replace('run_', '')) for k in self.request.args.keys() if k.startswith('run_')]
         if run_ids:
-            hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0])
+            hydra_queue = aegis.model.HydraQueue.get_id(run_ids[0], dbconn=self.dbconn)
             if hydra_queue:
                 self.logw(hydra_queue['hydra_queue_id'], "RUN NOW HYDRA_QUEUE_ID")
-                hydra_queue.run_now()
+                hydra_queue.run_now(dbconn=self.dbconn)
         return self.redirect('/admin/hydra/queue')
 
 
@@ -1268,12 +1269,12 @@ class AegisBuild(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        self.tmpl['builds'] = [b for b in aegis.model.Build.scan() if (not b['delete_dttm'] and b['build_target'] != 'admin')]
+        self.tmpl['builds'] = [b for b in aegis.model.Build.scan(dbconn=self.dbconn) if (not b['delete_dttm'] and b['build_target'] != 'admin')]
         self.tmpl['home_link'] = '/admin/build'
         env = aegis.config.get('env')
         if env.endswith('-admin'):
             env = env.rsplit('-', maxsplit=1)[0]
-        self.tmpl['live_build'] = aegis.model.Build.get_live_build(env)
+        self.tmpl['live_build'] = aegis.model.Build.get_live_build(env, dbconn=self.dbconn)
         self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version
         try:
             self.tmpl['app_version'] = pkg_resources.require(aegis.config.get('program_name'))[0].version
@@ -1292,16 +1293,16 @@ class AegisBuild(AegisWeb):
             build_id = [aegis.stdlib.validate_int(k.replace('deploy_', '')) for k in build_keys][0]
             if build_id:
                 # Set output to '' so the web can see that it's started
-                build_row = aegis.model.Build.get_id(build_id)
+                build_row = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
                 build_row.set_output('deploy', '')
-                hydra_type = aegis.model.HydraType.get_name('deploy_build')
+                hydra_type = aegis.model.HydraType.get_name('deploy_build', dbconn=self.dbconn)
                 # Put an item on the work queue to signal each host to deploy
                 for deploy_host in options.deploy_hosts:
                     hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                                    'work_host': deploy_host, 'work_env': aegis.config.get('env')}
                     work_data = {'build_id': build_id, 'user': self.get_member_email()}
                     hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-                    hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+                    hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=self.dbconn, **hydra_queue)
                 return self.redirect('/admin/build')
         # REVERT
         revert_keys = [k for k in self.request.args.keys() if k.startswith('revert_')]
@@ -1309,23 +1310,23 @@ class AegisBuild(AegisWeb):
             build_id = [aegis.stdlib.validate_int(k.replace('revert_', '')) for k in revert_keys][0]
             if build_id:
                 # Set output to '' so the web can see that it's started
-                build_row = aegis.model.Build.get_id(build_id)
+                build_row = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
                 build_row.set_output('revert', '')
-                hydra_type = aegis.model.HydraType.get_name('revert_build')
+                hydra_type = aegis.model.HydraType.get_name('revert_build', dbconn=self.dbconn)
                 # Put an item on the work queue to signal each host to deploy
                 for deploy_host in options.deploy_hosts:
                     hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                                    'work_host': deploy_host, 'work_env': aegis.config.get('env')}
                     work_data = {'build_id': build_id, 'user': self.get_member_email()}
                     hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-                    hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+                    hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=self.dbconn, **hydra_queue)
                 return self.redirect('/admin/build')
         # DELETE
         delete_keys = [k for k in self.request.args.keys() if k.startswith('delete_')]
         if delete_keys:
             build_id = [aegis.stdlib.validate_int(k.replace('delete_', '')) for k in delete_keys][0]
             if build_id:
-                build = aegis.model.Build.get_id(build_id)
+                build = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
                 build.set_soft_deleted()
                 return self.redirect('/admin/build')
 
@@ -1363,13 +1364,13 @@ class AegisBuildForm(AegisWeb):
         build['build_target'] = 'application'
 
         # Create build row and add it to run on Hydra
-        build_id = aegis.model.Build.insert_columns(**build)
-        hydra_type = aegis.model.HydraType.get_name('build_build')
+        build_id = aegis.model.Build.insert_columns(dbconn=self.dbconn, **build)
+        hydra_type = aegis.model.HydraType.get_name('build_build', dbconn=self.dbconn)
         hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                        'work_host': aegis.config.get('build_host'), 'work_env': aegis.config.get('env')}
         work_data = {'build_id': build_id, 'user': self.get_member_email()}
         hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-        hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+        hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=self.dbconn, **hydra_queue)
         self.redirect('/admin/build')
 
 
@@ -1382,7 +1383,7 @@ class AegisBuildView(AegisWeb):
         self.tmpl['errors'] = {}
         build_id = aegis.stdlib.validate_int(build_id)
         if build_id:
-            self.tmpl['build'] = aegis.model.Build.get_id(build_id)
+            self.tmpl['build'] = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
         else:
             self.tmpl['build'] = {}
         self.tmpl['build_step'] = self.request.args.get('build_step', 'build')
@@ -1404,13 +1405,13 @@ class AegisBuildView(AegisWeb):
             return self.render_path("build_form.html", **self.tmpl)
         build['env'] = aegis.config.get('env')
         # Create build row and add it to run on Hydra
-        build_id = aegis.model.Build.insert_columns(**build)
-        hydra_type = aegis.model.HydraType.get_name('build_build')
+        build_id = aegis.model.Build.insert_columns(dbconn=self.dbconn, **build)
+        hydra_type = aegis.model.HydraType.get_name('build_build', dbconn=self.dbconn)
         hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                        'work_host': aegis.config.get('build_host'), 'work_env': aegis.config.get('env')}
         work_data = {'build_id': build_id, 'user': self.get_member_email()}
         hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-        hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+        hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=self.dbconn, **hydra_queue)
         self.redirect('/admin/build')
 
 
@@ -1418,7 +1419,7 @@ class AegisBuildConfirm(AegisWeb):
     @tornado.web.authenticated
     def get(self, build_id, build_step, *args):
         self.enforce_admin()
-        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         self.tmpl['build_step'] = build_step
         self.tmpl['errors'] = {}
         return self.screen()
@@ -1426,7 +1427,7 @@ class AegisBuildConfirm(AegisWeb):
     @tornado.web.authenticated
     def post(self, build_id, build_step, *args):
         self.enforce_admin()
-        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         self.tmpl['build_step'] = build_step
         self.tmpl['errors'] = {}
         # Validate Input
@@ -1436,29 +1437,29 @@ class AegisBuildConfirm(AegisWeb):
             return self.screen()
         # Save the user message and start the deploy/revert
         self.tmpl['build_row'].set_message(message, build_step)
-        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         if build_step == 'deploy':
             aegis.build.Build.start_deploy(self.tmpl['build_row'], self.get_member_email())
         elif build_step == 'revert':
             aegis.build.Build.start_revert(self.tmpl['build_row'], self.get_member_email())
         # Set output to '' so the web can see that it's started
-        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id))
+        self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         self.tmpl['build_row'].set_output(build_step, '')
-        hydra_type = aegis.model.HydraType.get_name('%s_build' % build_step)
+        hydra_type = aegis.model.HydraType.get_name('%s_build' % build_step, dbconn=self.dbconn)
         # Put an item on the work queue to signal each host to deploy
         for deploy_host in options.deploy_hosts:
             hydra_queue = {'hydra_type_id': hydra_type['hydra_type_id'], 'priority_ndx': hydra_type['priority_ndx'], 'work_dttm': aegis.database.Literal("NOW()"),
                            'work_host': deploy_host, 'work_env': aegis.config.get('env')}
             work_data = {'build_id': build_id, 'user': self.get_member_email()}
             hydra_queue['work_data'] = json.dumps(work_data, cls=aegis.stdlib.DateTimeEncoder)
-            hydra_queue_id = aegis.model.HydraQueue.insert_columns(**hydra_queue)
+            hydra_queue_id = aegis.model.HydraQueue.insert_columns(dbconn=self.dbconn, **hydra_queue)
         return self.redirect('/admin/build')
 
     def screen(self):
         self.tmpl['home_link'] = '/admin/build'
         self.tmpl['page_title'] = 'Build'
         self.tmpl['commits'] = aegis.build.Build.commit_diff(self.tmpl['build_row'])
-        self.tmpl['live_build'] = aegis.model.Build.get_live_build(self.tmpl['build_row']['env'])
+        self.tmpl['live_build'] = aegis.model.Build.get_live_build(self.tmpl['build_row']['env'], dbconn=self.dbconn)
         return self.render_path("build_confirm.html", **self.tmpl)
 
 

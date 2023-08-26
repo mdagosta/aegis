@@ -795,26 +795,30 @@ class ReportType(aegis.database.Row):
     id_column = 'report_type_id'
 
     @classmethod
-    def insert(cls, report_type_name, report_sql):
+    def insert(cls, report_type_name, report_sql, dbconn=None):
+        dbconn = dbconn if dbconn else db()
         sql = "INSERT INTO report_type (report_type_name, report_sql) VALUES (%s, %s)"
         if type(db()) is aegis.database.PostgresConnection:
             sql += ' RETURNING report_type_id'
-        return db().execute(sql, report_type_name, report_sql)
+        return dbconn.execute(sql, report_type_name, report_sql)
 
     @classmethod
-    def scan(cls):
+    def scan(cls, dbconn=None):
+        dbconn = dbconn if dbconn else db()
         sql = "SELECT * FROM report_type"
-        return db().query(sql, cls=cls)
+        return dbconn.query(sql, cls=cls)
 
     @staticmethod
-    def set_name(report_type_id, report_type_name):
+    def set_name(report_type_id, report_type_name, dbconn=None):
+        dbconn = dbconn if dbconn else db()
         sql = 'UPDATE report_type SET report_type_name=%s WHERE report_type_id=%s'
-        return db().execute(sql, report_type_name, report_type_id)
+        return dbconn.execute(sql, report_type_name, report_type_id)
 
     @staticmethod
-    def set_sql(report_type_id, report_type_sql):
+    def set_sql(report_type_id, report_type_sql, dbconn=None):
+        dbconn = dbconn if dbconn else db()
         sql = 'UPDATE report_type SET report_sql=%s WHERE report_type_id=%s'
-        return db().execute(sql, report_type_sql, report_type_id)
+        return dbconn.execute(sql, report_type_sql, report_type_id)
 
 
 class Build(aegis.database.Row):

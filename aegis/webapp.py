@@ -1179,7 +1179,7 @@ class AegisReportForm(AegisWeb):
     def validate_report_type(self, report_type_id):
         report_type_id = aegis.stdlib.validate_int(report_type_id)
         if report_type_id:
-            self.tmpl['report_type'] = aegis.model.ReportType.get_id(report_type_id)
+            self.tmpl['report_type'] = aegis.model.ReportType.get_id(report_type_id, dbconn=self.dbconn)
         else:
             self.tmpl['report_type'] = {}
 
@@ -1216,9 +1216,9 @@ class AegisReportForm(AegisWeb):
         try:
             if report_type_id:
                 where = {'report_type_id': report_type_id}
-                aegis.model.ReportType.update_columns(self.columns, where)
+                aegis.model.ReportType.update_columns(self.columns, where, dbconn=self.dbconn)
             else:
-                report_type_id = aegis.model.ReportType.insert_columns(**self.columns)
+                report_type_id = aegis.model.ReportType.insert_columns(dbconn=self.dbconn, **self.columns)
         except Exception as ex:
             logging.exception(ex)
             sql_error = [str(arg) for arg in ex.args]
@@ -1240,12 +1240,13 @@ class AegisReport(AegisWeb):
         self.tmpl['errors'] = {}
         self.tmpl['column_names'] = []
         if report_type_id:
-            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
+            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id, dbconn=self.dbconn)
             self.tmpl['output'] = None
             self.tmpl['report_totals'] = {}
             sql = self.tmpl['report']['report_sql']
             try:
-                data, column_names = aegis.model.db(self.tmpl['report'].get('report_schema')).query(sql, return_column_names=True)
+                dbconn = self.dbconn if self.dbconn else aegis.model.db()
+                data, column_names = dbconn.query(sql, return_column_names=True)
                 for row in data:
                     for column_name, value in row.items():
                         if type(value) is int:
@@ -1262,10 +1263,10 @@ class AegisReport(AegisWeb):
                 logging.exception(ex)
                 sql_error = [str(arg) for arg in ex.args]
                 self.tmpl['errors']['sql_error'] = ': '.join(sql_error)
-            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id)
+            self.tmpl['report'] = aegis.model.ReportType.get_id(report_type_id, dbconn=self.dbconn)
             return self.render_path("report.html", **self.tmpl)
         else:
-            self.tmpl['reports'] = aegis.model.ReportType.scan()
+            self.tmpl['reports'] = aegis.model.ReportType.scan(dbconn=self.dbconn)
             return self.render_path("reports.html", **self.tmpl)
 
 

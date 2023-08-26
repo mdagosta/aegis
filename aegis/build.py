@@ -343,8 +343,8 @@ class Build:
 
     # Set to use previous version and send notifications
     @classmethod
-    def start_revert(cls, build_row, user):
+    def start_revert(cls, build_row, user, dbconn=None):
         notification_body = "REVERT BUILD TO: %s   USER: %s   MESSAGE: %s\n\n" % (build_row['previous_version'], user, build_row['revert_message'])
         for channel in options.build_notification_channels:
             requests.post(channel, json={"text": notification_body})
-        build_row.set_reverted()
+        build_row.set_reverted(dbconn=dbconn)

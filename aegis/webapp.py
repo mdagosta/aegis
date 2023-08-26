@@ -1328,7 +1328,7 @@ class AegisBuild(AegisWeb):
             build_id = [aegis.stdlib.validate_int(k.replace('delete_', '')) for k in delete_keys][0]
             if build_id:
                 build = aegis.model.Build.get_id(build_id, dbconn=self.dbconn)
-                build.set_soft_deleted()
+                build.set_soft_deleted(dbconn=self.dbconn)
                 return self.redirect('/admin/build')
 
 
@@ -1440,9 +1440,9 @@ class AegisBuildConfirm(AegisWeb):
         self.tmpl['build_row'].set_message(message, build_step, dbconn=self.dbconn)
         self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         if build_step == 'deploy':
-            aegis.build.Build.start_deploy(self.tmpl['build_row'], self.get_member_email())
+            aegis.build.Build.start_deploy(self.tmpl['build_row'], self.get_member_email(), dbconn=self.dbconn)
         elif build_step == 'revert':
-            aegis.build.Build.start_revert(self.tmpl['build_row'], self.get_member_email())
+            aegis.build.Build.start_revert(self.tmpl['build_row'], self.get_member_email(), dbconn=self.dbconn)
         # Set output to '' so the web can see that it's started
         self.tmpl['build_row'] = aegis.model.Build.get_id(aegis.stdlib.validate_int(build_id), dbconn=self.dbconn)
         self.tmpl['build_row'].set_output(build_step, '', dbconn=self.dbconn)

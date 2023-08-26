@@ -111,8 +111,7 @@ def db(use_schema=None, autocommit=True, **kwargs):
 
 
 def dbnow(use_schema=None, dbconn=None):
-    if not dbconn:
-        dbconn = db(use_schema)
+    dbconn = dbconn if dbconn else db()
     return dbconn.get("SELECT NOW() AS now")
 
 def sql_in_format(lst, cast):
@@ -584,15 +583,13 @@ class Row(dict):
             sql = sql + ' AND member_id=%%s'
             args.append(int(member_id))
         sql = sql % (cls._table_name(), cls.id_column)
-        if not dbconn:
-            dbconn = db()
+        dbconn = dbconn if dbconn else db()
         val = dbconn.get(sql, *args, cls=cls)
         return val
 
     @classmethod
     def scan(cls, dbconn=None):
-        if not dbconn:
-            dbconn = db()
+        dbconn = dbconn if dbconn else db()
         sql = 'SELECT * FROM %s' % cls.table_name
         return dbconn.query(sql, cls=cls)
 
@@ -600,8 +597,7 @@ class Row(dict):
     def scan_ids(cls, row_ids, dbconn=None):
         if not row_ids:
             return []
-        if not dbconn:
-            dbconn = db()
+        dbconn = dbconn if dbconn else db()
         # Fail fast if any of the data are bad, to not return confusing results
         try:
             args, fmt = aegis.database.sql_in_format(row_ids, int)
@@ -631,8 +627,7 @@ class Row(dict):
 
     @classmethod
     def insert_columns(cls, sql_txt='INSERT INTO %(db_table)s (%(keys)s) VALUES (%(values)s)', dbconn=None, **columns):
-        if not dbconn:
-            dbconn = db()
+        dbconn = dbconn if dbconn else db()
         db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
@@ -648,8 +643,7 @@ class Row(dict):
 
     @classmethod
     def update_columns(cls, columns, where, dbconn=None):
-        if not dbconn:
-            dbconn = db()
+        dbconn = dbconn if dbconn else db()
         if not columns:
             logging.debug('Nothing to update. Skipping query')
             return

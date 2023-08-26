@@ -207,7 +207,7 @@ class AegisHandler(tornado.web.RequestHandler):
                 user_id = self.models['User'].insert(user_agent['user_agent_id'], dbconn=self.dbconn)
                 self.models['UserAgent'].set_robot_user_id(user_agent['user_agent_id'], user_id, dbconn=self.dbconn)
                 user_agent = self.models['UserAgent'].get_id(user_agent['user_agent_id'], dbconn=self.dbconn)
-            user = self.models['User'].get_id(user_agent['robot_user_id'])
+            user = self.models['User'].get_id(user_agent['robot_user_id'], dbconn=self.dbconn)
             user_ck = {}
             self.tmpl['user_row'] = user
         else:

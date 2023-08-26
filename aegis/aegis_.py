@@ -138,32 +138,34 @@ def install(parser):
 # Prep aegis release and distribute onn pypi
 def release(parser):
     args = parser.parse_args()
+    aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     # Increment version number in version.json
     version = aegis.stdlib.read_version()
     x, y, z = [int(ver) for ver in version.split('.')]
     new_version = "%s.%s.%s" % aegis.stdlib.incr_version(x, y, z, z_ct=9)
     aegis.stdlib.write_version(new_version)
     logging.info("New Version: %s", new_version)
-    aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
     version_file = os.path.join(aegis_dir, 'version.json')
-    #aegis.stdlib.logw(version_file, "VERSION FILE")
-    # Commit version and tag to git
+    # Run command and log result, specific to this function
     def log_cmd(cmd):
         logging.info(cmd)
         stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=aegis_dir)
-        logging.info(stdout)
+        if stdout:
+            logging.info(stdout)
         if stderr:
-            logging.error(stderr)
+            logging.info(stderr)
+    # Commit version and tag to git
     log_cmd("git commit %s -m '%s'" % (version_file, new_version))
     log_cmd("git tag %s" % new_version)
     log_cmd("git push")
     log_cmd("git push --tags")
-    # Packaging for Pypi
-    """
-    rm aegis/dist/*
-    python3 setup.py sdist bdist_wheel
-    python3 -m twine upload dist/*
-    """
+    # Packaging and uploading to pypi
+    files = glob.glob(os.path.join(aegis_dir, 'dist', '*'))
+    for filename in files:
+        os.remove(filename)
+    logging.info("Cleaned dist dir of old builds")
+    log_cmd("python3 setup.py sdist bdist_wheel")
+    log_cmd("python3 -m twine upload dist/*")
 
 
 def schema(parser):

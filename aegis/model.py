@@ -427,7 +427,7 @@ class EmailType(aegis.database.Row):
     def get_name(cls, email_type_name, dbconn=None):
         dbconn = dbconn if dbconn else db()
         sql = "SELECT * FROM email_type WHERE email_type_name=%s"
-        return db.get(sql, email_type_name, cls=cls)
+        return dbconn.get(sql, email_type_name, cls=cls)
 
 
 class EmailTracking(aegis.database.Row):

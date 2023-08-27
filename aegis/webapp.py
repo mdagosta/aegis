@@ -79,7 +79,7 @@ class AegisHandler(tornado.web.RequestHandler):
         self.tmpl['referer'] = self.request.headers.get('Referer')
         self.tmpl['user_agent'] = self.request.headers.get('User-Agent')
         self.tmpl['scheme'] = 'https://'
-        self.tmpl['xsrf_token'] = self.xsrf_token
+        #self.tmpl['xsrf_token'] = self.xsrf_token    # Maybe not needed anymore
         self.tmpl['nl2br'] = aegis.stdlib.nl2br
         self.tmpl['format_integer'] = aegis.stdlib.format_integer
         self.tmpl['get_user_id'] = self.get_user_id

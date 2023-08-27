@@ -722,7 +722,7 @@ class AegisHandler(tornado.web.RequestHandler):
     def save_audit_relations(self, audit_request_id):
         for audit_relation in self.audit_relations:
             model_class, row_id = audit_relation
-            model_class.set_audit_request_id(row_id, audit_request_id)
+            model_class.set_audit_request_id(row_id, audit_request_id, dbconn=self.dbconn)
 
     def audit_session_end(self):
         # closes the session by deleting the cookie
@@ -740,7 +740,7 @@ class AegisHandler(tornado.web.RequestHandler):
         # If there's an mid in request args, use if it's in the marketing table
         mid = aegis.stdlib.validate_int(self.request.args.get('mid'))
         if mid:
-            marketing = aegis.model.Marketing.get_id(mid)
+            marketing = aegis.model.Marketing.get_id(mid, dbconn=self.dbconn)
             if marketing:
                 self.audit_session['marketing_id'] = mid
                 return
@@ -796,7 +796,7 @@ class AegisHandler(tornado.web.RequestHandler):
         if self.request.args.get('c') and not email_tracking['click_dttm']:
             email_tracking.mark_clicked()
         # Mark email and member verified
-        email = aegis.model.Email.get_id(email_tracking['to_email_id'])
+        email = aegis.model.Email.get_id(email_tracking['to_email_id'], dbconn=self.dbconn)
         if email:
             email.mark_verified()
             if email['member_id'] and email['member_id'] == self.get_member_id():

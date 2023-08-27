@@ -1016,9 +1016,10 @@ class AuditRequestData(aegis.database.Row):
     id_column = 'audit_request_data_id'
 
     @classmethod
-    def get_audit_request_id(cls, audit_request_id):
+    def get_audit_request_id(cls, audit_request_id, dbconn=None):
+        dbconn = dbconn if dbconn else db()
         sql = "SELECT * FROM audit_request_data WHERE audit_request_id=%s"
-        return db().get(sql, audit_request_id, cls=cls)
+        return dbconn.get(sql, audit_request_id, cls=cls)
 
 
 class Monitor(aegis.database.Row):
@@ -1026,9 +1027,10 @@ class Monitor(aegis.database.Row):
     id_column = 'monitor_id'
 
     @classmethod
-    def get_host_cmd(cls, host, cmd):
+    def get_host_cmd(cls, host, cmd, dbconn=None):
+        dbconn = dbconn if dbconn else db()
         sql = "SELECT * FROM monitor WHERE monitor_host=%s AND monitor_cmd=%s ORDER BY monitor_id DESC LIMIT 1"
-        return db().get(sql, host, cmd, cls=cls)
+        return dbconn.get(sql, host, cmd, cls=cls)
 
 
 class Marketing(aegis.database.Row):

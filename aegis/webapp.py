@@ -529,6 +529,11 @@ class AegisHandler(tornado.web.RequestHandler):
         if not self.get_current_user():
             return False
         super_admins = aegis.config.get('super_admins')
+        # Look for self.tmpl['host_config']['super_admins']
+        if hasattr(self, 'tmpl') and self.tmpl.get('host_config') and 'super_admins' in self.tmpl['host_config']:
+            for host_admin in self.tmpl['host_config']['super_admins']:
+                if host_admin not in super_admins:
+                    super_admins.append(host_admin)
         if super_admins and self.get_member_email() in super_admins:
             return True
 

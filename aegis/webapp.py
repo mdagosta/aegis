@@ -117,10 +117,11 @@ class AegisHandler(tornado.web.RequestHandler):
         # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False.
         self.use_audit = False
         if aegis.config.exists('use_audit'):
-            if hasattr(config, 'hostnames') and 'use_audit' in self.tmpl['host_config']:
-                self.use_audit = self.tmpl['host_config'].get('use_audit')
-            else:
-                self.use_audit = options.use_audit
+            self.use_audit = self.tmpl['host_config'].get('use_audit') or options.use_audit
+            #if hasattr(config, 'hostnames') and 'use_audit' in self.tmpl['host_config']:
+            #    self.use_audit = self.tmpl['host_config'].get('use_audit')
+            #else:
+            #    self.use_audit = options.use_audit
         if self.use_audit:
             self.set_marketing_id()
             self.audit_start()
@@ -250,8 +251,8 @@ class AegisHandler(tornado.web.RequestHandler):
     def render(self, template_name, **kwargs):
         aegis.stdlib.timer_start(self.timer_obj, 'render')
         # XXX template_path seems unused...
-        template_path = self.tmpl['host_config'].get('template_path') or options.template_path
-        template_path = os.path.join(template_path, template_name)
+        #template_path = self.tmpl['host_config'].get('template_path') or options.template_path
+        #template_path = os.path.join(template_path, template_name)
         # Override parent class render to remove the embeds and instrument a timer here. Copied in from tornado/web.py render()
         if self._finished:
             raise RuntimeError("Cannot render() after finish()")
@@ -375,14 +376,15 @@ class AegisHandler(tornado.web.RequestHandler):
                 cookie_durations = {'user': 3650, 'session': None, 'auth': 90}
             cookie_duration = cookie_durations[name]
         cookie_flags = {'httponly': True, 'secure': True, 'samesite': 'Lax'}
-        if options.hostname == 'localhost':
+        hostname = self.tmpl['host_config'].get('hostname') or options.hostname
+        if hostname == 'localhost':
             cookie_flags['secure'] = False
         # XXX Way to not set httponly for reading in javascript
         cookie_val = self.cookie_encode(value)
         if aegis.config.exists('cookie_domain'):
             cookie_domain = aegis.config.get('cookie_domain')
         else:
-            cookie_domain = options.hostname
+            cookie_domain = hostname
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=cookie_domain, **cookie_flags)
 
     def cookie_get(self, name, cookie_duration=None):
@@ -398,7 +400,8 @@ class AegisHandler(tornado.web.RequestHandler):
         return cookie_val
 
     def cookie_clear(self, name):
-        self.clear_cookie(self.cookie_name(name), domain=options.hostname)
+        domain = self.tmpl['host_config'].get('hostname') or options.hostname
+        self.clear_cookie(self.cookie_name(name), domain=domain)
 
 
     # Authentication
@@ -682,7 +685,7 @@ class AegisHandler(tornado.web.RequestHandler):
         #aegis.stdlib.logw(audit_request_id, "AUDIT REQUEST ID")
         self.save_audit_relations(audit_request_id)
         # In some error cases, log all the data from POST, headers, response.
-        if self._status_code >= 400 or (hasattr(self, 'json_resp') and self.json_resp.get('errors')):
+        if (self._status_code >= 400 and self._status_code != 404) or (hasattr(self, 'json_resp') and self.json_resp.get('errors')):
             # Formatting request headers
             req_headers = json.dumps(str(self.request.headers).splitlines(), cls=aegis.stdlib.DateTimeEncoder)
             # Formatting response headers
@@ -1112,11 +1115,12 @@ class AegisHydra(AegisWeb):
     @tornado.web.authenticated
     def get(self, *args):
         self.enforce_admin()
-        if options.header_logo.endswith('svg'):
+        header_logo = self.tmpl['host_config'].get('header_logo') or options.header_logo
+        if header_logo.endswith('svg'):
             logging.warning("DO SVG")
-            self.tmpl['page_title'] = 'Hydra %s' % options.domain
+            self.tmpl['page_title'] = 'Hydra %s' % self.tmpl['domain']
         else:
-            self.tmpl['page_title'] = 'Hydra %s' % options.domain
+            self.tmpl['page_title'] = 'Hydra %s' % self.tmpl['domain']
         self.tmpl['home_link'] = '/'
         # Hydra Types sorted by status, priority, importance
         self.tmpl['hydra_types'] = aegis.model.HydraType.scan(dbconn=self.dbconn)

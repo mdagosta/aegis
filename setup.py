@@ -45,7 +45,7 @@ setuptools.setup (
         'pyreferrer',
         'python-dateutil',
         'requests',
-        'tornado == 6.2.0',
+        'tornado >= 6.2.0',
         'user_agents',
     ]
 )

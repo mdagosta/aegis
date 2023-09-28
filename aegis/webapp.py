@@ -965,6 +965,9 @@ class AegisApplication():
             if hasattr(handler, 'json_length'):
                 extra_debug += ' | kb: %4.2f' % (handler.json_length / 1024.0)
             extra_debug = aegis.stdlib.cstr(extra_debug, 'yellow')
+            geoip = handler.tmpl.get('geoip')
+            if geoip:
+                extra_debug += aegis.stdlib.cstr("  %s / %s / %s" % (geoip.get('country_iso_code'), geoip.get('region_iso_code'), geoip.get('city')), 'cyan')
             if handler.user_is_robot():
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
         # Timing

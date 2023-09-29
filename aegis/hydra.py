@@ -461,27 +461,6 @@ class Hydra(HydraThread):
                         elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < (utcnow - datetime.timedelta(seconds=30)):
                             if hydra_type['run_env'] == aegis.config.get('env'):
                                 self.logw(hydra_type, "HYDRA TYPE BEHIND ON RUNNING")
-                            # maybe try to run_now?
-                        #    # If status is 'running' and not claimed, try clear_running like at start time
-                        #    if hydra_type['status'] == 'running' and not hydra_type['claimed_dttm']:
-                        #        aegis.stdlib.loge(hydra_type, "TYPE IS RUNNING AND NOT CLAIMED")
-                        #        aegis.stdlib.loge(aegis.config.get('env'), "CONFIG ENV")
-                        #        aegis.stdlib.loge(hydra_type['next_run_dttm'], "NEXT RUN")
-                        #        aegis.stdlib.loge(utcnow, "UTCNOW")
-                        #        logging.warning("%s clearing running jobs over %s minutes old for db: %s" % (self.name, self.stuck_minutes, dbconn.database))
-                        #        aegis.model.HydraType.clear_running(minutes=self.stuck_minutes, dbconn=dbconn)
-                        #    elif hydra_type['status'] == 'live' and hydra_type['claimed_dttm']:
-                        #        aegis.stdlib.loge(hydra_type, "TYPE IS LIVE AND CLAIMED")
-                        #        aegis.stdlib.loge(aegis.config.get('env'), "CONFIG ENV")
-                        #        aegis.stdlib.loge(hydra_type['next_run_dttm'], "NEXT RUN")
-                        #        aegis.stdlib.loge(utcnow, "UTCNOW")
-                        #        logging.warning("%s clearing claimed jobs over %s minutes old for db: %s" % (self.name, self.stuck_minutes, dbconn.database))
-                        #        aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
-                        #    elif hydra_type['run_env'] == aegis.config.get('env'):
-                        #        aegis.stdlib.loge(hydra_type, "NO RUNNABLE FOR TYPE")
-                        #        aegis.stdlib.loge(aegis.config.get('env'), "CONFIG ENV")
-                        #        aegis.stdlib.loge(hydra_type['next_run_dttm'], "NEXT RUN")
-                        #        aegis.stdlib.loge(utcnow, "UTCNOW")
 
                 # Better handling of AdminShutdown, OperationalError, to capture structured and complete data to logs and alerts.
                 except (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError) as ex:

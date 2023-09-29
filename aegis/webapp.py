@@ -970,6 +970,8 @@ class AegisApplication():
                 extra_debug += aegis.stdlib.cstr("  %s / %s / %s" % (geoip.get('country_iso_code'), geoip.get('region_iso_code'), geoip.get('city')), 'cyan')
             if handler.user_is_robot():
                 extra_debug += aegis.stdlib.cstr('   BOT', 'blue')
+        if hasattr(handler, 'log_request_debug'):
+            extra_debug += handler.log_request_debug()
         # Timing
         request_t_ms = handler.request.request_time() * 1000   # Use tornado's from start of __init__ to end of finish() as a reference
         timers = None

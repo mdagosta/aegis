@@ -960,7 +960,7 @@ def monitor_shell(cmd, timeout=8):
     return exit_status == 0
 
 
-def submit_mailer(email_type_id, from_addr, to_addr, email_data):
+def submit_mailer(email_type_id, from_addr, to_addr, email_data, dbconn=None):
     from_addr = email.utils.parseaddr(from_addr)
     email_data['from_name'] = from_addr[0]
     from_email = validate_email(from_addr[1])
@@ -969,10 +969,10 @@ def submit_mailer(email_type_id, from_addr, to_addr, email_data):
     to_email = validate_email(to_addr[1])
     # Write it to the db
     import aegis.model
-    from_email = aegis.model.Email.set_email(from_email)
-    to_email = aegis.model.Email.set_email(to_email)
+    from_email = aegis.model.Email.set_email(from_email, dbconn=dbconn)
+    to_email = aegis.model.Email.set_email(to_email, dbconn=dbconn)
     email_data = json.dumps(email_data, cls=aegis.stdlib.DateTimeEncoder)
-    return aegis.model.EmailTracking.insert(email_type_id, from_email['email_id'], to_email['email_id'], email_data)
+    return aegis.model.EmailTracking.insert(email_type_id, from_email['email_id'], to_email['email_id'], email_data, dbconn=dbconn)
 
 
 version_str = None

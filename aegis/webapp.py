@@ -381,10 +381,7 @@ class AegisHandler(tornado.web.RequestHandler):
             cookie_flags['secure'] = False
         # XXX Way to not set httponly for reading in javascript
         cookie_val = self.cookie_encode(value)
-        if aegis.config.exists('cookie_domain'):
-            cookie_domain = aegis.config.get('cookie_domain')
-        else:
-            cookie_domain = hostname
+        cookie_domain = hostname
         self.set_secure_cookie(self.cookie_name(name), cookie_val, expires_days=cookie_duration, domain=cookie_domain, **cookie_flags)
 
     def cookie_get(self, name, cookie_duration=None):
@@ -442,7 +439,10 @@ class AegisHandler(tornado.web.RequestHandler):
 
     def get_member_id(self):
         # Cookie can't change mid-request so we can just cache the value on the handler
-        if hasattr(self, '_member_id'):
+        logged_out = (self.tmpl.get('logged_out') == True)
+        if logged_out:
+            return None
+        if hasattr(self, '_member_id') and not logged_out:
             return self._member_id
         # When not on production, if test token and test member_id are present, use that for the request.
         test_token = self.request.headers.get('Test-Token')

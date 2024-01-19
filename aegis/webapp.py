@@ -702,7 +702,7 @@ class AegisHandler(tornado.web.RequestHandler):
             #    request_body = self.request.body
             #    aegis.stdlib.logw(request_body, "REQUEST BODY ")
             #    logging.warning("This may not always be a dictionary")
-            post_secret_fields = ['password', 'accessToken', 'idToken']
+            post_secret_fields = ['password', 'accessToken', 'idToken', 'tokenObj']
             if aegis.config.exists('post_secret_fields') and options.post_secret_fields:
                 post_secret_fields += options.post_secret_fields
             for field in post_secret_fields:
@@ -717,7 +717,8 @@ class AegisHandler(tornado.web.RequestHandler):
                                        'request_bytes': len(self.request.uri) + len(self.request.headers) + len(self.request.body),
                                        'response_status': self._status_code, 'response_headers': resp_headers, 'response_ms': self.audit_request['exec_time']}
             if hasattr(self, 'json_resp'):
-                self.audit_request_data['response_body'] = self.json_resp
+                #self.json_resp['stuff'] = "123 \xe9 é and others"   # This was breaking mysql without str(self.json_resp)
+                self.audit_request_data['response_body'] = str(self.json_resp)
                 self.audit_request_data['response_bytes'] = len(json.dumps(self.json_resp, cls=aegis.stdlib.DateTimeEncoder))
                 self.audit_request_data['response_error'] = json.dumps(self.json_resp.get('errors'), cls=aegis.stdlib.DateTimeEncoder)
             audit_request_data_id = aegis.model.AuditRequestData.insert_columns(dbconn=self.dbconn, **self.audit_request_data)

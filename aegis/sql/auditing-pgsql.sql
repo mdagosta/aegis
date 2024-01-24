@@ -105,3 +105,8 @@ CREATE TABLE audit_request_data (
 CREATE TRIGGER update_dttm BEFORE UPDATE ON audit_request_data FOR EACH ROW EXECUTE PROCEDURE update_dttm();
 CREATE INDEX ON audit_request_data(audit_request_id);
 CREATE INDEX ON audit_request_data(audit_session_id);
+
+INSERT INTO marketing (marketing_name) VALUES ('direct') RETURNING marketing_id;
+INSERT INTO marketing (marketing_name) VALUES ('referral') RETURNING marketing_id;
+INSERT INTO marketing (marketing_name) VALUES ('organic') RETURNING marketing_id;
+ALTER TABLE member ADD marketing_id INTEGER DEFAULT NULL REFERENCES marketing(marketing_id);

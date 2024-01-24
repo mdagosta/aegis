@@ -76,8 +76,8 @@ class HydraThread(threading.Thread):
         # Handling signals only works in the main thread
         signal.signal(signal.SIGINT, self.signal_stop)
         signal.signal(signal.SIGTERM, self.signal_stop)
+        signal.signal(signal.SIGHUP, self.signal_stop)
         signal.signal(signal.SIGUSR1, self.signal_debug)
-        signal.signal(signal.SIGHUP, self.signal_reset)
         # Main thread is used only as a control thread... monitors quitting variable, and sleep gets interrupted by signal. And that's it!
         while threading.active_count() > 1:
             if HydraThread.quitting.is_set():
@@ -116,13 +116,6 @@ class HydraThread(threading.Thread):
     def signal_stop(signal, frm):
         logging.warning('SIGINT or SIGTERM received (%s). Quitting now...', signal)
         HydraThread.quitting.set()
-
-
-    @staticmethod
-    def signal_reset(signal, frm):
-        logging.warning("SIGHUP received... clearing stale claims")
-        aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes)
-        aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes)
 
 
 class HydraHead(HydraThread):

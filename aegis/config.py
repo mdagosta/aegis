@@ -29,6 +29,15 @@ def exists(config_name):
 def aegis_dir():
     return aegis.stdlib.absdir(__file__)
 
+def console_level():
+    # https://docs.python.org/3/howto/logging.html
+    priority_map = {'DEBUG': logging.DEBUG, 'INFO': logging.INFO, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR, 'CRITICAL': logging.CRITICAL}
+    console_level = priority_map[options.console_level.upper()]
+    root_logger = logging.getLogger()
+    root_logger.setLevel(console_level)
+    stream_handler = root_logger.handlers[0]
+    stream_handler.setLevel(console_level)
+
 
 class SyslogHandler(logging.Handler):
     facility_map = {'local1': syslog.LOG_LOCAL1, 'local3': syslog.LOG_LOCAL3, 'local4': syslog.LOG_LOCAL4, 'local5': syslog.LOG_LOCAL5, 'local6': syslog.LOG_LOCAL6}

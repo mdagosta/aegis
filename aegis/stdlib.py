@@ -872,7 +872,7 @@ def timer_log(obj, timer_name):
     if not obj:
         return {}
     exec_name = '_%s_exec_s' % timer_name
-    logging.error("%s  %.3f ms" % (timer_name, 1000 * obj._timers[exec_name]))
+    logging.debug("%s  %.3f ms" % (timer_name, 1000 * obj._timers[exec_name]))
 
 def timer_reset(obj, timer_name):
     if not obj:

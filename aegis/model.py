@@ -774,9 +774,9 @@ class HydraQueue(aegis.database.Row):
     def past_items(cls, minutes=15, dbconn=None):
         dbconn = dbconn if dbconn else db()
         if type(dbconn) is aegis.database.PostgresConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE' ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL '%s MINUTE' AND claimed_dttm IS NOT NULL ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
         elif type(dbconn) is aegis.database.MysqlConnection:
-            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
+            sql = "SELECT * FROM hydra_queue WHERE work_dttm < NOW() - INTERVAL %s MINUTE AND claimed_dttm IS NOT NULL ORDER BY work_dttm ASC LIMIT 50" % int(minutes)
         return dbconn.query(sql, cls=cls)
 
     def run_now(self, dbconn=None):

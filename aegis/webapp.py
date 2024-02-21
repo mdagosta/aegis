@@ -114,14 +114,14 @@ class AegisHandler(tornado.web.RequestHandler):
         self.request.args = dict([(key, self.get_argument(key, strip=False)) for key, val in self.request.arguments.items()])
         self.setup_user()
         self.track_email()
-        # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False.
+        # Enable/Disable auditing. Allow for host-specific override in config.py hostnames. Else just use from options.use_audit, or False. Disable for admin_member_id.
         self.use_audit = False
         if aegis.config.exists('use_audit'):
             self.use_audit = self.tmpl['host_config'].get('use_audit') or options.use_audit
-            #if hasattr(config, 'hostnames') and 'use_audit' in self.tmpl['host_config']:
-            #    self.use_audit = self.tmpl['host_config'].get('use_audit')
-            #else:
-            #    self.use_audit = options.use_audit
+            # When admin is logged in as someone else, don't use_audit
+            auth_ck = self.cookie_get('auth')
+            if auth_ck and auth_ck.get('admin_member_id'):
+                self.use_audit = False
         if self.use_audit:
             self.set_marketing_id()
             self.audit_start()

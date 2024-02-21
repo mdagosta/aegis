@@ -650,7 +650,7 @@ class HydraQueue(aegis.database.Row):
            AND hydra_queue.finish_dttm IS NULL
            AND hydra_queue.delete_dttm IS NULL
            AND hydra_type.status <> 'paused'
-      ORDER BY hydra_queue.priority_ndx ASC
+      ORDER BY hydra_queue.priority_ndx ASC, hydra_queue.work_dttm ASC
          LIMIT %s"""
         dbconn = dbconn if dbconn else db()
         return dbconn.query(sql, hostname, env, limit, cls=cls)

@@ -928,12 +928,17 @@ class GeoLite(object):
         if not os.path.exists(cls.geolite_path):
             logging.error("GeoLite db not found: %s" % cls.geolite_path)
             return {}
+        # Only import these if not already imported
         import geoip2.database
+        import maxminddb
         if not cls.geolite_db:
             cls.geolite_db = geoip2.database.Reader(cls.geolite_path)
         try:
             record = cls.geolite_db.city(ip_addr)
         except geoip2.errors.AddressNotFoundError as ex:
+            logging.exception(ex)
+            return {}
+        except maxminddb.errors.InvalidDatabaseError as ex:
             logging.exception(ex)
             return {}
         geoip = {'continent': record.continent.name, 'country_iso_code': record.country.iso_code, 'country': record.country.name, 'time_zone': record.location.time_zone,

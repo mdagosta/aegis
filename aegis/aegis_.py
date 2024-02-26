@@ -23,26 +23,61 @@ import aegis.stdlib
 import aegis.build
 import aegis.config
 
-# Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
-venv = os.environ.get('VIRTUAL_ENV')
-if venv:
-    # Running from within a virtualenv
-    repo_dir = os.path.dirname(venv)
-    src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
-    sys.path.insert(0, src_dir)
-    #print("running within virtualenv")
-    import config
-elif sys.argv[0] == 'virtualenv/bin/aegis':
-    # Running by calling the virtualenv binary directly
-    repo_dir = os.getcwd()
-    src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
-    sys.path.insert(0, src_dir)
-    #print("running from aegis cmdline")
-    import config
-elif sys.argv[0] == '/usr/local/bin/aegis':
-    repo_dir = os.getcwd()
-    #print("running from /usr/local/bin")
-    if os.path.exists(os.path.join(repo_dir, '.git')):
+
+def setup_parser():
+    parser = argparse.ArgumentParser(description='Create your shield.')
+    parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create, install, schema, build, deploy, revert]')
+    parser.add_argument('--branch', metavar='<branch>', type=str, help='git branch name')
+    parser.add_argument('--revision', metavar='<revision>', type=str, help='git revision hash')
+    parser.add_argument('--env', metavar='<env>', type=str, help='primary environment name')
+    parser.add_argument('--build_target', metavar='<build_target>', default='application', type=str, help='build target  <application, admin>')
+    parser.add_argument('--version', metavar='<version>', type=str, help='program version tag')
+    parser.add_argument('--appname', metavar='<appname>', type=str, nargs=1, help='code name for application')
+    parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='domain to create application')
+    parser.add_argument('--hostname', metavar='<hostname>', type=str, help='hostname to specify configs')
+    parser.add_argument('--dry_run', metavar='<dry_run>', type=str, default='True', help='make no changes')
+    return parser
+parser = setup_parser()
+parser_args = parser.parse_args()
+parser_cmd = parser_args.cmd[0]
+
+
+# Import config into global scope, but it isn't needed when using aegis create
+if parser_cmd != 'create':
+    # Load project config via VIRTUAL_ENV and naming convention, or by calling virtualenv binary directly
+    venv = os.environ.get('VIRTUAL_ENV')
+    if venv:
+        # Running from within a virtualenv
+        repo_dir = os.path.dirname(venv)
+        src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+        sys.path.insert(0, src_dir)
+        #print("running within virtualenv")
+        import config
+    elif sys.argv[0] == 'virtualenv/bin/aegis':
+        # Running by calling the virtualenv binary directly
+        repo_dir = os.getcwd()
+        src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+        sys.path.insert(0, src_dir)
+        #print("running from aegis cmdline")
+        import config
+    elif sys.argv[0] == '/usr/local/bin/aegis':
+        repo_dir = os.getcwd()
+        #print("running from /usr/local/bin")
+        if os.path.exists(os.path.join(repo_dir, '.git')):
+            src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
+            sys.path.insert(0, src_dir)
+            try:
+                import config
+            except ModuleNotFoundError as ex:
+                logging.exception(ex)
+                logging.error("Some aegis functions won't be smooth without config.py")
+        else:
+            logging.error("Can't detect your app dir. Be in the source root, next to .git dir.")
+            sys.exit(1)
+    else:
+        print(aegis.stdlib.cstr("Running in non-standard context. Going to wing it and import config. Hope this works!", 'yellow'))
+        print(aegis.stdlib.cstr("Make sure you're in the source root, next to the .git dir.", 'yellow'))
+        repo_dir = os.getcwd()
         src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
         sys.path.insert(0, src_dir)
         try:
@@ -50,20 +85,6 @@ elif sys.argv[0] == '/usr/local/bin/aegis':
         except ModuleNotFoundError as ex:
             logging.exception(ex)
             logging.error("Some aegis functions won't be smooth without config.py")
-    else:
-        logging.error("Can't detect your app dir. Be in the source root, next to .git dir.")
-        sys.exit(1)
-else:
-    print(aegis.stdlib.cstr("Running in non-standard context. Going to wing it and import config. Hope this works!", 'yellow'))
-    print(aegis.stdlib.cstr("Make sure you're in the source root, next to the .git dir.", 'yellow'))
-    repo_dir = os.getcwd()
-    src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
-    sys.path.insert(0, src_dir)
-    try:
-        import config
-    except ModuleNotFoundError as ex:
-        logging.exception(ex)
-        logging.error("Some aegis functions won't be smooth without config.py")
 
 
 ### Note to self: aegis create will work better if the core web is web.py so we don't clobber snowballin.py
@@ -85,7 +106,9 @@ def create(parser):
     domain = args.domain[0]
     aegis.stdlib.logw("AEGIS CREATE  %s  %s" % (app_name, domain))
     aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    aegis.stdlib.logw(aegis_dir, "AEGIS DIR")
     src_dir = os.path.dirname(aegis_dir)
+    aegis.stdlib.logw(src_dir, "SRC DIR")
     template_vars = {'app_name': app_name, 'aegis_domain': domain}
     create_dir = os.path.join(src_dir, app_name)
     #aegis.stdlib.logw(create_dir, "CREATE DIR")
@@ -96,6 +119,7 @@ def create(parser):
     # If the directory exists prompt the user
     # You can run aegis create again to produce a new create in your repo. Then you can look at git diff to resolve and differences.
 
+    aegis.stdlib.logw(create_dir, "CREATE DIR")
     if not os.path.exists(create_dir):
         os.mkdir(create_dir)
     create_etc_dir = os.path.join(create_dir, 'etc')
@@ -372,7 +396,7 @@ def revert(parser):
 
 
 def initialize():
-    # if branch, revision, version, env don't exist, add them
+    # if tornado options don't exist, add them
     if not aegis.config.exists('branch'):
         define('branch', default=None, help='git branch name', type=str)
     if not aegis.config.exists('revision'):
@@ -397,34 +421,21 @@ def initialize():
     #    print(aegis.stdlib.cstr("Remaining arguments: %s" % remaining, 'red'))
 
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Create your shield.')
-    parser.add_argument('cmd', metavar='<command>', type=str, nargs=1, help='What to do: [create, install, schema, build, deploy, revert]')
-    parser.add_argument('--branch', metavar='<branch>', type=str, help='git branch name')
-    parser.add_argument('--revision', metavar='<revision>', type=str, help='git revision hash')
-    parser.add_argument('--env', metavar='<env>', type=str, help='primary environment name')
-    parser.add_argument('--build_target', metavar='<build_target>', default='application', type=str, help='build target  <application, admin>')
-    parser.add_argument('--version', metavar='<version>', type=str, help='program version tag')
-    parser.add_argument('--appname', metavar='<appname>', type=str, nargs=1, help='code name for application')
-    parser.add_argument('--domain', metavar='<domain>', type=str, nargs=1, help='domain to create application')
-    parser.add_argument('--hostname', metavar='<hostname>', type=str, help='hostname to specify configs')
-    parser.add_argument('--dry_run', metavar='<dry_run>', type=str, default='True', help='make no changes')
-    args = parser.parse_args()
-    cmd = args.cmd[0]
-    # Do something
-    if cmd == 'create':
+    if parser_cmd == 'create':
         return create(parser)
-    elif cmd == 'install':
+    elif parser_cmd == 'install':
         return install(parser)
-    elif cmd == 'schema':
+    elif parser_cmd == 'schema':
         return schema(parser)
-    elif cmd == 'build':
+    elif parser_cmd == 'build':
         return build(parser)
-    elif cmd == 'deploy':
+    elif parser_cmd == 'deploy':
         return deploy(parser)
-    elif cmd == 'revert':
+    elif parser_cmd == 'revert':
         return revert(parser)
-    elif cmd == 'release':
+    elif parser_cmd == 'release':
         return release(parser)
     else:
         logging.error("NOT IMPLEMENTED... YET")

@@ -55,7 +55,11 @@ else:
     repo_dir = os.getcwd()
     src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
     sys.path.insert(0, src_dir)
-    import config
+    try:
+        import config
+    except ModuleNotFoundError as ex:
+        logging.exception(ex)
+        logging.error("Some aegis functions won't be smooth without config.py")
 
 
 ### Note to self: aegis create will work better if the core web is web.py so we don't clobber snowballin.py
@@ -373,6 +377,10 @@ def initialize():
         define('version', default=None, help='git version name', type=str)
     if not aegis.config.get('dry_run'):
         define('dry_run', default='True', help='make no changes', type=str)
+    if not aegis.config.get('appname'):
+        define('appname', default=None, help='name of python app', type=str)
+    if not aegis.config.get('domain'):
+        define('domain', default=None, help='top level domain to host the app', type=str)
     #aegis.stdlib.logw(aegis.config.get('env'), "AEGIS ENV")
     tornado.options.parse_command_line(sys.argv[1:])
     #aegis.stdlib.logw(aegis.config.get('env'), "AEGIS ENV PARSED")

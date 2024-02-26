@@ -45,7 +45,11 @@ elif sys.argv[0] == '/usr/local/bin/aegis':
     if os.path.exists(os.path.join(repo_dir, '.git')):
         src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
         sys.path.insert(0, src_dir)
-        import config
+        try:
+            import config
+        except ModuleNotFoundError as ex:
+            logging.exception(ex)
+            logging.error("Some aegis functions won't be smooth without config.py")
     else:
         logging.error("Can't detect your app dir. Be in the source root, next to .git dir.")
         sys.exit(1)

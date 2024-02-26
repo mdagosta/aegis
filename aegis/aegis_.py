@@ -369,21 +369,21 @@ def revert(parser):
 
 def initialize():
     # if branch, revision, version, env don't exist, add them
-    if not aegis.config.get('branch'):
+    if not aegis.config.exists('branch'):
         define('branch', default=None, help='git branch name', type=str)
-    if not aegis.config.get('revision'):
+    if not aegis.config.exists('revision'):
         define('revision', default=None, help='git revision hash', type=str)
-    if not aegis.config.get('version'):
+    if not aegis.config.exists('version'):
         define('version', default=None, help='git version name', type=str)
-    if not aegis.config.get('dry_run'):
+    if not aegis.config.exists('dry_run'):
         define('dry_run', default='True', help='make no changes', type=str)
-    if not aegis.config.get('appname'):
+    if not aegis.config.exists('appname'):
         define('appname', default=None, help='name of python app', type=str)
-    if not aegis.config.get('domain'):
+    if not aegis.config.exists('domain'):
         define('domain', default=None, help='top level domain to host the app', type=str)
-    #aegis.stdlib.logw(aegis.config.get('env'), "AEGIS ENV")
+    #aegis.stdlib.logw(aegis.config.exists('env'), "AEGIS ENV")
     tornado.options.parse_command_line(sys.argv[1:])
-    #aegis.stdlib.logw(aegis.config.get('env'), "AEGIS ENV PARSED")
+    #aegis.stdlib.logw(aegis.config.exists('env'), "AEGIS ENV PARSED")
     #try:
     #    config.initialize(args=sys.argv[1:])
     #except Exception as ex:

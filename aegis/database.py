@@ -324,8 +324,8 @@ class PostgresConnection(object):
 
 class MysqlConnection(object):
     """ From torndb originally """
-    def __init__(self, host, database, user=None, password=None, max_idle_time=7 * 3600):
-        self.host = host
+    def __init__(self, hostname, database, user=None, password=None, max_idle_time=7 * 3600):
+        self.hostname = hostname
         self.database = database
         self.max_idle_time = max_idle_time
         args = dict(use_unicode=True, charset="utf8mb4", db=database, sql_mode="TRADITIONAL")
@@ -333,18 +333,10 @@ class MysqlConnection(object):
             args["user"] = user
         if password is not None:
             args["passwd"] = password
-        # We accept a path to a MySQL socket file or a host(:port) string
-        if "/" in host:
-            args["unix_socket"] = host
-        else:
-            self.socket = None
-            pair = host.split(":")
-            if len(pair) == 2:
-                args["host"] = pair[0]
-                args["port"] = int(pair[1])
-            else:
-                args["host"] = host
-                args["port"] = 3306
+        if not hostname:
+            logging.error("ALERT TO DEVELOPER: No hostname specified for MysqlConnection. Check it's specified. Check environment variable being set.")
+        args["host"] = hostname
+        args["port"] = 3306
         self._db_init_command = 'SET time_zone = "+0:00"'
         self._db = None
         self._db_args = args
@@ -352,31 +344,31 @@ class MysqlConnection(object):
         try:
             self.reconnect()
         except Exception:
-            logging.error("Cannot connect to MySQL on %s", self.host, exc_info=True)
+            logging.error("Cannot connect to MySQL on %s", self.hostname, exc_info=True)
 
     threads = {}
 
     @classmethod
     def connect(cls, **kwargs):
         if 'mysql_schema' in kwargs:
-            host = kwargs['mysql_host']
+            hostname = kwargs['mysql_hostname']
             schema = kwargs['mysql_schema']
-            user = kwargs['mysql_user']
+            user = kwargs['mysql_username']
             passwd = kwargs['mysql_password']
         else:
-            host = options.mysql_host
+            hostname = options.mysql_hostname
             schema = options.mysql_schema
-            user = options.mysql_user
+            user = options.mysql_username
             passwd = options.mysql_password
         # force a new connection
         if kwargs.get('force', False):
-            return cls(host, schema, user, passwd)
+            return cls(hostname, schema, user, passwd)
         # check existing connections
         ident = threading.current_thread().ident
-        target = '%s@%s' % (schema, host)
+        target = '%s@%s' % (schema, hostname)
         connections = cls.threads.setdefault(ident, {})
         if not target in connections:
-            conn = cls(host, schema, user, passwd)
+            conn = cls(hostname, schema, user, passwd)
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
             conn.schema = schema
             cls.threads[ident][target] = conn
@@ -520,7 +512,7 @@ class MysqlConnection(object):
             aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
             return result
         except (MysqlOperationalError, MysqlInterfaceError) as ex:
-            logging.error("Error with MySQL on %s. Close connection and raise.", self.host)
+            logging.error("Error with MySQL on %s. Close connection and raise.", self.hostname)
             logging.exception(ex)
             self.close()
             raise

@@ -110,3 +110,27 @@ INSERT INTO marketing (marketing_name) VALUES ('direct') RETURNING marketing_id;
 INSERT INTO marketing (marketing_name) VALUES ('referral') RETURNING marketing_id;
 INSERT INTO marketing (marketing_name) VALUES ('organic') RETURNING marketing_id;
 ALTER TABLE member ADD marketing_id INTEGER DEFAULT NULL REFERENCES marketing(marketing_id);
+
+CREATE TABLE user_agent (
+  user_agent_id bigint NOT NULL AUTO_INCREMENT,
+  user_agent_tx text NOT NULL,
+  user_agent_md5 varchar(32) NOT NULL,
+  robot_ind tinyint(1) NOT NULL DEFAULT '0',
+  robot_user_id bigint DEFAULT NULL,
+  user_agent_json json DEFAULT NULL,
+  create_dttm datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_dttm timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  delete_dttm TIMESTAMP DEFAULT NULL,
+  PRIMARY KEY (user_agent_id),
+  UNIQUE KEY user_agent_md5 (user_agent_md5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `user` (
+  user_id bigint NOT NULL AUTO_INCREMENT,
+  user_agent_id int NOT NULL,
+  member_id int DEFAULT NULL,
+  create_dttm datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_dttm timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  delete_dttm TIMESTAMP DEFAULT NULL,
+  PRIMARY KEY (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

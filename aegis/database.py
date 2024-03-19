@@ -297,30 +297,6 @@ class PostgresConnection(object):
             if not self._txn:
                 cursor.close()
 
-    # Commenting until they can be properly tested for use with commit() and rollback()
-    #def executemany(self, query, parameters):
-    #    """ Return the lastrowid from the query."""
-    #    return self.executemany_lastrowid(query, parameters)
-    #
-    #def executemany_lastrowid(self, query, parameters):
-    #    """ Return the lastrowid from the query."""
-    #    cursor = self._cursor()
-    #    try:
-    #        cursor.executemany(query, parameters)
-    #        return cursor.lastrowid
-    #    finally:
-    #        cursor.close()
-    #
-    #def executemany_rowcount(self, query, parameters):
-    #    """ Return the rowcount from the query."""
-    #    cursor = self._cursor()
-    #    try:
-    #        cursor.executemany(query, parameters)
-    #        return cursor.rowcount
-    #    finally:
-    #        cursor.close()
-
-
 
 class MysqlConnection(object):
     """ From torndb originally """

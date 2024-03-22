@@ -942,7 +942,7 @@ class Cache(aegis.database.Row):
     def get_cache(cls, cache_key):
         cls.purge_expired()
         cache_obj = cls.get_key(cache_key)
-        if cache_obj and type(cache_obj) is str:
+        if cache_obj and type(cache_obj['cache_json']) is str:
             return json.loads(cache_obj['cache_json'])
         elif cache_obj:
             return cache_obj['cache_json']

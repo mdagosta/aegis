@@ -442,6 +442,8 @@ class Hydra(HydraThread):
                                 #logging.error("HydraQueue has %s stuck items", len(past_items))
                                 for past_item in past_items:
                                     past_item_type = aegis.model.HydraType.get_id(past_item['hydra_type_id'], dbconn=dbconn)
+                                    if past_item_type['status'] == 'paused':
+                                        continue
                                     logging.error("Running stuck hydra_queue_id: %s  hydra_type_name: %s", past_item['hydra_queue_id'], past_item_type['hydra_type_name'])
                                     past_item.run_now(dbconn=dbconn)
                             # Any hydra_type claimed since the next_run_dttm and over 5m old are stuck. Automatically unclaim them.
@@ -449,6 +451,8 @@ class Hydra(HydraThread):
                             if past_items and len(past_items):
                                 #logging.error("HydraType has %s stuck items", len(past_items))
                                 for past_item in past_items:
+                                    if past_item['status'] == 'paused':
+                                        continue
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim(dbconn=dbconn)
                         elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < (utcnow - datetime.timedelta(seconds=30)):

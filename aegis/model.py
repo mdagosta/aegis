@@ -994,6 +994,12 @@ class Cache(aegis.database.Row):
         return cache_obj
 
     @staticmethod
+    def del_star(cache_key):
+        cache_key = cache_key.replace('*', '%%')
+        sql = "DELETE FROM cache WHERE cache_key LIKE '" + cache_key + "'"
+        return db().execute_rowcount(sql)
+
+    @staticmethod
     def del_key(cache_key):
         sql = "DELETE FROM cache WHERE cache_key=%s"
         return db().execute(sql, cache_key)

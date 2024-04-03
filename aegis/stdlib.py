@@ -283,12 +283,14 @@ def format_money(amount, rjust=None):
     return amt
 
 
-# >>> "%4.2f Trillion Should Be Enough" % (float(26*pow(36, 7)) / float(pow(1024, 4)))
-# '1.85 Trillion Should Be Enough'
-# >>> "If Not, %4.2f Trillion Should Definitely Be Enough" % (float(26*pow(36, 9)) / float(pow(1024, 4)))
-# 'If Not, 2401.57 Trillion Should Definitely Be Enough'
-
-# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities. Enforce at least one letter so it can't be cast to an int
+# Token format that is unique and hard to guess. Enforce at least one letter so it can't accidentally be cast to an int.
+# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities.
+#>>> chars=8; "%4.2f Trillion Should Be Enough For Just %s Chars" % (float(26*pow(36, chars-1)) / float(pow(1024, 4)), chars)
+#'1.85 Trillion Should Be Enough For Just 8 Chars'
+#>>> chars=10; "If not, %4.2f Trillion in %s Chars Should Definitely Be Enough" % (float(26*pow(36, chars-1)) / float(pow(1024, 4)), chars)
+#'If not, 2401.57 Trillion in 10 Chars Should Definitely Be Enough'
+#>>> chars=12; "Ludicrous Odds: %s Chars Makes For %4.2f Trillion Possibilities (3 Quintillion)" % (chars, float(26*pow(36, chars-1)) / float(pow(1024, 4)))
+#'Ludicrous Odds: 12 Chars Makes For 3112440.30 Trillion Possibilities (3 Quintillion)'
 token_length = 10
 token_chars = string.ascii_letters + string.digits
 def magic_token(length=token_length):

@@ -574,7 +574,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
             if aegis.database.mysql_available:
-                self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_dttm)')
+                self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(create_dttm)')
             elif aegis.database.pgsql_available:
                 self.audit_session['session_time'] = aegis.database.Literal('EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM create_dttm)')
             self.audit_session['request_cnt'] = aegis.database.Literal('request_cnt+1')

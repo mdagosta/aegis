@@ -3,107 +3,131 @@
 #
 # Generate Domain
 #
-# Create {{app_name}}-specific domain files for nginx directly into sites-enabled
+# Create epiphyte-specific domain files for nginx directly into sites-enabled
 
 import logging
 import os
 import sys
 
-domains = ['{{aegis_domain}}']
-dev_envs = {'dev': '/srv/www/{{app_name}}_dev'}
+import aegis.stdlib
 
-dev_template = """### {{dev_env}}
+
+# Configuring on a per-user per-domain basis
+domains = {'dashboard.birthdayalarm.com': {'envs': ['md', 'nick', 'dev', 'prod']}}
+
+envs = {'md': {'src_dir': '/home/mdagosta/src/bday-dashboard'},
+        'nick': {'src_dir': '/home/nick/src/bday-dashboard'},
+        'dev': {'src_dir': '/srv/www/bday-dashboard_dev'},
+        'prod': {'src_dir': '/srv/www/bday-dashboard/prod', 'etc_dir': ''}
+        }
+
+
+# One standard nginx server to rule them all
+template = """# {{env}} environment
 server {
     listen         80;
-    server_name    {{dev_env}}.{{domain}};
-    return         301 https://{{dev_env}}.{{domain}}$request_uri;
-    access_log     /var/log/nginx/{{app_name}}-{{dev_env}}.access.log {{app_name}};
-    error_log      /var/log/nginx/{{app_name}}-{{dev_env}}.error.log;
+    server_name    {{server_name}};
+    server_tokens  off;
+    return         301 https://{{hostname}}$request_uri;
+    access_log     /var/log/nginx/epiphyte-{{env}}.access.log epiphyte;
+    error_log      /var/log/nginx/epiphyte-{{env}}.error.log;
 }
-
 
 server {
     listen 443 ssl;
-    server_name {{dev_env}}.{{domain}};
-    access_log /var/log/nginx/{{app_name}}-{{dev_env}}.access-ssl.log {{app_name}};
-    error_log /var/log/nginx/{{app_name}}-{{dev_env}}.error-ssl.log;
-    set $app_root {{src_dir}}/{{app_name}};
-    root $app_root/;
+    server_name {{server_name}};
+    server_tokens off;
+    access_log /var/log/nginx/epiphyte-{{env}}.access-ssl.log epiphyte;
+    error_log /var/log/nginx/epiphyte-{{env}}.error-ssl.log;
 
-    ssl on;
-    ssl_certificate /etc/nginx/ssl/star.{{domain}}.CF-origin.crt;
-    ssl_certificate_key /etc/nginx/ssl/star.{{domain}}.CF-origin.key;
+    set $app_root {{src_dir}}/epiphyte;
+    set $host_root {{src_dir}}/epiphyte/sites/$host;
+    root $host_root/;
 
-    auth_basic "Regnu {{app_name}}";
-    auth_basic_user_file /etc/nginx/http_basic_auth;
+    ssl_certificate {{etc_dir}}/etc/nginx/ssl/star.{{domain}}.CF-origin.crt;
+    ssl_certificate_key {{etc_dir}}/etc/nginx/ssl/star.{{domain}}.CF-origin.key;
+
+    # HTTP Basic Auth
+    auth_basic "Get Your Own";
+    auth_basic_user_file {{etc_dir}}/etc/nginx/http_basic_auth;
 
     # Sink annoying probing requests to HTTP 410 Gone without logging
-    include {{src_dir}}/{{app_name}}/etc/nginx/sink_gone.conf;
+    include {{etc_dir}}/etc/nginx/sink_gone.conf;
 
     # Use standardized error pages to send a decent error mode to the client
-    include {{src_dir}}/{{app_name}}/etc/nginx/error_pages.conf;
+    include {{etc_dir}}/etc/nginx/error_pages.conf;
 
     # Configure real_ip_header from Cloudflare
-    include {{src_dir}}/{{app_name}}/etc/nginx/cloudflare.conf;
+    include {{etc_dir}}/etc/nginx/cloudflare.conf;
+
+    # Baseline Secure Headers
+    add_header Strict-Transport-Security max-age=63072000 always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Permissions-Policy microphone=(),camera=(),display-capture=(),geolocation=() always;
+    #add_header Allow "GET, POST" always;
+    if ( $request_method !~ ^(GET|POST)$ ) { return 405; }
 
     # Application
-    location /favicon.ico { root $app_root/sites/$host; }
-    location /robots.txt { root $app_root/sites/$host; }
-    location /sitemap.xml { root $app_root/sites/$host; }
-    location /static { if ($query_string) { expires 8d; } }
-    location / { proxy_pass http://{{dev_env}}_{{app_name}}_tornados; }
+    location /apple-touch-icon.png { expires 8d; }
+    location /favicon.ico { expires 8d; }
+    location /robots.txt { expires 1d; root $app_root;try_files /sites/$host/static/robots.txt /static/robots.txt =404; }
+    location /sitemap.xml { expires 1d; }
+    location ~ /static/(.*) {
+      root $app_root;
+      expires 8d;   # not in if because If is evil: https://www.nginx.com/resources/wiki/start/topics/depth/ifisevil/
+      try_files /sites/$host/static/$1 /static/$1 =404;
+    }
+    location /admin/build { proxy_pass http://{{env}}-admin_epiphyte_tornados; proxy_next_upstream off; }
+    location / { proxy_pass http://{{env}}_epiphyte_tornados; }
 }
+
+
 
 """
 
-prod_template = """### prod
-server {
-    listen         80;
-    server_name    .{{domain}};
-    return         301 https://{{domain}}$request_uri;
-    access_log     /var/log/nginx/{{app_name}}-prod.access.log {{app_name}};
-    error_log      /var/log/nginx/{{app_name}}-prod.error.log;
-}
 
 
-server {
-    listen 443 ssl;
-    server_name .{{domain}};
-    access_log /var/log/nginx/{{app_name}}-prod.access-ssl.log {{app_name}};
-    error_log /var/log/nginx/{{app_name}}-prod.error-ssl.log;
-    set $app_root /srv/www/{{app_name}}_prod/{{app_name}};
-    root $app_root/;
 
-    ssl on;
-    ssl_certificate /etc/nginx/ssl/star.{{domain}}.CF-origin.crt;
-    ssl_certificate_key /etc/nginx/ssl/star.{{domain}}.CF-origin.key;
-
-    # Sink annoying probing requests to HTTP 410 Gone without logging
-    include /etc/nginx/sink_gone.conf;
-
-    # Use standardized error pages to send a decent error mode to the client
-    include /etc/nginx/error_pages.conf;
-
-    # Configure real_ip_header from Cloudflare
-    include /etc/nginx/cloudflare.conf;
-
-    # Application
-    location /favicon.ico { root $app_root/sites/$host; }
-    location /robots.txt { root $app_root/sites/$host; }
-    location /sitemap.xml { root $app_root/sites/$host; }
-    location /static { if ($query_string) { expires 8d; } }
-    location / { proxy_pass http://prod_{{app_name}}_tornados; }
-}"""
-
-template = ''
-for dev_env, src_dir in dev_envs.items():
-    template += dev_template.replace('{{dev_env}}', dev_env).replace('{{src_dir}}', src_dir)
-template += prod_template
-
+# Building nginx site config and writing to filesystem
 dirname = os.path.abspath(os.path.dirname(__file__))
 sites_enabled = os.path.join(dirname, 'sites-enabled')
-for domain in domains:
+
+# iterate through the domains, then build a template for each env in that domain
+for domain, domain_envs in domains.items():
+    rendered = ''
+    # iterate the envs
+    for env in domain_envs['envs']:
+        configs = envs[env]
+        configs['env'] = env
+        configs['domain'] = domain
+        # Generate server_name and hostname from env and domain
+        env_name = env
+        if env_name == 'prod':
+            env_name = ''
+        configs['server_name'] = '%s.%s' % (env_name, domain)
+        configs['hostname'] = ('%s.%s' % (env_name, domain)).strip('.')
+        # Generate etc_dir if not prod
+        if 'etc_dir' not in configs:
+            configs['etc_dir'] = '%s' % configs['src_dir']
+        # Render template with replaced params
+        host = template
+        for config, value in configs.items():
+            host = host.replace('{{%s}}' % config, configs[config])
+        host_render = []
+        # Filter out auth_basic in production
+        auth_filter = None
+        if configs['env'] == 'prod':
+            auth_filter = 'auth_basic'
+        lines = host.splitlines()
+        lines = [ line for line in lines if not auth_filter or auth_filter not in line ]
+        # Filter out admin in non-deployed admin
+        admin_filter = None
+        if configs['env'] in ['md', 'nick']:
+            admin_filter = '/admin/build'
+        lines = [ line for line in lines if not admin_filter or admin_filter not in line ]
+        host_render = lines
+        rendered += '\n'.join(host_render)
     filename = os.path.join(sites_enabled, domain + '.conf')
     with open(filename, 'w') as fd:
-        fd.write(template.replace('{{domain}}', domain))
+        fd.write(rendered)
 print ("GREAT SUCCESS!!")

@@ -942,7 +942,7 @@ class Cache(aegis.database.Row):
     def get_cache(cls, cache_key):
         cls.purge_expired()
         cache_obj = cls.get_key(cache_key)
-        if cache_obj and type(cache_obj) is str:
+        if cache_obj and type(cache_obj['cache_json']) is str:
             return json.loads(cache_obj['cache_json'])
         elif cache_obj:
             return cache_obj['cache_json']
@@ -992,6 +992,12 @@ class Cache(aegis.database.Row):
             cls.insert(cache_key, cache_json, cache_expiry)
             cache_obj = cls.get_key(cache_key)
         return cache_obj
+
+    @staticmethod
+    def del_star(cache_key):
+        cache_key = cache_key.replace('*', '%%')
+        sql = "DELETE FROM cache WHERE cache_key LIKE '" + cache_key + "'"
+        return db().execute_rowcount(sql)
 
     @staticmethod
     def del_key(cache_key):

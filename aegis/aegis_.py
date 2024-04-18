@@ -130,7 +130,6 @@ def create(parser):
     for entry in os.walk(tmpl_dir):
         basedir, subdirs, files = entry
         rebasedir = create_dir + basedir[basedir.find('aegis/tmpl')+10:]
-        logging.warning(rebasedir)
         if rebasedir.endswith('/aegis'):
             rebasedir = rebasedir[:-6] + '/' + app_name
         if not os.path.exists(rebasedir):
@@ -145,6 +144,16 @@ def create(parser):
                 rebase_filename = filename
                 if filename == 'aegis.py':
                     rebase_filename = app_name + '.py'
+
+
+                # Needs web.py and batch with all aegis working by default
+                # config.py with defaults and pre-filled program_name (only if no config.py, but definitely don't overwrite)
+                # sudoers
+                # github deploy key
+                # supervisor should have the build configs
+                # nginx should have the build configs
+
+
                 if filename == 'aegis.conf':
                     rebase_filename = app_name + '.conf'
                 if filename == 'aegis_dev.conf':
@@ -241,6 +250,15 @@ def schema(parser):
         logging.error("postgres=# GRANT %s TO <root>;    # where root like doadmin, awsadmin" % (options.pg_username))
         logging.error("postgres=# CREATE DATABASE %s OWNER=%s;" % (options.pg_database, options.pg_username))
         exit(1)
+    except aegis.database.MysqlOperationalError as ex:
+        logging.error("Could not connect to database. Do you need to log into mysql and run:")
+        logging.error("mysql> CREATE DATABASE %s" % (options.mysql_database))
+        logging.error("mysql> USE %s" % (options.mysql_database))
+        logging.error("mysql> CREATE USER '%s'@'%s' IDENTIFIED BY '%s'" % (options.mysql_username, '%', options.mysql_password))
+        logging.error("mysql> GRANT ALL PRIVILEGES ON %s TO '%s'@'%%'" % (options.mysql_database, options.mysql_username))
+        logging.error("mysql> FLUSH PRIVILEGES")
+        exit(1)
+
     except Exception as ex:
         logging.error("Unknown Error Occurred")
         logging.exception(ex)

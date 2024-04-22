@@ -455,7 +455,7 @@ class Hydra(HydraThread):
                                         continue
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim(dbconn=dbconn)
-                        elif hydra_type['status'] != 'paused' and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < (utcnow - datetime.timedelta(seconds=30)):
+                        elif hydra_type['status'] not in ('paused', 'running') and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < (utcnow - datetime.timedelta(seconds=30)):
                             if hydra_type['run_env'] == aegis.config.get('env'):
                                 self.logw(hydra_type, "HYDRA TYPE BEHIND ON RUNNING")
 

@@ -99,7 +99,7 @@ def db(use_schema=None, autocommit=True, **kwargs):
         if not use_schema:
             use_schema = pg_database
     if mysql_available:
-        mysql_database = kwargs.get('mysql_database') or options.mysql_schema
+        mysql_database = kwargs.get('mysql_database') or options.mysql_database
         if mysql_database not in dbconns.databases[pid]:
             dbconns.databases[pid][mysql_database] = MysqlConnection.connect(**kwargs)
         if not use_schema:
@@ -326,27 +326,27 @@ class MysqlConnection(object):
 
     @classmethod
     def connect(cls, **kwargs):
-        if 'mysql_schema' in kwargs:
+        if 'mysql_database' in kwargs:
             hostname = kwargs['mysql_hostname']
-            schema = kwargs['mysql_schema']
+            database = kwargs['mysql_database']
             user = kwargs['mysql_username']
             passwd = kwargs['mysql_password']
         else:
             hostname = options.mysql_hostname
-            schema = options.mysql_schema
+            database = options.mysql_database
             user = options.mysql_username
             passwd = options.mysql_password
         # force a new connection
         if kwargs.get('force', False):
-            return cls(hostname, schema, user, passwd)
+            return cls(hostname, database, user, passwd)
         # check existing connections
         ident = threading.current_thread().ident
-        target = '%s@%s' % (schema, hostname)
+        target = '%s@%s' % (database, hostname)
         connections = cls.threads.setdefault(ident, {})
         if not target in connections:
-            conn = cls(hostname, schema, user, passwd)
+            conn = cls(hostname, database, user, passwd)
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
-            conn.schema = schema
+            conn.database = database
             cls.threads[ident][target] = conn
         #conn_debug = "%s %s %s" % (ident, target, connections)
         #aegis.stdlib.logw(conn_debug, "CONN DEBUG")

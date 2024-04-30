@@ -169,6 +169,7 @@ class Build:
         if len(processes) == num_procs:
             aegis.stdlib.loge(processes, "No processes ending with _%s to restart." % env)
         # Set up a set of <env>_prev-# to use with try_files in nginx
+        # XXX Make sure to only rotate admin if it's admin   I can't remember what this comment means.
         prev_version = self.build_row['previous_version']
         if prev_version:
             for prev_num in range(1, 6):

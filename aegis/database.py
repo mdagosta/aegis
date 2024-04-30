@@ -482,16 +482,24 @@ class MysqlConnection(object):
         return self._db.cursor()
 
     def _execute(self, cursor, query, parameters):
-        try:
-            aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
-            result = cursor.execute(query, parameters)
-            aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
-            return result
-        except (MysqlOperationalError, MysqlInterfaceError) as ex:
-            logging.error("Error with MySQL on %s. Close connection and raise.", self.hostname)
-            logging.exception(ex)
-            self.close()
-            raise
+        max_tries = 1
+        try_cnt = 0
+        while try_cnt < max_tries:
+            try_cnt += 1
+            try:
+                aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
+                result = cursor.execute(query, parameters)
+                aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
+                return result
+            except (MysqlOperationalError, MysqlInterfaceError) as ex:
+                if ex.message == 'Deadlock found when trying to get lock; try restarting transaction':
+                    logging.warning("Deadlock found, restarting transaction")
+                    max_tries += 1
+                    continue
+                logging.error("Error with MySQL on %s. Close connection and raise.", self.hostname)
+                logging.exception(ex)
+                self.close()
+                raise
 
 
 # To support inserting something literally, like NOW(), into mini-ORM below

@@ -986,8 +986,8 @@ class Cache(aegis.database.Row):
         except (aegis.database.MysqlIntegrityError, aegis.database.PgsqlUniqueViolation) as ex:
             logging.warning("Ignoring duplicate key in cache")
 
-    @staticmethod
-    def update_key(cache_key, cache_json, cache_expiry):
+    @classmethod
+    def update_key(cls, cache_key, cache_json, cache_expiry):
         cls.purge_expired()
         sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s WHERE cache_key=%s"
         return db().execute(sql, cache_json, cache_expiry, cache_key)
@@ -1003,8 +1003,8 @@ class Cache(aegis.database.Row):
             cache_obj = cls.get_key(cache_key)
         return cache_obj
 
-    @staticmethod
-    def purge_expired():
+    @classmethod
+    def purge_expired(cls):
         sql = "DELETE FROM cache WHERE cache_expiry < NOW()"
         return db().execute(sql)
 

@@ -940,7 +940,6 @@ class Cache(aegis.database.Row):
     # External Interface for simplified usage
     @classmethod
     def get_cache(cls, cache_key):
-        cls.purge_expired()
         cache_obj = cls.get_key(cache_key)
         if cache_obj and type(cache_obj['cache_json']) is str:
             return json.loads(cache_obj['cache_json'])
@@ -955,6 +954,17 @@ class Cache(aegis.database.Row):
         return cls.get_cache(cache_key)
 
     @staticmethod
+    def del_star(cache_key):
+        cache_key = cache_key.replace('*', '%%')
+        sql = "DELETE FROM cache WHERE cache_key LIKE '" + cache_key + "'"
+        return db().execute_rowcount(sql)
+
+    @staticmethod
+    def del_key(cache_key):
+        sql = "DELETE FROM cache WHERE cache_key=%s"
+        return db().execute(sql, cache_key)
+
+    @staticmethod
     def purge_all():
         sql = "DELETE FROM cache"
         return db().execute(sql)
@@ -967,18 +977,17 @@ class Cache(aegis.database.Row):
             sql += ' RETURNING cache_id'
         try:
             return db().execute(sql, cache_key, cache_json, cache_expiry)
-        except aegis.database.PgsqlUniqueViolation as ex:
-            logging.warning("Ignoring duplicate key in cache")
-        except aegis.database.MysqlIntegrityError as ex:
+        except (aegis.database.MysqlIntegrityError, aegis.database.PgsqlUniqueViolation) as ex:
             logging.warning("Ignoring duplicate key in cache")
 
     @classmethod
     def get_key(cls, cache_key):
-        sql = "SELECT * FROM cache WHERE cache_key=%s"
+        sql = "SELECT * FROM cache WHERE cache_key=%s AND cache_expiry > NOW()"
         return db().get(sql, cache_key, cls=cls)
 
     @staticmethod
     def update_key(cache_key, cache_json, cache_expiry):
+        cls.purge_expired()
         sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s WHERE cache_key=%s"
         return db().execute(sql, cache_json, cache_expiry, cache_key)
 
@@ -992,17 +1001,6 @@ class Cache(aegis.database.Row):
             cls.insert(cache_key, cache_json, cache_expiry)
             cache_obj = cls.get_key(cache_key)
         return cache_obj
-
-    @staticmethod
-    def del_star(cache_key):
-        cache_key = cache_key.replace('*', '%%')
-        sql = "DELETE FROM cache WHERE cache_key LIKE '" + cache_key + "'"
-        return db().execute_rowcount(sql)
-
-    @staticmethod
-    def del_key(cache_key):
-        sql = "DELETE FROM cache WHERE cache_key=%s"
-        return db().execute(sql, cache_key)
 
     @staticmethod
     def purge_expired():

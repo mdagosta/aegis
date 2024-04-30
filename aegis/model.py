@@ -970,8 +970,14 @@ class Cache(aegis.database.Row):
         return db().execute(sql)
 
     # Internal Interface
-    @staticmethod
-    def insert(cache_key, cache_json, cache_expiry):
+    @classmethod
+    def get_key(cls, cache_key):
+        sql = "SELECT * FROM cache WHERE cache_key=%s AND cache_expiry > NOW()"
+        return db().get(sql, cache_key, cls=cls)
+
+    @classmethod
+    def insert(cls, cache_key, cache_json, cache_expiry):
+        cls.purge_expired()
         sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s)"
         if type(db()) is aegis.database.PostgresConnection:
             sql += ' RETURNING cache_id'
@@ -979,11 +985,6 @@ class Cache(aegis.database.Row):
             return db().execute(sql, cache_key, cache_json, cache_expiry)
         except (aegis.database.MysqlIntegrityError, aegis.database.PgsqlUniqueViolation) as ex:
             logging.warning("Ignoring duplicate key in cache")
-
-    @classmethod
-    def get_key(cls, cache_key):
-        sql = "SELECT * FROM cache WHERE cache_key=%s AND cache_expiry > NOW()"
-        return db().get(sql, cache_key, cls=cls)
 
     @staticmethod
     def update_key(cache_key, cache_json, cache_expiry):

@@ -255,7 +255,7 @@ def schema(parser):
         logging.error("mysql> CREATE DATABASE %s" % (options.mysql_database))
         logging.error("mysql> USE %s" % (options.mysql_database))
         logging.error("mysql> CREATE USER '%s'@'%s' IDENTIFIED BY '%s'" % (options.mysql_username, '%', options.mysql_password))
-        logging.error("mysql> GRANT ALL PRIVILEGES ON %s TO '%s'@'%%'" % (options.mysql_database, options.mysql_username))
+        logging.error("mysql> GRANT ALL PRIVILEGES ON %s.* TO '%s'@'%%'" % (options.mysql_database, options.mysql_username))
         logging.error("mysql> FLUSH PRIVILEGES")
         exit(1)
 

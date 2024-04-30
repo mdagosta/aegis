@@ -976,30 +976,29 @@ class Cache(aegis.database.Row):
         return db().get(sql, cache_key, cls=cls)
 
     @classmethod
-    def insert(cls, cache_key, cache_json, cache_expiry):
-        cls.purge_expired()
+    def insert_key(cls, cache_key, cache_json, cache_expiry):
         sql = "INSERT INTO cache (cache_key, cache_json, cache_expiry) VALUES (%s, %s, %s)"
         if type(db()) is aegis.database.PostgresConnection:
             sql += ' RETURNING cache_id'
         try:
             return db().execute(sql, cache_key, cache_json, cache_expiry)
         except (aegis.database.MysqlIntegrityError, aegis.database.PgsqlUniqueViolation) as ex:
-            logging.warning("Ignoring duplicate key in cache")
+            logging.warning("Ignoring duplicate key in cache: %s", cache_key)
 
     @classmethod
     def update_key(cls, cache_key, cache_json, cache_expiry):
-        cls.purge_expired()
         sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s WHERE cache_key=%s"
         return db().execute(sql, cache_json, cache_expiry, cache_key)
 
     @classmethod
     def set_key(cls, cache_key, cache_json, cache_expiry):
+        cls.purge_expired()
         cache_obj = cls.get_key(cache_key)
         if cache_obj:
             cls.update_key(cache_key, cache_json, cache_expiry)
             cache_obj = cls.get_key(cache_key)
         else:
-            cls.insert(cache_key, cache_json, cache_expiry)
+            cls.insert_key(cache_key, cache_json, cache_expiry)
             cache_obj = cls.get_key(cache_key)
         return cache_obj
 

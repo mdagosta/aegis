@@ -491,12 +491,20 @@ class MysqlConnection(object):
                 result = cursor.execute(query, parameters)
                 aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
                 return result
-            except (MysqlOperationalError, MysqlInterfaceError) as ex:
-                if ex.message == 'Deadlock found when trying to get lock; try restarting transaction':
-                    logging.warning("Deadlock found, restarting transaction")
+            except MysqlInterfaceError as ex:
+                logging.error("InterfaceError with MySQL on %s. Close connection and raise.", self.hostname)
+                logging.exception(ex)
+                self.close()
+                raise
+            except MysqlOperationalError as ex:
+                # 1205: 'Lock wait timeout exceeded; try restarting transaction'
+                # 1213: 'Deadlock found when trying to get lock; try restarting transaction'
+                retry_errors = (1205, 1213)
+                if hasattr(ex, 'args') and ex.args[0] in retry_errors:
+                    logging.warning("Deadlock found or Lock wait timeout exceeded. Restarting transaction")
                     max_tries += 1
                     continue
-                logging.error("Error with MySQL on %s. Close connection and raise.", self.hostname)
+                logging.error("OperationalError with MySQL on %s. Close connection and raise.", self.hostname)
                 logging.exception(ex)
                 self.close()
                 raise

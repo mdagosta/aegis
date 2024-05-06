@@ -942,11 +942,13 @@ class Cache(aegis.database.Row):
     def get_cache(cls, cache_key):
         # It's important to make sure this only does SELECT. It can't UPDATE or DELETE to maintain the cache or can be surprising in real usage.
         cache_obj = cls.get_key(cache_key)
-        if cache_obj and cache_obj['cache_expiry'] <= datetime.datetime.utcnow():
+        if not cache_obj:
+            return None
+        if cache_obj['cache_expiry'] <= datetime.datetime.utcnow():
             return False
-        if cache_obj and type(cache_obj['cache_json']) is str:
+        if type(cache_obj['cache_json']) is str:
             return json.loads(cache_obj['cache_json'])
-        elif cache_obj:
+        else:
             return cache_obj['cache_json']
 
     @classmethod

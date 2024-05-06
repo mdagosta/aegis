@@ -940,18 +940,27 @@ class Cache(aegis.database.Row):
     # External Interface for simplified usage
     @classmethod
     def get_cache(cls, cache_key):
+        # It's important to make sure this only does SELECT. It can't UPDATE or DELETE to maintain the cache or can be surprising in real usage.
         cache_obj = cls.get_key(cache_key)
+        if cache_obj and cache_obj['cache_expiry'] <= datetime.datetime.utcnow():
+            return False
         if cache_obj and type(cache_obj['cache_json']) is str:
             return json.loads(cache_obj['cache_json'])
         elif cache_obj:
             return cache_obj['cache_json']
 
     @classmethod
-    def set_cache(cls, cache_key, cache_obj, duration_s):
-        cache_json = json.dumps(cache_obj, cls=aegis.stdlib.DateTimeEncoder)
-        cache_expiry = datetime.datetime.utcnow() + datetime.timedelta(seconds=duration_s) + datetime.timedelta(seconds=random.randint(0, duration_s))
-        cache_id = cls.set_key(cache_key, cache_json, cache_expiry)
+    def set_cache(cls, cache_key, cache_json_str, duration_s):
+        # INSERT or UPDATE to make sure that these values are what are in the cache and returned.
+        cache_json = json.dumps(cache_json_str, cls=aegis.stdlib.DateTimeEncoder)
+        cache_expiry = datetime.datetime.utcnow() + datetime.timedelta(seconds=duration_s) + datetime.timedelta(seconds=random.uniform(0, duration_s))
+        cls.set_key(cache_key, cache_json, cache_expiry)
         return cls.get_cache(cache_key)
+
+    @staticmethod
+    def del_key(cache_key):
+        sql = "DELETE FROM cache WHERE cache_key=%s"
+        return db().execute(sql, cache_key)
 
     @staticmethod
     def del_star(cache_key):
@@ -960,20 +969,24 @@ class Cache(aegis.database.Row):
         return db().execute_rowcount(sql)
 
     @staticmethod
-    def del_key(cache_key):
-        sql = "DELETE FROM cache WHERE cache_key=%s"
-        return db().execute(sql, cache_key)
-
-    @staticmethod
-    def purge_all():
+    def del_all():
         sql = "DELETE FROM cache"
         return db().execute(sql)
 
-    # Internal Interface
+    # Internal Interface. Use the existence of cache_key to choose INSERT or UPDATE.
     @classmethod
     def get_key(cls, cache_key):
-        sql = "SELECT * FROM cache WHERE cache_key=%s AND cache_expiry > NOW()"
+        sql = "SELECT * FROM cache WHERE cache_key=%s"
         return db().get(sql, cache_key, cls=cls)
+
+    @classmethod
+    def set_key(cls, cache_key, cache_json, cache_expiry):
+        cache_obj = cls.get_key(cache_key)
+        if cache_obj:
+            cls.update_key(cache_key, cache_json, cache_expiry)
+        else:
+            cls.insert_key(cache_key, cache_json, cache_expiry)
+        cls.purge_expired()
 
     @classmethod
     def insert_key(cls, cache_key, cache_json, cache_expiry):
@@ -987,20 +1000,8 @@ class Cache(aegis.database.Row):
 
     @classmethod
     def update_key(cls, cache_key, cache_json, cache_expiry):
-        sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s WHERE cache_key=%s"
+        sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s, delete_dttm=NULL WHERE cache_key=%s"
         return db().execute(sql, cache_json, cache_expiry, cache_key)
-
-    @classmethod
-    def set_key(cls, cache_key, cache_json, cache_expiry):
-        cls.purge_expired()
-        cache_obj = cls.get_key(cache_key)
-        if cache_obj:
-            cls.update_key(cache_key, cache_json, cache_expiry)
-            cache_obj = cls.get_key(cache_key)
-        else:
-            cls.insert_key(cache_key, cache_json, cache_expiry)
-            cache_obj = cls.get_key(cache_key)
-        return cache_obj
 
     @classmethod
     def purge_expired(cls):

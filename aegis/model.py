@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 #
-# Core common Data Model that will applies to a lot of applications
+# Core common Data Model that will apply to many applications
 
 
 # Python Imports
@@ -945,7 +945,7 @@ class Cache(aegis.database.Row):
         if not cache_obj:
             return None
         if cache_obj['cache_expiry'] <= datetime.datetime.utcnow():
-            return False
+            return None
         if type(cache_obj['cache_json']) is str:
             return json.loads(cache_obj['cache_json'])
         else:

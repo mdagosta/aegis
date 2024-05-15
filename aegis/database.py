@@ -559,7 +559,7 @@ class Row(dict):
 
     @classmethod
     def get_id(cls, column_id_val, member_id=None, dbconn=None):
-        if not column_id_val:
+        if not aegis.stdlib.validate_int(column_id_val):
             return None
         sql = 'SELECT * FROM %s WHERE %s=%%s'
         args = [int(column_id_val)]
@@ -648,3 +648,23 @@ class Row(dict):
         #aegis.stdlib.logw(sql, "SQL")
         #aegis.stdlib.logw(args, "ARGS")
         return dbconn.execute_rowcount(sql, *args)
+
+    @classmethod
+    def set_row(cls, data, dbconn):
+        # INSERT or UPDATE
+        data_row = cls.get_id(data[cls.id_column])
+        if data_row:
+            # compare everything in **data to data_row and don't update if there's no update
+            cols = {}
+            where = {cls.id_column: data_row[cls.id_column]}
+            for key, value in data.items():
+                if key in data_row and data_row[key] != value:
+                    cols[key] = value
+            if cols:
+                return cls.update_columns(cols, where, dbconn=dbconn)
+            else:
+                # 0 rows updated when no columns to update
+                return 0
+        else:
+            row_id = cls.insert_columns(**data, dbconn=dbconn)
+            return 1

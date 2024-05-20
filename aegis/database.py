@@ -489,6 +489,7 @@ class MysqlConnection(object):
             return result
         except (MysqlOperationalError, MysqlInterfaceError) as ex:
             logging.error("Error with MySQL on %s. Close connection and raise.", self.hostname)
+            logging.error("Query Was: %s", query)
             logging.exception(ex)
             self.close()
             raise

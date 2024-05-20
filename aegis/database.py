@@ -99,7 +99,7 @@ def db(use_schema=None, autocommit=True, **kwargs):
         if not use_schema:
             use_schema = pg_database
     if mysql_available:
-        mysql_database = kwargs.get('mysql_database') or options.mysql_schema
+        mysql_database = kwargs.get('mysql_database') or options.mysql_database
         if mysql_database not in dbconns.databases[pid]:
             dbconns.databases[pid][mysql_database] = MysqlConnection.connect(**kwargs)
         if not use_schema:
@@ -326,27 +326,27 @@ class MysqlConnection(object):
 
     @classmethod
     def connect(cls, **kwargs):
-        if 'mysql_schema' in kwargs:
+        if 'mysql_database' in kwargs:
             hostname = kwargs['mysql_hostname']
-            schema = kwargs['mysql_schema']
+            database = kwargs['mysql_database']
             user = kwargs['mysql_username']
             passwd = kwargs['mysql_password']
         else:
             hostname = options.mysql_hostname
-            schema = options.mysql_schema
+            database = options.mysql_database
             user = options.mysql_username
             passwd = options.mysql_password
         # force a new connection
         if kwargs.get('force', False):
-            return cls(hostname, schema, user, passwd)
+            return cls(hostname, database, user, passwd)
         # check existing connections
         ident = threading.current_thread().ident
-        target = '%s@%s' % (schema, hostname)
+        target = '%s@%s' % (database, hostname)
         connections = cls.threads.setdefault(ident, {})
         if not target in connections:
-            conn = cls(hostname, schema, user, passwd)
+            conn = cls(hostname, database, user, passwd)
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
-            conn.schema = schema
+            conn.database = database
             cls.threads[ident][target] = conn
         #conn_debug = "%s %s %s" % (ident, target, connections)
         #aegis.stdlib.logw(conn_debug, "CONN DEBUG")
@@ -482,17 +482,33 @@ class MysqlConnection(object):
         return self._db.cursor()
 
     def _execute(self, cursor, query, parameters):
-        try:
-            aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
-            result = cursor.execute(query, parameters)
-            aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
-            return result
-        except (MysqlOperationalError, MysqlInterfaceError) as ex:
-            logging.error("Error with MySQL on %s. Close connection and raise.", self.hostname)
-            logging.error("Query Was: %s", query)
-            logging.exception(ex)
-            self.close()
-            raise
+        max_tries = 1
+        try_cnt = 0
+        while try_cnt < max_tries:
+            try_cnt += 1
+            try:
+                aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
+                result = cursor.execute(query, parameters)
+                aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
+                return result
+            except MysqlInterfaceError as ex:
+                logging.error("InterfaceError with MySQL on %s. Close connection and raise.", self.hostname)
+                logging.exception(ex)
+                self.close()
+                raise
+            except MysqlOperationalError as ex:
+                # 1205: 'Lock wait timeout exceeded; try restarting transaction'
+                # 1213: 'Deadlock found when trying to get lock; try restarting transaction'
+                retry_errors = (1205, 1213)
+                if hasattr(ex, 'args') and ex.args[0] in retry_errors:
+                    logging.warning("Deadlock found or Lock wait timeout exceeded. Restarting transaction")
+                    max_tries += 1
+                    continue
+                logging.error("OperationalError with MySQL on %s. Close connection and raise.", self.hostname)
+                logging.error("Query Was: %s", query)
+                logging.exception(ex)
+                self.close()
+                raise
 
 
 # To support inserting something literally, like NOW(), into mini-ORM below
@@ -544,7 +560,7 @@ class Row(dict):
 
     @classmethod
     def get_id(cls, column_id_val, member_id=None, dbconn=None):
-        if not column_id_val:
+        if not aegis.stdlib.validate_int(column_id_val):
             return None
         sql = 'SELECT * FROM %s WHERE %s=%%s'
         args = [int(column_id_val)]
@@ -633,3 +649,23 @@ class Row(dict):
         #aegis.stdlib.logw(sql, "SQL")
         #aegis.stdlib.logw(args, "ARGS")
         return dbconn.execute_rowcount(sql, *args)
+
+    @classmethod
+    def set_row(cls, data, dbconn):
+        # INSERT or UPDATE
+        data_row = cls.get_id(data[cls.id_column])
+        if data_row:
+            # compare everything in **data to data_row and don't update if there's no update
+            cols = {}
+            where = {cls.id_column: data_row[cls.id_column]}
+            for key, value in data.items():
+                if key in data_row and data_row[key] != value:
+                    cols[key] = value
+            if cols:
+                return cls.update_columns(cols, where, dbconn=dbconn)
+            else:
+                # 0 rows updated when no columns to update
+                return 0
+        else:
+            row_id = cls.insert_columns(**data, dbconn=dbconn)
+            return 1

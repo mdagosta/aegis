@@ -574,7 +574,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.audit_session['last_request_name'] = self.tmpl['request_name']
             self.audit_session['last_request_dttm'] = aegis.database.Literal('NOW()')
             if aegis.database.mysql_available:
-                self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_dttm)')
+                self.audit_session['session_time'] = aegis.database.Literal('UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(create_dttm)')
             elif aegis.database.pgsql_available:
                 self.audit_session['session_time'] = aegis.database.Literal('EXTRACT(EPOCH FROM NOW()) - EXTRACT(EPOCH FROM create_dttm)')
             self.audit_session['request_cnt'] = aegis.database.Literal('request_cnt+1')
@@ -1173,7 +1173,6 @@ class AegisHydraQueue(AegisWeb):
         # If the queue item is running internally, sort it to the top
         for hydra_queue in self.tmpl['hydra_queues']:
             hydra_queue['_running'] = (hydra_queue['next_run_sql'] and hydra_queue['status'] == 'running') or (not hydra_queue['next_run_sql'] and hydra_queue['claimed_dttm'])
-            logging.warning("RUNNING: %s", hydra_queue['hydra_type_name'])
         self.tmpl['hydra_queues'] = sorted(self.tmpl['hydra_queues'], key=lambda x: x.get('_running') is True, reverse=True)
         return self.render_path("hydra_queue.html", **self.tmpl)
 

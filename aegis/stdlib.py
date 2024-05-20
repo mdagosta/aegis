@@ -18,10 +18,12 @@ import pprint
 import random
 import re
 import shlex
+import signal
 import socket
 import string
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 import xml
@@ -283,12 +285,14 @@ def format_money(amount, rjust=None):
     return amt
 
 
-# >>> "%4.2f Trillion Should Be Enough" % (float(26*pow(36, 7)) / float(pow(1024, 4)))
-# '1.85 Trillion Should Be Enough'
-# >>> "If Not, %4.2f Trillion Should Definitely Be Enough" % (float(26*pow(36, 9)) / float(pow(1024, 4)))
-# 'If Not, 2401.57 Trillion Should Definitely Be Enough'
-
-# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities. Enforce at least one letter so it can't be cast to an int
+# Token format that is unique and hard to guess. Enforce at least one letter so it can't accidentally be cast to an int.
+# Combine with a second factor like a row_id to eliminate unbelievably lucky brute force possibilities.
+#>>> chars=8; "%4.2f Trillion Should Be Enough For Just %s Chars" % (float(26*pow(36, chars-1)) / float(pow(1024, 4)), chars)
+#'1.85 Trillion Should Be Enough For Just 8 Chars'
+#>>> chars=10; "If not, %4.2f Trillion in %s Chars Should Definitely Be Enough" % (float(26*pow(36, chars-1)) / float(pow(1024, 4)), chars)
+#'If not, 2401.57 Trillion in 10 Chars Should Definitely Be Enough'
+#>>> chars=12; "Ludicrous Odds: %s Chars Makes For %4.2f Trillion Possibilities (3 Quintillion)" % (chars, float(26*pow(36, chars-1)) / float(pow(1024, 4)))
+#'Ludicrous Odds: 12 Chars Makes For 3112440.30 Trillion Possibilities (3 Quintillion)'
 token_length = 10
 token_chars = string.ascii_letters + string.digits
 def magic_token(length=token_length):
@@ -1017,3 +1021,78 @@ def write_version(version_str):
     version_json = open(version_file, 'w')
     version_json.write('{"version": "%s"}\n' % version_str)
     version_json.close()
+
+
+class DaemonThread(threading.Thread):
+    # quitting uses threading.Event() at the class level to synchronize flags between threads
+    quitting = threading.Event()
+    filename = __file__
+
+    def __init__(self, *args, **kwargs):
+        threading.Thread.__init__(self, *args, **kwargs)
+        self.start_t = time.time()
+        self.record_cnt = 0
+        self.last_id = 0
+
+    # Alert and debug hooks likely need to be defined in applications
+    def exception_alert(self, ex):
+        logw(ex, "EXCEPTION ALERT - OVERRIDE ME IN CHILD CLASS")
+        # XXX TODO It could default to channels
+
+    def run(self):
+        try:
+            self.process()
+        except Exception as ex:
+            logging.exception(ex)
+            self.exception_alert(ex)
+
+    def finish(self):
+        end_t = time.time()
+        exec_t = end_t - self.start_t
+        recs_s = max(float(self.record_cnt), 1.0) / exec_t
+        recs_h = max(float(self.record_cnt), 1.0) / exec_t * 3600
+        logging.info("%s ending.  Records: %d   Seconds: %4.3f   Records/sec: %4.3f   Records/hr: %4.3f   Last Id: %s", self.name, self.record_cnt, exec_t, recs_s, recs_h, self.last_id)
+
+    def main_thread(self, sleep_sec=3):
+        # Handling signals only works in the main thread
+        signal.signal(signal.SIGINT, self.signal_stop)
+        signal.signal(signal.SIGTERM, self.signal_stop)
+        signal.signal(signal.SIGHUP, self.signal_stop)
+        signal.signal(signal.SIGUSR1, self.signal_debug)
+        # Main thread is used only as a control thread... monitors quitting variable, and sleep gets interrupted by signal. And that's it!
+        while threading.active_count() > 1:
+            if DaemonThread.quitting.is_set():
+                logging.warning("DaemonThread waiting %ss for threads to finish... %s active" % (sleep_sec, threading.active_count()))
+                threads = threading.enumerate()
+                if len(threads) > 1:
+                    thr = random.choice(threads[1:])
+                    if thr != threading.current_thread():
+                        thr.join(1.0)
+            else:
+                time.sleep(sleep_sec)
+
+    @staticmethod
+    def signal_stop(signal, frm):
+        logging.warning('SIGINT or SIGTERM received (%s). Quitting now...', signal)
+        DaemonThread.quitting.set()
+
+    # Debug dump in response to kill -SIGUSR1
+    @staticmethod
+    def signal_debug(sig, frame):
+        """Interrupt running process, and provide a stack trace for each thread. Trigger using kill -SIGUSR1 <pid>"""
+        # Show memory usage
+        import pympler
+        all_objects = pympler.muppy.get_objects()
+        summary1 = pympler.summary.summarize(all_objects)
+        formatted = pympler.summary.format_(summary1)
+        logging.warning("Received SIGUSR1 - Dumping Debug Output" + "\n".join(formatted) + "\n")
+        # Dump a stack trace on each thread
+        id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
+        code = []
+        for threadId, stack in sys._current_frames().items():
+            code.append("\n# Thread: %s(%d)" % (id2name.get(threadId,""), threadId))
+            for filename, lineno, name, line in traceback.extract_stack(stack):
+                code.append('File: "%s", line %d, in %s' % (filename, lineno, name))
+                if line:
+                    code.append("  %s" % (line.strip()))
+        logging.warning("\n".join(code))

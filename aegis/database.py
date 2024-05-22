@@ -631,12 +631,14 @@ class Row(dict):
         dbconn = dbconn if dbconn else db()
         if not columns:
             logging.debug('Nothing to update. Skipping query')
-            return
+            return 0
         db_table = cls._table_name()
         # Filter out anything that's not in optional, pre-specified list of data columns
         data_columns = hasattr(cls, 'data_columns') and cls.data_columns
         if data_columns:
             columns = dict( [ (key,val) for key, val in columns.items() if key in data_columns] )
+        if not columns:
+            return 0
         # SET clause
         keys, values, args = cls.kva_split(columns)
         set_clause = ', '.join(['%s=%s' % (key, value) for key, value in zip(keys, values)])

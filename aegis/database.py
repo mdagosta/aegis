@@ -300,19 +300,19 @@ class PostgresConnection(object):
 
 class MysqlConnection(object):
     """ From torndb originally """
-    def __init__(self, hostname, database, user=None, password=None, max_idle_time=7 * 3600):
+    def __init__(self, hostname, port, database, username=None, password=None, max_idle_time=7 * 3600):
         self.hostname = hostname
         self.database = database
         self.max_idle_time = max_idle_time
         args = dict(use_unicode=True, charset="utf8mb4", db=database, sql_mode="TRADITIONAL")
-        if user is not None:
-            args["user"] = user
+        if username is not None:
+            args["user"] = username   # MysqlDB Interface param is 'user'
         if password is not None:
             args["passwd"] = password
         if not hostname:
             logging.error("ALERT TO DEVELOPER: No hostname specified for MysqlConnection. Check it's specified. Check environment variable being set.")
         args["host"] = hostname
-        args["port"] = 3306
+        args["port"] = port
         self._db_init_command = 'SET time_zone = "+0:00"'
         self._db = None
         self._db_args = args
@@ -328,23 +328,25 @@ class MysqlConnection(object):
     def connect(cls, **kwargs):
         if 'mysql_database' in kwargs:
             hostname = kwargs['mysql_hostname']
+            port = kwargs['mysql_port']
             database = kwargs['mysql_database']
-            user = kwargs['mysql_username']
+            username = kwargs['mysql_username']
             passwd = kwargs['mysql_password']
         else:
             hostname = options.mysql_hostname
+            port = options.mysql_port
             database = options.mysql_database
-            user = options.mysql_username
+            username = options.mysql_username
             passwd = options.mysql_password
         # force a new connection
         if kwargs.get('force', False):
-            return cls(hostname, database, user, passwd)
+            return cls(hostname, port, database, username, passwd)
         # check existing connections
         ident = threading.current_thread().ident
         target = '%s@%s' % (database, hostname)
         connections = cls.threads.setdefault(ident, {})
         if not target in connections:
-            conn = cls(hostname, database, user, passwd)
+            conn = cls(hostname, port, database, username, passwd)
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
             conn.database = database
             cls.threads[ident][target] = conn

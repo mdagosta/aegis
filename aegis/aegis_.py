@@ -76,7 +76,7 @@ if parser_cmd != 'create':
             sys.exit(1)
     else:
         print(aegis.stdlib.cstr("Running in non-standard context. Going to wing it and import config. Hope this works!", 'yellow'))
-        print(aegis.stdlib.cstr("Make sure you're in the source root, next to the .git dir.", 'yellow'))
+        print(aegis.stdlib.cstr("Make sure you're in the source root, next to the .git dir, and in the virtualenv.", 'yellow'))
         repo_dir = os.getcwd()
         src_dir = os.path.join(repo_dir, os.path.split(repo_dir)[-1])
         sys.path.insert(0, src_dir)
@@ -330,6 +330,7 @@ def build(parser):
     os.setreuid(pw.pw_uid, pw.pw_uid)
     # Set up build
     logging.info("Running aegis build   Env: %s   Branch: %s   Revision: %s", aegis.config.get('env'), build_args['branch'], build_args['revision'])
+    # XXX Need to pass a dbconn
     new_build = aegis.build.Build()
     build_row = new_build.create(build_args)
     if build_row.get('error'):

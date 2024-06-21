@@ -1063,6 +1063,9 @@ class DaemonThread(threading.Thread):
         while threading.active_count() > 1:
             if DaemonThread.quitting.is_set():
                 logging.warning("DaemonThread waiting %ss for threads to finish... %s active" % (sleep_sec, threading.active_count()))
+                # Callback hook to call the subclass method in the loop, to clean up
+                if hasattr(self, 'shutdown'):
+                    self.shutdown()
                 threads = threading.enumerate()
                 if len(threads) > 1:
                     thr = random.choice(threads[1:])

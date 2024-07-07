@@ -1053,7 +1053,7 @@ class DaemonThread(threading.Thread):
         recs_h = max(float(self.record_cnt), 1.0) / exec_t * 3600
         logging.info("%s ending.  Records: %d   Seconds: %4.3f   Records/sec: %4.3f   Records/hr: %4.3f   Last Id: %s", self.name, self.record_cnt, exec_t, recs_s, recs_h, self.last_id)
 
-    def main_thread(self, sleep_sec=3):
+    def main_thread(self, sleep_sec=3, debug=False):
         # Handling signals only works in the main thread
         signal.signal(signal.SIGINT, self.signal_stop)
         signal.signal(signal.SIGTERM, self.signal_stop)
@@ -1067,10 +1067,20 @@ class DaemonThread(threading.Thread):
                 if hasattr(self, 'shutdown'):
                     self.shutdown()
                 threads = threading.enumerate()
-                if len(threads) > 1:
-                    thr = random.choice(threads[1:])
-                    if thr != threading.current_thread():
-                        thr.join(1.0)
+                active_threads = [thr for thr in threads if not thr.daemon]
+                daemon_threads = [thr for thr in threads if thr.daemon]
+                if debug:
+                    logw(len(active_threads), "ACTIVE THREADS")
+                    logw(len(daemon_threads), "DAEMON THREADS")
+                    for thr in threads:
+                        logging.warning("Thread name: %s   is_alive: %s   daemon: %s  [%s]", thr.name, thr.is_alive(), thr.daemon, thr.ident)
+                # Join the non-daemon threads, which should be controlled by DaemonThread and subclass.
+                if len(active_threads) > 1:
+                    for thread in active_threads:
+                        if thread.name == 'MainThread' or thread == threading.current_thread():
+                            continue
+                        logging.warning("Join Thread: %s", thread.name)
+                        thread.join(1.0)
             else:
                 time.sleep(sleep_sec)
 

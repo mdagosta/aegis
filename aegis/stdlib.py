@@ -1060,15 +1060,14 @@ class DaemonThread(threading.Thread):
         signal.signal(signal.SIGHUP, self.signal_stop)
         signal.signal(signal.SIGUSR1, self.signal_debug)
         # Main thread is used only as a control thread... monitors quitting variable, and sleep gets interrupted by signal. And that's it!
-        while threading.active_count() > 1:
+        threads, active_threads, daemon_threads = self.get_threads()
+        while len(active_threads) > 1:
             if DaemonThread.quitting.is_set():
-                logging.warning("DaemonThread waiting %ss for threads to finish... %s active" % (sleep_sec, threading.active_count()))
+                logging.warning("DaemonThread waiting %ss for active threads to finish... %s active" % (sleep_sec, len(active_threads)))
                 # Callback hook to call the subclass method in the loop, to clean up
                 if hasattr(self, 'shutdown'):
                     self.shutdown()
-                threads = threading.enumerate()
-                active_threads = [thr for thr in threads if not thr.daemon]
-                daemon_threads = [thr for thr in threads if thr.daemon]
+                threads, active_threads, daemon_threads = self.get_threads()
                 if debug:
                     logw(len(active_threads), "ACTIVE THREADS")
                     logw(len(daemon_threads), "DAEMON THREADS")
@@ -1083,6 +1082,12 @@ class DaemonThread(threading.Thread):
                         thread.join(1.0)
             else:
                 time.sleep(sleep_sec)
+
+    def get_threads(self):
+        threads = threading.enumerate()
+        active_threads = [thr for thr in threads if not thr.daemon]
+        daemon_threads = [thr for thr in threads if thr.daemon]
+        return threads, active_threads, daemon_threads
 
     @staticmethod
     def signal_stop(signal, frm):

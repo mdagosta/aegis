@@ -120,7 +120,7 @@ class AegisHandler(tornado.web.RequestHandler):
             self.use_audit = self.tmpl['host_config'].get('use_audit') or options.use_audit
             # When admin is logged in as someone else, don't use_audit
             auth_ck = self.cookie_get('auth')
-            if auth_ck and auth_ck.get('admin_member_id'):
+            if auth_ck and type(auth_ck) is dict and auth_ck.get('admin_member_id'):
                 self.use_audit = False
         if self.use_audit:
             self.set_marketing_id()

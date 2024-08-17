@@ -131,12 +131,13 @@ class Build:
                 build_file_version = self.next_tag
                 if self.build_row['env'] in options.build_local_envs:
                     build_file_version = 'local'
-                build_file_name = options.build_output_file % {'version': build_file_version}
-                build_output_file = os.path.join(self.build_dir, build_file_name)
-                if os.path.exists(build_output_file):
-                    build_size = os.path.getsize(build_output_file)
-                    if build_size:
-                        self.build_row.set_build_size(build_size)
+                if aegis.config.get('build_output_file'):
+                    build_file_name = options.build_output_file % {'version': build_file_version}
+                    build_output_file = os.path.join(self.build_dir, build_file_name)
+                    if os.path.exists(build_output_file):
+                        build_size = os.path.getsize(build_output_file)
+                        if build_size:
+                            self.build_row.set_build_size(build_size)
             # Rsync the files to the servers if it's configured, using non-blocking multi-shell so the rsync run in parallel
             rsync_hosts = [rh for rh in aegis.config.get('deploy_hosts') if rh != self.host]
             cmds = []

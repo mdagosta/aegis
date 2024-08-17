@@ -54,30 +54,36 @@ class Build:
             refspec = build_row['branch']
             if build_row['revision'] != 'HEAD':
                 refspec = build_row['revision']
+            # Using GIT_SSH_COMMAND to specify deploy_key     https://support.circleci.com/hc/en-us/articles/21182136871835-How-to-use-a-Specific-SSH-Key-for-Git-Clone
+            git_env = None
+            deploy_key_path = aegis.config.get('deploy_key_path')
+            if deploy_key_path:
+                git_env = {'GIT_SSH_COMMAND': "ssh -i %s" % deploy_key_path}
             # Make a local clone of the repository from origin so we don't have to clone entire repository every time
             if not os.path.exists(self.src_repo):
-                if self._shell_exec("git clone --progress %s %s" % (aegis.config.get('git_repo'), options.program_name), cwd=self.src_dir, build_step='build'):
+                if self._shell_exec("git clone --progress %s %s" % (aegis.config.get('git_repo'), options.program_name), cwd=self.src_dir, build_step='build', env=git_env):
                     return
             # Fetch all the changes to repo and set the correct branch and revision
-            if self._shell_exec("git fetch --all", cwd=self.src_repo, build_step='build'):
+            if self._shell_exec("git fetch --all", cwd=self.src_repo, build_step='build', env=git_env):
                 return
             # Reset in case there are version changes from previous builds
-            if self._shell_exec("git reset --hard", cwd=self.src_repo, build_step='build'):
+            if self._shell_exec("git reset --hard", cwd=self.src_repo, build_step='build', env=git_env):
                 return
-            if self._shell_exec("git checkout %s" % (refspec), cwd=self.src_repo, build_step='build'):
+            if self._shell_exec("git checkout %s" % (refspec), cwd=self.src_repo, build_step='build', env=git_env):
                 return
-            if self._shell_exec("git pull --commit --ff", cwd=self.src_repo, build_step='build'):
+            if self._shell_exec("git pull --commit --ff", cwd=self.src_repo, build_step='build', env=git_env):
                 return
             if self.build_row['revision'] == 'HEAD':
                 commit_hash, stderr, exit_status = aegis.stdlib.shell('git rev-parse HEAD', cwd=self.src_repo)
                 self.build_row.set_revision(commit_hash, dbconn=self.dbconn)
             # Generate new version number before cloning the new version tag into build directory
             self._new_version()
-            env = {"GIT_COMMITTER_NAME": options.git_committer_name, "GIT_COMMITTER_EMAIL": options.git_committer_email,
-                   "GIT_AUTHOR_NAME": options.git_committer_name, "GIT_AUTHOR_EMAIL": options.git_committer_email}
-            if self._shell_exec("git tag %s" % self.next_tag, cwd=self.src_repo, build_step='build'):
+            # How was this in use? Were these all specified previously?
+            #env = {"GIT_COMMITTER_NAME": options.git_committer_name, "GIT_COMMITTER_EMAIL": options.git_committer_email,
+            #       "GIT_AUTHOR_NAME": options.git_committer_name, "GIT_AUTHOR_EMAIL": options.git_committer_email}
+            if self._shell_exec("git tag %s" % self.next_tag, cwd=self.src_repo, build_step='build', env=git_env):
                 return
-            if self._shell_exec("git push --tags", cwd=self.src_repo, build_step='build'):
+            if self._shell_exec("git push --tags", cwd=self.src_repo, build_step='build', env=git_env):
                 return
             self.build_row.set_version(self.next_tag, dbconn=self.dbconn)
             # Clone a fresh build into directory named by version tag
@@ -86,7 +92,7 @@ class Build:
             if os.path.exists(self.build_dir):
                 if self._shell_exec("rm -rf %s" % self.build_dir, cwd=app_dir, build_step='build'):
                     return
-            if self._shell_exec("git clone %s %s" % (self.src_repo, self.build_dir), cwd=app_dir, build_step='build'):
+            if self._shell_exec("git clone %s %s" % (self.src_repo, self.build_dir), cwd=app_dir, build_step='build', env=git_env):
                 return
             # write config files into the build directory and not version control
             version_file = os.path.join(self.build_dir, options.program_name, 'version.json')

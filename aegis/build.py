@@ -110,8 +110,14 @@ class Build:
             if self.npm and package_lock:
                 if self._shell_exec("npm install", cwd=self.build_dir, build_step='build'):
                     return
-                if self._shell_exec("npm run %s" % self.build_row['env'], cwd=self.build_dir, build_step='build'):
-                    return
+                # If there is a next.config.mjs then build it as a next app. Otherwise run by environment name.
+                next_config = os.path.exists(os.path.join(self.build_dir, 'next.config.mjs'))
+                if next_config:
+                    if self._shell_exec("npm run build", cwd=self.build_dir, build_step='build'):
+                        return
+                else:
+                    if self._shell_exec("npm run %s" % self.build_row['env'], cwd=self.build_dir, build_step='build'):
+                        return
             # Set up and run yarn if it's installed TODO and yarn.lock file exists in the root of repository
             yarn_lock = os.path.exists(os.path.join(self.build_dir, 'yarn.lock'))
             self.yarn, stderr, exit_status = aegis.stdlib.shell('which yarn', cwd=self.src_dir)

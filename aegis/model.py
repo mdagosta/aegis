@@ -544,7 +544,7 @@ class Pageview(aegis.database.Row):
 class HydraType(aegis.database.Row):
     table_name = 'hydra_type'
     id_column = 'hydra_type_id'
-    data_columns = ('hydra_type_id', 'hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host', 'run_env')
+    data_columns = ('hydra_type_id', 'hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host', 'run_env', 'status')
 
     @classmethod
     def get_name(cls, hydra_type_name, dbconn=None):

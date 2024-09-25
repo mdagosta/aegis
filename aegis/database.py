@@ -208,19 +208,29 @@ class PostgresConnection(object):
             self._txn = None
 
     def _execute(self, cursor, query, parameters, **kwargs):
-        try:
-            aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
-            cursor.execute(query, parameters)
-            aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
-            return
-        except PgsqlUniqueViolation as ex:
-            # UniqueViolation doesn't need to close connection, it needs to be handled in application
-            raise
-        except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError) as ex:
-            logging.error("General Error at PostgreSQL - close connection/rollback")
-            logging.exception(ex)
-            self.close()
-            raise
+        max_tries = 1
+        try_cnt = 0
+        while try_cnt < max_tries:
+            try_cnt += 1
+            try:
+                aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
+                result = cursor.execute(query, parameters)
+                aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
+                return result
+            except PgsqlUniqueViolation as ex:
+                # UniqueViolation doesn't need to close connection, it needs to be handled in application
+                raise
+            except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError) as ex:
+                retry_errors = ['SSL SYSCALL error: EOF detected']
+                if hasattr(ex, 'args') and ex.args[0] and max_tries < 3:
+                    logging.warning("Got EOF or similar error. Retrying up to twice.")
+                    max_tries += 1
+                    continue
+                logging.error("General Error at PostgreSQL - close connection/rollback")
+                logging.error("Query Was: %s", query)
+                logging.exception(ex)
+                self.close()
+                raise
 
     def iter(self, query, *parameters, **kwargs):
         """Returns an iterator for the given query and parameters."""

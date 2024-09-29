@@ -1150,10 +1150,6 @@ def usage():
     def wrapper(fn):
         Accumulator.usage_set.add(fn.__qualname__)
         def foo(*args, **kwargs):
-            if len(args):
-                caller = args[0]
-            else:
-                caller = None
             usage_name = fn.__qualname__
             timer_obj = TimerObj()
             timer_start(timer_obj, usage_name)
@@ -1178,12 +1174,10 @@ def usage():
             if use_usage:
                 accumulator.incr(usage_name, usage_ms)
                 if not rate_limit(accum_sync, 'sync_to_db', '', delta_sec=5):
-                    logging.warning("Not Rate-Limited. Do now.")
+                    logging.warning("Syncing Usage to DB")
                     accum = accumulator
                     accumulator = Accumulator()
                     for usage_name, usage in accum.items():
-                        #logging.warning(usage_name)
-                        #logging.warning(usage)
                         aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
             # Return the result of the wrapped function call
             return result

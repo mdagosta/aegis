@@ -1119,11 +1119,12 @@ class DaemonThread(threading.Thread):
                     code.append("  %s" % (line.strip()))
         logging.warning("\n".join(code))
 
-# To use, call aegis.stdlib.usage('function_name'). If calling object has usage_timer function, call it with the label and exec_time so it can record to the db.
-def usage(usage_label):
+# To use, call aegis.stdlib.usage(). If calling object has usage_timer function, call it with the label and exec_time so it can record to the db.
+def usage():
     def wrapper(fn):
         def foo(*args, **kwargs):
             obj = args[0]
+            usage_label = fn.__qualname__
             timer_obj = get_timer(obj)
             timer_start(timer_obj, usage_label)
             result = fn(*args, **kwargs)

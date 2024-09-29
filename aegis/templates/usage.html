@@ -3,7 +3,7 @@
 {% block body %}
 
 <div class="w3-container w3-blue">
-    <h3>Usage</h3>
+  <h1>Usage</h1>
 </div>
 
 <table class="w3-table-all w3-responsive w3-medium">
@@ -28,6 +28,36 @@
   {% end %}
 
 </table>
+
+<br/><br/>
+
+<div class="w3-container w3-blue">
+  <h1>No Usage</h1>
+</div>
+
+<table class="w3-table-all w3-responsive w3-medium">
+  <tr>
+    <th>Usage Name</th>
+    <th>Usage Count</th>
+    <th>Usage ms total</th>
+    <th>Usage ms min</th>
+    <th>Usage ms mean</th>
+    <th>Usage ms max</th>
+  </tr>
+
+  {% for usage_name in no_usage_set %}
+  <tr>
+    <td>{{usage_name}}</td>
+    <td>0</td>
+    <td>0</td>
+    <td>0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr>
+  {% end %}
+
+</table>
+
 
 {#
 

@@ -1122,6 +1122,8 @@ class DaemonThread(threading.Thread):
 
 # In-memory accumulator for usage data, to consolidate data down to the db every few seconds
 class Accumulator(dict):
+    usage_set = set()
+
     def incr(self, usage_name, usage_ms):
         self.setdefault(usage_name, {})
         usage = self[usage_name]
@@ -1146,6 +1148,7 @@ accumulator = Accumulator()
 accum_sync = Accumulator()
 def usage():
     def wrapper(fn):
+        Accumulator.usage_set.add(fn.__qualname__)
         def foo(*args, **kwargs):
             if len(args):
                 caller = args[0]
@@ -1178,12 +1181,11 @@ def usage():
                     logging.warning("Not Rate-Limited. Do now.")
                     accum = accumulator
                     accumulator = Accumulator()
-                    logw(accum, "ACCUM")
                     for usage_name, usage in accum.items():
                         #logging.warning(usage_name)
                         #logging.warning(usage)
                         aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
-            # Return the result of the function call
+            # Return the result of the wrapped function call
             return result
         return foo
     return wrapper

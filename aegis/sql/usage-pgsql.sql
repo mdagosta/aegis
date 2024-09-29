@@ -1,0 +1,15 @@
+CREATE TABLE usage (
+  usage_id SERIAL NOT NULL,
+  usage_name VARCHAR(80) NOT NULL,
+  usage_cnt BIGINT DEFAULT 0,
+  usage_ms DECIMAL DEFAULT 0,
+  usage_ms_min DECIMAL DEFAULT 0,
+  usage_ms_mean DECIMAL DEFAULT 0,
+  usage_ms_max DECIMAL DEFAULT 0,
+  create_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_dttm TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  delete_dttm TIMESTAMP DEFAULT NULL,
+  PRIMARY KEY (usage_name),
+  UNIQUE (usage_id)
+);
+CREATE TRIGGER update_dttm BEFORE UPDATE ON usage FOR EACH ROW EXECUTE PROCEDURE update_dttm();

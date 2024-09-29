@@ -5,6 +5,7 @@
 
 # Python Imports
 import datetime
+import decimal
 import hashlib
 import json
 import logging
@@ -1051,3 +1052,32 @@ class Marketing(aegis.database.Row):
         dbconn = dbconn if dbconn else db()
         sql = 'SELECT * FROM marketing WHERE marketing_name=%s'
         return dbconn.get(sql, name, cls=cls)
+
+
+class Usage(aegis.database.Row):
+    table_name = 'usage'
+    id_column = 'usage_id'
+
+    @classmethod
+    def incr_name(cls, usage_name, exec_t, dbconn=None):
+        exec_t = round(decimal.Decimal(exec_t), 5)
+        dbconn = dbconn if dbconn else db()
+        usage_row = Usage.get_name(usage_name)
+        if not usage_row:
+            columns = {'usage_name': usage_name}
+            usage_id = cls.insert_columns(dbconn=dbconn, **columns)
+            usage_row = Usage.get_name(usage_name)
+        columns = {'usage_cnt': usage_row['usage_cnt'] + 1, 'usage_ms': usage_row['usage_ms'] + exec_t}
+        if not usage_row['usage_ms_min'] or exec_t < usage_row['usage_ms_min']:
+            columns['usage_ms_min'] = exec_t
+        if exec_t > usage_row['usage_ms_max']:
+            columns['usage_ms_max'] = exec_t
+        columns['usage_ms_mean'] = round( (usage_row['usage_ms'] + exec_t) / (usage_row['usage_cnt'] + 1), 5)
+        where = {'usage_id': usage_row['usage_id']}
+        cls.update_columns(columns, where)
+
+    @classmethod
+    def get_name(cls, usage_name, dbconn=None):
+        dbconn = dbconn if dbconn else db()
+        sql = "SELECT * FROM usage WHERE usage_name=%s"
+        return dbconn.get(sql, usage_name, cls=cls)

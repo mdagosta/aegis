@@ -877,6 +877,7 @@ def timer_log(obj, timer_name):
         return {}
     exec_name = '_%s_exec_s' % timer_name
     logging.debug("%s  %.3f ms" % (timer_name, 1000 * obj._timers[exec_name]))
+    return 1000 * obj._timers[exec_name]
 
 def timer_reset(obj, timer_name):
     if not obj:
@@ -912,6 +913,7 @@ def incr_stop(obj, timer_name):
     obj._timers[exec_name] += obj._timers[stop_name] - obj._timers[start_name]
     obj._timers[cnt_name] += 1
     return obj._timers[stop_name] - obj._timers[start_name]
+
 
 
 # Support for MaxMind's free GeoLite2 database, sign up at https://www.maxmind.com/en/geolite2/signup
@@ -1114,3 +1116,20 @@ class DaemonThread(threading.Thread):
                 if line:
                     code.append("  %s" % (line.strip()))
         logging.warning("\n".join(code))
+
+# To use, call aegis.stdlib.usage('function_name'). On an Admin page put all usage strings in a list, read them from usage table, and show UI of performance.
+def usage(usage_label):
+    def wrapper(fn):
+        def foo(*args, **kwargs):
+            obj = args[0]
+            timer_obj = get_timer(obj)
+            timer_start(timer_obj, usage_label)
+            result = fn(*args, **kwargs)
+            timer_stop(timer_obj, usage_label)
+            exec_t = timer_log(timer_obj, usage_label)
+            timer_reset(timer_obj, usage_label)
+            if hasattr(obj, 'usage_timer'):
+                obj.usage_timer(usage_label, exec_t)
+            return result
+        return foo
+    return wrapper

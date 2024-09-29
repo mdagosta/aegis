@@ -872,12 +872,14 @@ def timer_stop(obj, timer_name):
         obj._timers[stop_name] = time.time()
         obj._timers[exec_name] = obj._timers[stop_name] - obj._timers[start_name]
 
-def timer_log(obj, timer_name):
+def timer_log(obj, timer_name, do_log=True):
     if not obj:
         return {}
     exec_name = '_%s_exec_s' % timer_name
-    logging.debug("%s  %.3f ms" % (timer_name, 1000 * obj._timers[exec_name]))
-    return 1000 * obj._timers[exec_name]
+    exec_t = 1000 * obj._timers[exec_name]
+    if do_log:
+        logging.debug("%s  %.3f ms" % (timer_name, exec_t))
+    return exec_t
 
 def timer_reset(obj, timer_name):
     if not obj:
@@ -1117,7 +1119,7 @@ class DaemonThread(threading.Thread):
                     code.append("  %s" % (line.strip()))
         logging.warning("\n".join(code))
 
-# To use, call aegis.stdlib.usage('function_name'). On an Admin page put all usage strings in a list, read them from usage table, and show UI of performance.
+# To use, call aegis.stdlib.usage('function_name'). If calling object has usage_timer function, call it with the label and exec_time so it can record to the db.
 def usage(usage_label):
     def wrapper(fn):
         def foo(*args, **kwargs):
@@ -1126,7 +1128,7 @@ def usage(usage_label):
             timer_start(timer_obj, usage_label)
             result = fn(*args, **kwargs)
             timer_stop(timer_obj, usage_label)
-            exec_t = timer_log(timer_obj, usage_label)
+            exec_t = timer_log(timer_obj, usage_label, do_log=False)
             timer_reset(timer_obj, usage_label)
             if hasattr(obj, 'usage_timer'):
                 obj.usage_timer(usage_label, exec_t)

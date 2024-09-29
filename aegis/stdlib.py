@@ -1119,7 +1119,31 @@ class DaemonThread(threading.Thread):
                     code.append("  %s" % (line.strip()))
         logging.warning("\n".join(code))
 
-# To use, call aegis.stdlib.usage(). If calling object has usage_timer function, call it with the label and exec_time so it can record to the db.
+
+# In-memory accumulator for usage data, to consolidate data down to the db every few seconds
+class Accumulator(dict):
+    def incr(self, usage_name, usage_ms):
+        self.setdefault(usage_name, {})
+        usage = self[usage_name]
+        if 'usage_cnt' not in self[usage_name]:
+            usage.setdefault('usage_cnt', 0)
+            usage.setdefault('usage_ms', decimal.Decimal(0))
+            usage.setdefault('usage_ms_min', decimal.Decimal(0))
+            usage.setdefault('usage_ms_max', decimal.Decimal(0))
+        usage_ms = decimal.Decimal(usage_ms)
+        usage['usage_cnt'] += 1
+        usage['usage_ms'] += usage_ms
+        if not usage['usage_ms_min'] or usage_ms < usage['usage_ms_min']:
+            usage['usage_ms_min'] = usage_ms
+        if usage_ms > usage['usage_ms_max']:
+            usage['usage_ms_max'] = usage_ms
+
+# Decorator to put on any function. Records to usage table in the db if configured. Example usage:
+#   @aegis.stdlib.usage()
+#   def do_something()
+use_usage = None
+accumulator = Accumulator()
+accum_sync = Accumulator()
 def usage():
     def wrapper(fn):
         def foo(*args, **kwargs):
@@ -1127,15 +1151,39 @@ def usage():
                 caller = args[0]
             else:
                 caller = None
-            usage_label = fn.__qualname__
+            usage_name = fn.__qualname__
             timer_obj = TimerObj()
-            timer_start(timer_obj, usage_label)
+            timer_start(timer_obj, usage_name)
             result = fn(*args, **kwargs)
-            timer_stop(timer_obj, usage_label)
-            exec_t = timer_log(timer_obj, usage_label, do_log=False)
-            timer_reset(timer_obj, usage_label)
-            if caller and hasattr(caller, 'usage_timer'):
-                caller.usage_timer(usage_label, exec_t)
+            timer_stop(timer_obj, usage_name)
+            usage_ms = timer_log(timer_obj, usage_name, do_log=False)
+            timer_reset(timer_obj, usage_name)
+            # Trying to connect to the database to record usage. Only works if a database has been configured.
+            global use_usage
+            global accumulator
+            global accum_sync
+            import aegis.database
+            import aegis.model
+            if use_usage is None:
+                if aegis.database.pgsql_available:
+                    results = aegis.database.db().get("SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'usage')")
+                elif aegis.database.mysql_available:
+                    results = aegis.database.db().get("SELECT * FROM information_schema.tables WHERE TABLE_SCHEMA=%s AND TABLE_NAME='usage'", options.mysql_database)
+                    results = {'exists': bool(results)}
+                use_usage = results['exists']
+            # If we're tracking usage, do so in the Accumulator, then sync to db periodically. After sync create a new accumulator.
+            if use_usage:
+                accumulator.incr(usage_name, usage_ms)
+                if not rate_limit(accum_sync, 'sync_to_db', '', delta_sec=5):
+                    logging.warning("Not Rate-Limited. Do now.")
+                    accum = accumulator
+                    accumulator = Accumulator()
+                    logw(accum, "ACCUM")
+                    for usage_name, usage in accum.items():
+                        #logging.warning(usage_name)
+                        #logging.warning(usage)
+                        aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
+            # Return the result of the function call
             return result
         return foo
     return wrapper

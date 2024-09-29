@@ -174,10 +174,6 @@ class AegisHandler(tornado.web.RequestHandler):
         if hasattr(self, 'use_audit') and self.use_audit:
             self.audit_request_id = self.audit_finish()
 
-    # This is really here to use the self scoping to access the db
-    def usage_timer(self, usage_label, exec_t):
-        aegis.model.Usage.incr_name(usage_label, exec_t, dbconn=self.dbconn)
-
     def debug_request(self):
         req_str = str(self.request).rstrip(')') + ', headers={'
         for header in sorted(self.request.headers.items()):

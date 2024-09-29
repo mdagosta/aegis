@@ -1059,20 +1059,19 @@ class Usage(aegis.database.Row):
     id_column = 'usage_id'
 
     @classmethod
-    def incr_name(cls, usage_name, exec_t, dbconn=None):
-        exec_t = round(decimal.Decimal(exec_t), 5)
+    def incr_name(cls, usage_name, usage_cnt, usage_ms, usage_ms_min, usage_ms_max, dbconn=None):
         dbconn = dbconn if dbconn else db()
         usage_row = Usage.get_name(usage_name)
         if not usage_row:
             columns = {'usage_name': usage_name}
             usage_id = cls.insert_columns(dbconn=dbconn, **columns)
             usage_row = Usage.get_name(usage_name)
-        columns = {'usage_cnt': usage_row['usage_cnt'] + 1, 'usage_ms': usage_row['usage_ms'] + exec_t}
-        if not usage_row['usage_ms_min'] or exec_t < usage_row['usage_ms_min']:
-            columns['usage_ms_min'] = exec_t
-        if exec_t > usage_row['usage_ms_max']:
-            columns['usage_ms_max'] = exec_t
-        columns['usage_ms_mean'] = round( (usage_row['usage_ms'] + exec_t) / (usage_row['usage_cnt'] + 1), 5)
+        columns = {'usage_cnt': usage_row['usage_cnt'] + usage_cnt, 'usage_ms': round(usage_row['usage_ms'] + usage_ms, 5)}
+        if not usage_row['usage_ms_min'] or usage_ms_min < usage_row['usage_ms_min']:
+            columns['usage_ms_min'] = round(usage_ms_min, 5)
+        if usage_ms_max > usage_row['usage_ms_max']:
+            columns['usage_ms_max'] = round(usage_ms_max, 5)
+        columns['usage_ms_mean'] = round(columns['usage_ms'] / columns['usage_cnt'], 5)
         where = {'usage_id': usage_row['usage_id']}
         cls.update_columns(columns, where)
 

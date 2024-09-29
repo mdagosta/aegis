@@ -1482,6 +1482,16 @@ class AegisBuildConfirm(AegisWeb):
         return self.render_path("build_confirm.html", **self.tmpl)
 
 
+class AegisUsage(AegisWeb):
+    @tornado.web.authenticated
+    def get(self, *args):
+        self.enforce_admin()
+        self.tmpl['home_link'] = '/admin/usage'
+        self.tmpl['page_title'] = 'Usage'
+        self.tmpl['usages'] = aegis.model.Usage.scan_slowest()
+        return self.render_path("usage.html", **self.tmpl)
+
+
 handler_urls = [
     (r'^/admin/build/(\d+)/(deploy|revert)\W*$', AegisBuildConfirm),
     (r'^/admin/build/(\d+)\W*$', AegisBuildView),
@@ -1495,5 +1505,6 @@ handler_urls = [
     (r'^/admin/report/form\W*$', AegisReportForm),
     (r'^/admin/report/(\d+)\W*$', AegisReport),
     (r'^/admin/report\W*$', AegisReport),
+    (r'^/admin/usage\W*$', AegisUsage),
     (r'^/admin\W*$', AegisHome),
 ]

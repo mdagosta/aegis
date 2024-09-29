@@ -1080,3 +1080,9 @@ class Usage(aegis.database.Row):
         dbconn = dbconn if dbconn else db()
         sql = "SELECT * FROM usage WHERE usage_name=%s"
         return dbconn.get(sql, usage_name, cls=cls)
+
+    @classmethod
+    def scan_slowest(cls, dbconn=None):
+        dbconn = dbconn if dbconn else db()
+        sql = "SELECT * FROM usage ORDER BY usage_ms DESC"
+        return dbconn.query(sql, cls=cls)

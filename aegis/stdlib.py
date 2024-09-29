@@ -1123,16 +1123,19 @@ class DaemonThread(threading.Thread):
 def usage():
     def wrapper(fn):
         def foo(*args, **kwargs):
-            obj = args[0]
+            if len(args):
+                caller = args[0]
+            else:
+                caller = None
             usage_label = fn.__qualname__
-            timer_obj = get_timer(obj)
+            timer_obj = TimerObj()
             timer_start(timer_obj, usage_label)
             result = fn(*args, **kwargs)
             timer_stop(timer_obj, usage_label)
             exec_t = timer_log(timer_obj, usage_label, do_log=False)
             timer_reset(timer_obj, usage_label)
-            if hasattr(obj, 'usage_timer'):
-                obj.usage_timer(usage_label, exec_t)
+            if caller and hasattr(caller, 'usage_timer'):
+                caller.usage_timer(usage_label, exec_t)
             return result
         return foo
     return wrapper

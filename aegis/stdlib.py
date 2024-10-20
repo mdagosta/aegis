@@ -1002,11 +1002,11 @@ def read_version():
             version_json = json.loads(fp.read())
             version_str = version_json['version']
         else:
-            version_str = 'N/A'
+            version_str = '0.0'
         return version_str
     except Exception as ex:
         logging.exception(ex)
-        return 'N/A'
+        return '0.0'
 
 # Increment minor (z) number up to z_ct (use only 99 or 9) and the major numbers x and y to 10
 def incr_version(x, y, z, z_ct=99):

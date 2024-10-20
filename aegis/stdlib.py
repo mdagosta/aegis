@@ -78,7 +78,7 @@ def multi_shell(cmds, cwd=None, env=None):
 
 def force_int(string):
     if type(string) in (int, int): return int(string)
-    int_re = re.compile('^.*?(\d+).*?$')
+    int_re = re.compile(r'^.*?(\d+).*?$')
     match = int_re.match(string)
     if not match: return None
     return int(match.group(1))
@@ -545,7 +545,7 @@ class RobotValidator:
         '^Microsoft Windows Network Diagnostics',
         '^MLBot',
         '^montastic-monitor',
-        '^Mozilla/.*\(compatible$',
+        r'^Mozilla/.*\(compatible$',
         '^Mozilla/.*Abonti',
         '^Mozilla/.*AcoonBot',
         '^Mozilla/.*AhrefsBot',
@@ -581,7 +581,7 @@ class RobotValidator:
         '^Mozilla/.*Gravitybot',
         '^Mozilla/.*heritrix',
         '^Mozilla/.*HTTrack',
-        '^Mozilla/.*ICS\)$'
+        r'^Mozilla/.*ICS\)$'
         '^Mozilla/.*IntelCSbot',
         '^Mozilla/.*ips-agent',
         '^Mozilla/.*JikeSpider',

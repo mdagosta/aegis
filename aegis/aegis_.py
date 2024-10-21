@@ -19,6 +19,8 @@ import tornado.options
 from tornado.options import define, options
 
 # Project Imports
+aegispath = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, aegispath)
 import aegis.stdlib
 import aegis.build
 import aegis.config

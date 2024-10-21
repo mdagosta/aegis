@@ -65,6 +65,7 @@ try:
     MysqlInterfaceError = MySQLdb._exceptions.InterfaceError
     MysqlDataError = MySQLdb._exceptions.DataError
 except Exception as ex:
+    # XXX If this was in a function that got called, it would have options.mysql_database. Then could only log if it's configured.
     #logging.error("Couldn't import MySQLdb - maybe that's ok for now - but shim the exception types.")
     #logging.exception(ex)
     class MysqlIntegrityError(BaseException):

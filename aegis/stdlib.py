@@ -43,6 +43,8 @@ def get_caller():
     f = f.f_back
     filename = f.f_code.co_filename
     module = filename.split('/')[-1].split('.')[0]
+    #label = '%s.%s' % (module, f.f_code.co_name)
+    #print(label)
     lineno = f.f_lineno
     return "%s:%s" % (module, lineno)
 
@@ -828,7 +830,7 @@ class Memcache(dict):
 class TimerObj(object):
     pass
 
-def get_timer(obj=None):
+def get_timer(obj=None, debug=False):
     # Optional object that sets the timer on the object given so it doesn't have to crawl the stack each call
     if obj and hasattr(obj, '_timer_obj'):
         return obj._timer_obj
@@ -839,7 +841,11 @@ def get_timer(obj=None):
     f_self = frame.f_locals.get('self')
     while not f_self or not hasattr(f_self, 'timer_obj'):
         frame = frame.f_back
+        #if debug:
+        #    logw(frame, "FRAME")
         if not frame:
+            if debug:
+                logging.warning('no frame')
             return None
         if frame.f_locals.get('timer_obj'):
             return frame.f_locals['timer_obj']
@@ -1149,7 +1155,8 @@ accum_sync = Accumulator()
 def usage():
     def wrapper(fn):
         Accumulator.usage_set.add(fn.__qualname__)
-        def foo(*args, **kwargs):
+        def aegis_stdlib_usage(*args, **kwargs):
+            caller = get_caller()   # XXX experimental
             usage_name = fn.__qualname__
             timer_obj = TimerObj()
             timer_start(timer_obj, usage_name)
@@ -1181,5 +1188,5 @@ def usage():
                         aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
             # Return the result of the wrapped function call
             return result
-        return foo
+        return aegis_stdlib_usage
     return wrapper

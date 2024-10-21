@@ -1489,9 +1489,13 @@ class AegisUsage(AegisWeb):
         self.tmpl['home_link'] = '/admin/usage'
         self.tmpl['page_title'] = 'Usage'
         self.tmpl['usages'] = aegis.model.Usage.scan_slowest()
+        self.tmpl['min_date'] = 'N/A'
+        if self.tmpl['usages']:
+            self.tmpl['min_date'] = min([str(usage['create_dttm']) for usage in self.tmpl['usages']]).split('.')[0]
         self.tmpl['usage_map'] = aegis.stdlib.map_items(self.tmpl['usages'], 'usage_name')
         self.tmpl['usage_set'] = aegis.stdlib.Accumulator.usage_set
-        self.tmpl['no_usage_set'] = set([usage_name for usage_name in self.tmpl['usage_set'] if usage_name in self.tmpl['usage_map']])
+        self.tmpl['no_usage_set'] = set([usage_name for usage_name in self.tmpl['usage_set'] if usage_name not in self.tmpl['usage_map']])
+        self.tmpl['no_usage_list'] = [no_usage for no_usage in sorted(list(self.tmpl['no_usage_set']))]
         return self.render_path("usage.html", **self.tmpl)
 
 

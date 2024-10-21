@@ -403,6 +403,7 @@ class Hydra(HydraThread):
                     if self.hydra_id == 0 and not aegis.stdlib.rate_limit(self, 'clear_hydra', '', delta_sec=300):
                         self.clear(dbconn)
                     self.spawn_heads()
+                    self.timer_obj = aegis.stdlib.TimerObj()
                     utcnow = datetime.datetime.utcnow()
                     # Batch Loop: scan hydra_type for runnable batches
                     for hydra_type in aegis.model.HydraType.scan(dbconn):

@@ -4,13 +4,16 @@
 
 
 # Python Imports
+import base64
 import datetime
 import decimal
 import hashlib
 import json
 import logging
+import pickle
 import random
 import uuid
+import zlib
 
 # Project Imports
 import aegis.stdlib
@@ -959,6 +962,25 @@ class Cache(aegis.database.Row):
         cache_expiry = datetime.datetime.utcnow() + datetime.timedelta(seconds=duration_s) + datetime.timedelta(seconds=random.uniform(0, duration_s))
         cls.set_key(cache_key, cache_json, cache_expiry)
         return cls.get_cache(cache_key)
+
+    @classmethod
+    def pickleize(cls, cache_key, cache_data, duration_s):
+        pickled = pickle.dumps(cache_data)
+        compressed = zlib.compress(pickled)
+        b64_compressed = base64.b64encode(compressed).decode()
+        cache_obj = {'compressed': b64_compressed}
+        cls.set_cache(cache_key, cache_obj, duration_s)
+        return cls.unpickleize(cache_key)
+
+    @classmethod
+    def unpickleize(cls, cache_key):
+        cache_obj = cls.get_cache(cache_key)
+        if cache_obj is not None:
+            b64_compressed = cache_obj['compressed']
+            compressed = base64.b64decode(b64_compressed)
+            decompressed = zlib.decompress(compressed)
+            cache_obj = pickle.loads(decompressed)
+            return cache_obj
 
     @staticmethod
     def del_key(cache_key):

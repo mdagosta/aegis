@@ -666,7 +666,6 @@ class Row(dict):
         return dbconn.execute_rowcount(sql, *args)
 
     @classmethod
-    @aegis.stdlib.usage()
     def set_row(cls, data, dbconn):
         # INSERT or UPDATE
         data_row = cls.get_id(data[cls.id_column])

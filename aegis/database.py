@@ -225,7 +225,7 @@ class PostgresConnection(object):
                 # If we got EOF, cursor closed, reconnect the cursor and retry
                 retry_errors = ['SSL SYSCALL error: EOF detected', 'cursor already closed']
                 if hasattr(ex, 'args') and ex.args[0] and max_tries < 3:
-                    logging.warning("Got EOF or similar error. Retrying up to twice.")
+                    logging.warning("Got EOF, cursor closed, or similar error. Reconnect cursor and retry up to twice.")
                     cursor = self._cursor()
                     max_tries += 1
                     continue

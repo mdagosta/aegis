@@ -1007,8 +1007,12 @@ class Cache(aegis.database.Row):
     @classmethod
     def set_key(cls, cache_key, cache_json, cache_expiry):
         cache_obj = cls.get_key(cache_key)
+        # This may either need to be a loop or check the rows updated and if not do the insert after all
         if cache_obj:
-            cls.update_key(cache_key, cache_json, cache_expiry)
+            # It would be possible that another thread already deleted the key, so the update would have 0 rows returned
+            rows_updated = cls.update_key(cache_key, cache_json, cache_expiry)
+            if not rows_updated:
+                aegis.stdlib.logw(rows_updated, "ROWS_UPDATED IN SET_KEY UPDATE_KEY")
         else:
             cls.insert_key(cache_key, cache_json, cache_expiry)
         cls.purge_expired()
@@ -1026,7 +1030,7 @@ class Cache(aegis.database.Row):
     @classmethod
     def update_key(cls, cache_key, cache_json, cache_expiry):
         sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s, delete_dttm=NULL WHERE cache_key=%s"
-        return db().execute(sql, cache_json, cache_expiry, cache_key)
+        return db().execute_rowcount(sql, cache_json, cache_expiry, cache_key)
 
     @classmethod
     def purge_expired(cls):

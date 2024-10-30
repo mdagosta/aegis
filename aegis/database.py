@@ -179,8 +179,8 @@ class PostgresConnection(object):
         self._db.autocommit = autocommit
 
     def _cursor(self):
-        # Connect if not connected.
-        if self._db is None:
+        # Connect if not connected or if connection is closed.
+        if self._db is None or self._db.closed:
             self._connect(self._autocommit)
         # If auto-commit then return a new cursor immediately.
         if self._autocommit:

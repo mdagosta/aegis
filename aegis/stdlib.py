@@ -1131,18 +1131,23 @@ class Accumulator(dict):
     usage_set = set()
 
     def incr(self, usage_name, usage_ms):
+        # It is possible for two threads to be racing around the accumulator global instantiate of this.
+        # So the setdefault checks are more explicit and also the critical section narrowed (but not closed entirely)
         self.setdefault(usage_name, {})
         usage = self[usage_name]
+        usage_ms = decimal.Decimal(usage_ms)
         if 'usage_cnt' not in self[usage_name]:
             usage.setdefault('usage_cnt', 0)
-            usage.setdefault('usage_ms', decimal.Decimal(0))
-            usage.setdefault('usage_ms_min', decimal.Decimal(0))
-            usage.setdefault('usage_ms_max', decimal.Decimal(0))
-        usage_ms = decimal.Decimal(usage_ms)
         usage['usage_cnt'] += 1
+        if 'usage_ms' not in self[usage_name]:
+            usage.setdefault('usage_ms', decimal.Decimal('0'))
         usage['usage_ms'] += usage_ms
+        if 'usage_ms_min' not in self[usage_name]:
+            usage.setdefault('usage_ms_min', decimal.Decimal('0'))
         if not usage['usage_ms_min'] or usage_ms < usage['usage_ms_min']:
             usage['usage_ms_min'] = usage_ms
+        if 'usage_ms_max' not in self[usage_name]:
+            usage.setdefault('usage_ms_max', decimal.Decimal('0'))
         if usage_ms > usage['usage_ms_max']:
             usage['usage_ms_max'] = usage_ms
 

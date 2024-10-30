@@ -1161,7 +1161,7 @@ def usage():
     def wrapper(fn):
         Accumulator.usage_set.add(fn.__qualname__)
         def aegis_stdlib_usage(*args, **kwargs):
-            caller = get_caller()   # XXX experimental
+            #caller = get_caller()   # XXX experimental
             usage_name = fn.__qualname__
             timer_obj = TimerObj()
             timer_start(timer_obj, usage_name)

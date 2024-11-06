@@ -516,6 +516,7 @@ class RobotValidator:
         'Google-InspectionTool',
         '^Googlebot-Image',
         'Google Favicon',
+        'Google-Read-Aloud',
         '^gsa-crawler',
         '^Hatena::Bookmark',
         '^HuaweiSymantecSpider',

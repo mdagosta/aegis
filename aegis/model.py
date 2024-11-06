@@ -4,13 +4,16 @@
 
 
 # Python Imports
+import base64
 import datetime
 import decimal
 import hashlib
 import json
 import logging
+import pickle
 import random
 import uuid
+import zlib
 
 # Project Imports
 import aegis.stdlib
@@ -960,6 +963,25 @@ class Cache(aegis.database.Row):
         cls.set_key(cache_key, cache_json, cache_expiry)
         return cls.get_cache(cache_key)
 
+    @classmethod
+    def pickleize(cls, cache_key, cache_data, duration_s):
+        pickled = pickle.dumps(cache_data)
+        compressed = zlib.compress(pickled)
+        b64_compressed = base64.b64encode(compressed).decode()
+        cache_obj = {'compressed': b64_compressed}
+        cls.set_cache(cache_key, cache_obj, duration_s)
+        return cls.unpickleize(cache_key)
+
+    @classmethod
+    def unpickleize(cls, cache_key):
+        cache_obj = cls.get_cache(cache_key)
+        if cache_obj is not None:
+            b64_compressed = cache_obj['compressed']
+            compressed = base64.b64decode(b64_compressed)
+            decompressed = zlib.decompress(compressed)
+            cache_obj = pickle.loads(decompressed)
+            return cache_obj
+
     @staticmethod
     def del_key(cache_key):
         sql = "DELETE FROM cache WHERE cache_key=%s"
@@ -985,8 +1007,12 @@ class Cache(aegis.database.Row):
     @classmethod
     def set_key(cls, cache_key, cache_json, cache_expiry):
         cache_obj = cls.get_key(cache_key)
+        # This may either need to be a loop or check the rows updated and if not do the insert after all
         if cache_obj:
-            cls.update_key(cache_key, cache_json, cache_expiry)
+            # It would be possible that another thread already deleted the key, so the update would have 0 rows returned
+            rows_updated = cls.update_key(cache_key, cache_json, cache_expiry)
+            if not rows_updated:
+                aegis.stdlib.logw(rows_updated, "ROWS_UPDATED IN SET_KEY UPDATE_KEY")
         else:
             cls.insert_key(cache_key, cache_json, cache_expiry)
         cls.purge_expired()
@@ -1004,7 +1030,7 @@ class Cache(aegis.database.Row):
     @classmethod
     def update_key(cls, cache_key, cache_json, cache_expiry):
         sql = "UPDATE cache SET cache_json=%s, cache_expiry=%s, delete_dttm=NULL WHERE cache_key=%s"
-        return db().execute(sql, cache_json, cache_expiry, cache_key)
+        return db().execute_rowcount(sql, cache_json, cache_expiry, cache_key)
 
     @classmethod
     def purge_expired(cls):

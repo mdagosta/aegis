@@ -3,7 +3,7 @@
 {% block body %}
 
 <div class="w3-container w3-blue">
-  <h1>Usage</h1>
+  <h1>Usage since {{min_date}}</h1>
 </div>
 
 <table class="w3-table-all w3-responsive w3-medium">
@@ -19,11 +19,11 @@
   {% for usage in usages %}
   <tr>
       <td>{{usage['usage_name']}}</td>
-      <td>{{usage['usage_cnt']}}</td>
-      <td>{{usage['usage_ms']}}</td>
-      <td>{{usage['usage_ms_min']}}</td>
-      <td>{{usage['usage_ms_mean']}}</td>
-      <td>{{usage['usage_ms_max']}}</td>
+      <td class="w3-right-align">{{usage['usage_cnt']}}</td>
+      <td class="w3-right-align">{{usage['usage_ms']}}</td>
+      <td class="w3-right-align">{{usage['usage_ms_min']}}</td>
+      <td class="w3-right-align">{{usage['usage_ms_mean']}}</td>
+      <td class="w3-right-align">{{usage['usage_ms_max']}}</td>
   </tr>
   {% end %}
 
@@ -32,7 +32,7 @@
 <br/><br/>
 
 <div class="w3-container w3-blue">
-  <h1>No Usage</h1>
+  <h1>No Usage since {{min_date}}</h1>
 </div>
 
 <table class="w3-table-all w3-responsive w3-medium">
@@ -45,14 +45,14 @@
     <th>Usage ms max</th>
   </tr>
 
-  {% for usage_name in no_usage_set %}
+  {% for usage_name in no_usage_list %}
   <tr>
     <td>{{usage_name}}</td>
-    <td>0</td>
-    <td>0</td>
-    <td>0</td>
-    <td>0</td>
-    <td>0</td>
+    <td class="w3-right-align">0</td>
+    <td class="w3-right-align">0</td>
+    <td class="w3-right-align">0</td>
+    <td class="w3-right-align">0</td>
+    <td class="w3-right-align">0</td>
   </tr>
   {% end %}
 

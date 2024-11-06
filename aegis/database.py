@@ -179,8 +179,8 @@ class PostgresConnection(object):
         self._db.autocommit = autocommit
 
     def _cursor(self):
-        # Connect if not connected.
-        if self._db is None:
+        # Connect if not connected or if connection is closed.
+        if self._db is None or self._db.closed:
             self._connect(self._autocommit)
         # If auto-commit then return a new cursor immediately.
         if self._autocommit:
@@ -222,9 +222,11 @@ class PostgresConnection(object):
                 # UniqueViolation doesn't need to close connection, it needs to be handled in application
                 raise
             except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError) as ex:
-                retry_errors = ['SSL SYSCALL error: EOF detected']
+                # If we got EOF, cursor closed, reconnect the cursor and retry
+                retry_errors = ['SSL SYSCALL error: EOF detected', 'cursor already closed']
                 if hasattr(ex, 'args') and ex.args[0] and max_tries < 3:
-                    logging.warning("Got EOF or similar error. Retrying up to twice.")
+                    logging.warning("Got EOF, cursor closed, or similar error. Reconnect cursor and retry up to twice.")
+                    cursor = self._cursor()
                     max_tries += 1
                     continue
                 logging.error("General Error at PostgreSQL - close connection/rollback")

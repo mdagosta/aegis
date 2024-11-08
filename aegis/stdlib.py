@@ -350,7 +350,7 @@ def validate_ip_address(value):
     except:
         return None
 
-def validate_json(self, value):
+def validate_json(value):
     if type(value) is dict:
         return value
     try:
@@ -516,6 +516,7 @@ class RobotValidator:
         'Google-InspectionTool',
         '^Googlebot-Image',
         'Google Favicon',
+        'Google-Read-Aloud',
         '^gsa-crawler',
         '^Hatena::Bookmark',
         '^HuaweiSymantecSpider',

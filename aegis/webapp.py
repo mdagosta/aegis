@@ -1144,17 +1144,17 @@ class AegisHydra(AegisWeb):
         # Do Pause
         if pause_ids:
             hydra_type = aegis.model.HydraType.get_id(pause_ids[0], dbconn=self.dbconn)
-            self.logw(hydra_type, "HYDRA TYPE")
+            #self.logw(hydra_type, "HYDRA TYPE")
             hydra_type.set_status('paused', dbconn=self.dbconn)
         # Do Unpause
         if unpause_ids:
             hydra_type = aegis.model.HydraType.get_id(unpause_ids[0], dbconn=self.dbconn)
-            self.logw(hydra_type, "HYDRA TYPE")
+            #self.logw(hydra_type, "HYDRA TYPE")
             hydra_type.set_status('live', dbconn=self.dbconn)
         # Do Run --- hooks over to batch!
         if run_ids:
             hydra_type = aegis.model.HydraType.get_id(run_ids[0], dbconn=self.dbconn)
-            self.logw(hydra_type, "HYDRA TYPE")
+            #self.logw(hydra_type, "HYDRA TYPE")
             hydra_type.run_now(dbconn=self.dbconn)
         return self.redirect(self.request.uri)
 

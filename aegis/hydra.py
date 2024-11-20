@@ -376,13 +376,14 @@ class Hydra(HydraThread):
 
 
     def clear(self, dbconn):
-        logging.warning("%s clearing stale claims over %s minutes old for db: %s" % (self.name, self.stuck_minutes, dbconn.database))
-        aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
-        aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+        cleared = aegis.model.HydraType.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+        logging.warning("%s cleared %s stale hydra_type claims over %s minutes old for db: %s" % (self.name, cleared, self.stuck_minutes, dbconn.database))
+        cleared = aegis.model.HydraQueue.clear_claims(minutes=self.stuck_minutes, dbconn=dbconn)
+        logging.warning("%s cleared %s stale hydra_queue claims over %s minutes old for db: %s" % (self.name, cleared, self.stuck_minutes, dbconn.database))
         # If the hydra_type_id for this queue item has next_run_sql then it should be a singleton across the hydras.
         # This means set hydra_type['status'] = 'running' and set it back to 'live' after completion.
-        logging.warning("%s clearing running jobs over %s minutes old for db: %s" % (self.name, self.stuck_minutes, dbconn.database))
-        aegis.model.HydraType.clear_running(minutes=self.stuck_minutes, dbconn=dbconn)
+        cleared = aegis.model.HydraType.clear_running(minutes=self.stuck_minutes, dbconn=dbconn)
+        logging.warning("%s clearing %s running jobs over %s minutes old for db: %s" % (self.name, cleared, self.stuck_minutes, dbconn.database))
 
 
     def process(self):

@@ -603,7 +603,7 @@ class HydraType(aegis.database.Row):
             sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL '%s MINUTE'" % int(minutes)
         elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_type SET status='live' WHERE status='running' and next_run_dttm < NOW() - INTERVAL %s MINUTE" % int(minutes)
-        return dbconn.execute(sql)
+        return dbconn.execute_rowcount(sql)
 
     def claim(self, dbconn=None):
         dbconn = dbconn if dbconn else db()
@@ -631,7 +631,7 @@ class HydraType(aegis.database.Row):
             sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE' AND status='live'" % int(minutes)
         elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_type SET claimed_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE AND status='live'" % int(minutes)
-        return dbconn.execute(sql)
+        return dbconn.execute_rowcount(sql)
 
 
 class HydraQueue(aegis.database.Row):
@@ -772,7 +772,7 @@ class HydraQueue(aegis.database.Row):
             sql = "UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL '%s MINUTE' AND finish_dttm IS NULL" % int(minutes)
         elif type(dbconn) is aegis.database.MysqlConnection:
             sql = "UPDATE hydra_queue SET claimed_dttm=NULL, start_dttm=NULL WHERE claimed_dttm < NOW() - INTERVAL %s MINUTE AND finish_dttm IS NULL" % int(minutes)
-        return dbconn.execute(sql)
+        return dbconn.execute_rowcount(sql)
 
     @classmethod
     def past_items(cls, minutes=15, dbconn=None):

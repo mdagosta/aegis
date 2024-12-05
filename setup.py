@@ -28,7 +28,7 @@ setuptools.setup (
     url = 'https://github.com/mdagosta/aegis',
     python_requires='>=3.6',
     packages = ['aegis'],
-    package_data = {'aegis': ['templates/*', 'sql/*']},
+    package_data = {'': ['version.json'], 'aegis': ['templates/*', 'sql/*']},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

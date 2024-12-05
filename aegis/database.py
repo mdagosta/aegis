@@ -313,7 +313,7 @@ class PostgresConnection(object):
 
 class MysqlConnection(object):
     """ From torndb originally """
-    def __init__(self, hostname, port, database, username=None, password=None, max_idle_time=7 * 3600):
+    def __init__(self, hostname, port, database, username=None, password=None, auth_plugin=None, max_idle_time=7 * 3600):
         self.hostname = hostname
         self.database = database
         self.max_idle_time = max_idle_time
@@ -322,6 +322,8 @@ class MysqlConnection(object):
             args["user"] = username   # MysqlDB Interface param is 'user'
         if password is not None:
             args["passwd"] = password
+        if auth_plugin:
+            args["auth_plugin"] = auth_plugin
         if not hostname:
             logging.error("ALERT TO DEVELOPER: No hostname specified for MysqlConnection. Check it's specified. Check environment variable being set.")
         args["host"] = hostname
@@ -345,21 +347,23 @@ class MysqlConnection(object):
             database = kwargs['mysql_database']
             username = kwargs['mysql_username']
             passwd = kwargs['mysql_password']
+            auth_plugin = kwargs.get('mysql_auth_plugin')
         else:
             hostname = options.mysql_hostname
             port = options.mysql_port
             database = options.mysql_database
             username = options.mysql_username
             passwd = options.mysql_password
+            auth_plugin = aegis.config.get('mysql_auth_plugin')
         # force a new connection
         if kwargs.get('force', False):
-            return cls(hostname, port, database, username, passwd)
+            return cls(hostname, port, database, username, passwd, auth_plugin)
         # check existing connections
         ident = threading.current_thread().ident
         target = '%s@%s' % (database, hostname)
         connections = cls.threads.setdefault(ident, {})
         if not target in connections:
-            conn = cls(hostname, port, database, username, passwd)
+            conn = cls(hostname, port, database, username, passwd, auth_plugin)
             conn.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", disable_audit_sql=True)
             conn.database = database
             cls.threads[ident][target] = conn

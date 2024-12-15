@@ -1055,7 +1055,7 @@ class AegisWeb(AegisHandler):
         self.tmpl['aegis_version'] = pkg_resources.require("aegis-tools")[0].version
         try:
             self.tmpl['app_version'] = pkg_resources.require(aegis.config.get('program_name'))[0].version
-        except pkg_resources.ContextualVersionConflict as ex:
+        except (pkg_resources.ContextualVersionConflict, pkg_resources.DistributionNotFound) as ex:
             logging.exception(ex)
             self.tmpl['app_version'] = 'N/A'
         self.tmpl['favicon_url'] = aegis.config.get('aegis_favicon_url') or '/favicon.ico'

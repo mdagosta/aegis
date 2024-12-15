@@ -207,7 +207,7 @@ def release(parser):
     for filename in files:
         os.remove(filename)
     logging.info("Cleaned dist dir of old builds")
-    log_cmd("python3 setup.py sdist bdist_wheel")
+    log_cmd("python3 setup.py sdist bdist_wheel")    # XXX TODO use pypa/build    https://github.com/pypa/build
     log_cmd("python3 -m twine upload dist/*")
 
 

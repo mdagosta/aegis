@@ -410,7 +410,7 @@ class Hydra(HydraThread):
                     for hydra_type in aegis.model.HydraType.scan(dbconn):
                         if HydraThread.quitting.is_set(): break
                         # Check if the task is runnable
-                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'], aegis.config.get('env'), dbconn=dbconn)
+                        runnable = aegis.model.HydraType.get_runnable(hydra_type['hydra_type_id'], dbconn=dbconn)
                         if aegis.config.get('hydra_debug') and runnable:
                             self.logw(hydra_type['hydra_type_name'], "%s FOUND RUNNABLE HYDRA_TYPE  env: %s  db: %s" % (self.name, aegis.config.get('env'), dbconn.database))
                         if runnable:
@@ -423,7 +423,7 @@ class Hydra(HydraThread):
                             hydra_queue['hydra_type_id'] = hydra_type['hydra_type_id']
                             hydra_queue['priority_ndx'] = hydra_type['priority_ndx']
                             hydra_queue['work_dttm'] = aegis.database.Literal("NOW()")
-                            hydra_queue['work_env'] = hydra_type.get('run_env', aegis.config.get('env'))
+                            hydra_queue['work_env'] = aegis.config.get('env')
                             if hydra_type.get('run_host'):
                                 hydra_queue['work_host'] = hydra_type['run_host']
                             # Schedule the next run before inserting on queue to prevent super weird race conditions.
@@ -458,8 +458,7 @@ class Hydra(HydraThread):
                                     logging.error("Unclaiming stuck hydra_type_id: %s  hydra_type_name: %s", past_item['hydra_type_name'], past_item['hydra_type_name'])
                                     past_item.unclaim(dbconn=dbconn)
                         elif hydra_type['status'] not in ('paused', 'running') and hydra_type['next_run_dttm'] and hydra_type['next_run_dttm'] < (utcnow - datetime.timedelta(seconds=30)):
-                            if hydra_type['run_env'] == aegis.config.get('env'):
-                                self.logw(hydra_type, "HYDRA TYPE BEHIND ON RUNNING")
+                            self.logw(hydra_type, "HYDRA TYPE BEHIND ON RUNNING")
 
                 # Better handling of AdminShutdown, OperationalError, to capture structured and complete data to logs and alerts.
                 except (aegis.database.PgsqlAdminShutdown, aegis.database.PgsqlOperationalError, aegis.database.MysqlOperationalError, aegis.database.MysqlInterfaceError) as ex:

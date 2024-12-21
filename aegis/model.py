@@ -548,7 +548,7 @@ class Pageview(aegis.database.Row):
 class HydraType(aegis.database.Row):
     table_name = 'hydra_type'
     id_column = 'hydra_type_id'
-    data_columns = ('hydra_type_id', 'hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host', 'status')
+    data_columns = ('hydra_type_id', 'hydra_type_name', 'hydra_type_desc', 'priority_ndx', 'next_run_sql', 'claimed_dttm', 'run_host', 'run_env', 'status')
 
     @classmethod
     def get_name(cls, hydra_type_name, dbconn=None):
@@ -573,16 +573,17 @@ class HydraType(aegis.database.Row):
         return dbconn.execute(sql, status, self['hydra_type_id'])
 
     @classmethod
-    def get_runnable(cls, hydra_type_id, dbconn=None):
+    def get_runnable(cls, hydra_type_id, env, dbconn=None):
         sql = """SELECT hydra_type_id, hydra_type_name, next_run_sql
                    FROM hydra_type
                   WHERE next_run_dttm <= NOW()
                     AND status='live'
                     AND hydra_type_id=%s
+                    AND run_env=%s
                     AND claimed_dttm IS NULL
                     AND next_run_sql IS NOT NULL"""
         dbconn = dbconn if dbconn else db()
-        return dbconn.get(sql, hydra_type_id, cls=cls)
+        return dbconn.get(sql, hydra_type_id, env, cls=cls)
 
     def schedule_next(self, dbconn=None):
         dbconn = dbconn if dbconn else db()

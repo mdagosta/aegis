@@ -1013,6 +1013,7 @@ class Cache(aegis.database.Row):
             rows_updated = cls.update_key(cache_key, cache_json, cache_expiry)
             if not rows_updated:
                 aegis.stdlib.logw(rows_updated, "ROWS_UPDATED IN SET_KEY UPDATE_KEY")
+                cls.insert_key(cache_key, cache_json, cache_expiry)
         else:
             cls.insert_key(cache_key, cache_json, cache_expiry)
         cls.purge_expired()

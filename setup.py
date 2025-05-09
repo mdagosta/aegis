@@ -45,6 +45,7 @@ setuptools.setup (
         'python-dateutil',
         'requests',
         'tornado >= 6.2.0',
+        'twine >= 6.1.0',
         'user_agents',
     ]
 )

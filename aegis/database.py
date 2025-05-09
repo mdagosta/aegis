@@ -25,6 +25,7 @@ PgsqlDatabaseError = None
 PgsqlProgrammingError = None
 PgsqlUniqueViolation = None
 PgsqlAdminShutdown = None
+PgsqlInterfaceError = None
 try:
     import psycopg2
     pgsql_available = True
@@ -35,6 +36,7 @@ try:
     PgsqlProgrammingError = psycopg2.ProgrammingError
     PgsqlUniqueViolation = psycopg2.errors.UniqueViolation
     PgsqlAdminShutdown = psycopg2.errors.AdminShutdown
+    PgsqlInterfaceError = psycopg2.InterfaceError
 except Exception as ex:
     #logging.error("Couldn't import psycopg2 - maybe that's ok for now - but shim the exception types.")
     #logging.exception(ex)
@@ -49,6 +51,8 @@ except Exception as ex:
     class PgsqlUniqueViolation(BaseException):
         pass
     class PgsqlAdminShutdown(BaseException):
+        pass
+    class PgsqlInterfaceError(BaseException):
         pass
 
 mysql_available = False
@@ -221,9 +225,12 @@ class PostgresConnection(object):
             except PgsqlUniqueViolation as ex:
                 # UniqueViolation doesn't need to close connection, it needs to be handled in application
                 raise
-            except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError) as ex:
-                # If we got EOF, cursor closed, reconnect the cursor and retry
-                retry_errors = ['SSL SYSCALL error: EOF detected', 'cursor already closed']
+            except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError, PgsqlInterfaceError) as ex:
+                # If we got EOF, cursor closed, connection closed, reconnect the cursor and retry
+                retry_errors = ['SSL SYSCALL error: EOF detected', 'cursor already closed', 'connection already closed']
+                aegis.stdlib.logw(ex, "EX")
+                aegis.stdlib.logw(retry_errors, "RETRY_ERRORS")
+                aegis.stdlib.logw(ex.args[0], "EX.ARGS[0]")
                 if hasattr(ex, 'args') and ex.args[0] and max_tries < 3:
                     logging.warning("Got EOF, cursor closed, or similar error. Reconnect cursor and retry up to twice.")
                     cursor = self._cursor()

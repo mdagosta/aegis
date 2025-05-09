@@ -22,16 +22,15 @@ setuptools.setup (
     name = 'aegis-tools',
     version = aegis.stdlib.read_version(),
     description = 'Aegis is a set of battle-tested tools and tricks to help everyone make better software',
-    long_description = 'A combination of tools and framework, Aegis has multiple different uses. You can import it and use the thoroughly made and tested functions. You can use it as a natural extension for the tornado web framework. And you can use it to quickly create a new web application with the structure already built-in, and follow along.',
+    #long_description = 'A combination of tools and framework, Aegis has multiple different uses. You can import it and use the thoroughly made and tested functions. You can use it as a natural extension for the tornado web framework. And you can use it to quickly create a new web application with the structure already built-in, and follow along.',
     author = "Michael D'Agosta",
     author_email = 'mdagosta@codebug.com',
     url = 'https://github.com/mdagosta/aegis',
     python_requires='>=3.6',
     packages = ['aegis'],
-    package_data = {'': ['version.json'], 'aegis': ['templates/*', 'sql/*']},
+    package_data = {'': ['version', 'version.json'], 'aegis': ['templates/*', 'sql/*']},
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     entry_points={

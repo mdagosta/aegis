@@ -346,7 +346,10 @@ def build(parser):
         logging.error("Build Failed. Version: %s" % build_row['version'])
     else:
         logging.info("Build Success. Version: %s" % build_row['version'])
-        logging.info("Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version']))
+        next_step = "Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version'])
+        if args.hostname:
+            next_step += " --hostname=%s" % args.hostname
+        logging.info(next_step)
     sys.exit(exit_status)
 
 
@@ -431,6 +434,8 @@ def initialize():
         define('appname', default=None, help='name of python app', type=str)
     if not aegis.config.exists('domain'):
         define('domain', default=None, help='top level domain to host the app', type=str)
+    if not aegis.config.exists('env'):
+        define("env", default=None, help='[Required or set EPIPHYTE_ENV] Environment (md, prod)', type=str)
     #aegis.stdlib.logw(aegis.config.exists('env'), "AEGIS ENV")
     tornado.options.parse_command_line(sys.argv[1:])
     #aegis.stdlib.logw(aegis.config.exists('env'), "AEGIS ENV PARSED")

@@ -121,11 +121,16 @@ class Build:
 
             # If options.build_vite_dirs, run through them running npm run build
             build_vite_dirs = aegis.config.get('build_vite_dirs')
+            aegis.stdlib.logw(build_vite_dirs, "BUILD_VITE_DIRS")
             if build_vite_dirs:
-                aegis.stdlib.logw(build_vite_dirs, "BUILD_VITE_DIRS")
+                npm_cache_dir = os.path.join(options.deploy_dir, '.npm')
+                aegis.stdlib.logw(options.deploy_dir, "OPTIONS.DEPLOY_DIR")
+                aegis.stdlib.logw(npm_cache_dir, "NPM_CACHE_DIR")
                 for build_vite_dir in build_vite_dirs:
                     build_vite_path = os.path.join(self.build_dir, build_vite_dir)
                     aegis.stdlib.logw(build_vite_path, "BUILD_VITE_PATH")
+                    if self._shell_exec("npm install --cache %s" % npm_cache_dir, cwd=build_vite_path, build_step='build'):
+                        return
                     if self._shell_exec("npm run build", cwd=build_vite_path, build_step='build'):
                         logging.warning("SUCCESSFUL BUILD... ?!?")
                         return

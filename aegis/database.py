@@ -219,15 +219,15 @@ class PostgresConnection(object):
             try_cnt += 1
             try:
                 aegis.stdlib.incr_start(aegis.stdlib.get_timer(), 'database')
-                result = cursor.execute(query, parameters)
+                cursor.execute(query, parameters)
                 aegis.stdlib.incr_stop(aegis.stdlib.get_timer(), 'database')
-                return result
+                return cursor
             except PgsqlUniqueViolation as ex:
                 # UniqueViolation doesn't need to close connection, it needs to be handled in application
                 raise
             except (psycopg2.Error, PgsqlAdminShutdown, PgsqlOperationalError, PgsqlInterfaceError) as ex:
                 # If we got EOF, cursor closed, connection closed, reconnect the cursor and retry
-                retry_errors = ['SSL SYSCALL error: EOF detected', 'cursor already closed', 'connection already closed']
+                retry_errors = ['SSL SYSCALL error: EOF detected', 'SSL connection has been closed unexpectedly', 'cursor already closed', 'connection already closed']
                 aegis.stdlib.logw(ex, "EX")
                 aegis.stdlib.logw(retry_errors, "RETRY_ERRORS")
                 aegis.stdlib.logw(ex.args[0], "EX.ARGS[0]")
@@ -246,7 +246,7 @@ class PostgresConnection(object):
         """Returns an iterator for the given query and parameters."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            cursor = self._execute(cursor, query, parameters)
             column_names = [d[0] for d in cursor.description]
             if kwargs.get('cls'):
                 for row in cursor:
@@ -261,7 +261,7 @@ class PostgresConnection(object):
         """ Returns a row list for the given query and parameters."""
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters, **kwargs)
+            cursor = self._execute(cursor, query, parameters, **kwargs)
             column_names = [d[0] for d in cursor.description]
             cls = kwargs.get('cls')
             if cls:
@@ -296,7 +296,7 @@ class PostgresConnection(object):
         # Executes the given query, returning the lastrowid from the query.
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            cursor = self._execute(cursor, query, parameters)
             if cursor.rowcount > 0:
                 try:
                     return cursor.fetchone()[0]
@@ -311,7 +311,7 @@ class PostgresConnection(object):
         # Executes the given query, returning the rowcount from the query.
         cursor = self._cursor()
         try:
-            self._execute(cursor, query, parameters)
+            cursor = self._execute(cursor, query, parameters)
             return cursor.rowcount
         finally:
             if not self._txn:

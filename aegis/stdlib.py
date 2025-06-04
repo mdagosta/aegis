@@ -1187,7 +1187,7 @@ def usage():
             if use_usage:
                 accumulator.incr(usage_name, usage_ms)
                 if not rate_limit(accum_sync, 'sync_to_db', '', delta_sec=5):
-                    logging.warning("Syncing Usage to DB")
+                    #logging.debug("Syncing Usage to DB")
                     accum = accumulator
                     accumulator = Accumulator()
                     for usage_name, usage in accum.items():

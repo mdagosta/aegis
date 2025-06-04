@@ -29,10 +29,8 @@ import urllib.parse
 import xml
 
 # Extern Imports
-import bcrypt
-import dateutil.parser
-import tornado.util
-
+# This space intentionally left blank. Doing python3 -m build was hitting errors, since they aren't importable in the build scope.
+# Currently they are imported into stdlib.py as-needed.
 
 def absdir(path):
     return os.path.abspath(os.path.dirname(path))
@@ -94,13 +92,17 @@ def md5hex(val=None, encoding=None):
         return hashlib.md5().hexdigest()
 
 def bcrypt_salt(log_rounds=14):
+    import bcrypt
     return bcrypt.gensalt(rounds=log_rounds)
 
 def bcrypt_hashpw(password, salt):
+    import bcrypt
     result = bcrypt.hashpw(password, salt.encode('utf-8'))
     return result
 
 def bcrypt_password(password, log_rounds=14):
+    import bcrypt
+    import tornado.util
     if type(password) is str:
         password = password.encode('utf-8')
     salt = tornado.util.unicode_type(bcrypt.gensalt(rounds=log_rounds), 'ascii').encode('utf-8')
@@ -321,6 +323,7 @@ def validate_date(value):
     if type(value) is datetime.datetime:
         return value
     try:
+        import dateutil.parser
         return dateutil.parser.parse(value)
     except (ValueError, TypeError):
         return None
@@ -1003,11 +1006,10 @@ def read_version():
         return version_str
     try:
         aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
-        version_file = os.path.join(aegis_dir, 'version.json')
+        version_file = os.path.join(aegis_dir, 'version')
         if os.path.exists(version_file):
             fp = open(version_file)
-            version_json = json.loads(fp.read())
-            version_str = version_json['version']
+            version_str = fp.read()
         else:
             version_str = '0.0'
         return version_str
@@ -1028,6 +1030,12 @@ def incr_version(x, y, z, z_ct=99):
 def write_version(version_str):
     # write config files into the build directory and not version control
     aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+    # Write plaintext version file
+    version_file = os.path.join(aegis_dir, 'version')
+    version = open(version_file, 'w')
+    version.write("%s" % version_str)
+    version.close()
+    # Also write a version.json for external sources to use
     version_file = os.path.join(aegis_dir, 'version.json')
     version_json = open(version_file, 'w')
     version_json.write('{"version": "%s"}\n' % version_str)

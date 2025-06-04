@@ -177,38 +177,39 @@ def create(parser):
 def install(parser):
     aegis.stdlib.logw(parser, "INSTALL ARG PARSER")
 
+# Run command and log result, specific to this function
+def log_cmd(cmd, aegis_dir):
+    logging.info(cmd)
+    stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=aegis_dir)
+    if stdout:
+        logging.info(stdout)
+    if stderr:
+        logging.info(stderr)
 
 # Prep aegis release and distribute onn pypi
 def release(parser):
     args = parser.parse_args()
     aegis_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
-    # Increment version number in version.json
+    # Increment version number in distribution files
     version = aegis.stdlib.read_version()
     x, y, z = [int(ver) for ver in version.split('.')]
     new_version = "%s.%s.%s" % aegis.stdlib.incr_version(x, y, z, z_ct=9)
     aegis.stdlib.write_version(new_version)
     logging.info("New Version: %s", new_version)
-    version_file = os.path.join(aegis_dir, 'version.json')
-    # Run command and log result, specific to this function
-    def log_cmd(cmd):
-        logging.info(cmd)
-        stdout, stderr, exit_status = aegis.stdlib.shell(cmd, cwd=aegis_dir)
-        if stdout:
-            logging.info(stdout)
-        if stderr:
-            logging.info(stderr)
     # Commit version and tag to git
-    log_cmd("git commit %s -m '%s'" % (version_file, new_version))
-    log_cmd("git tag %s" % new_version)
-    log_cmd("git push")
-    log_cmd("git push --tags")
+    version_files = [os.path.join(aegis_dir, 'version'), os.path.join(aegis_dir, 'version.json')]
+    version_files_glob = ' '.join(version_files)
+    log_cmd("git commit %s -m '%s'" % (version_files_glob, new_version), aegis_dir)
+    log_cmd("git tag %s" % new_version, aegis_dir)
+    log_cmd("git push", aegis_dir)
+    log_cmd("git push --tags", aegis_dir)
     # Packaging and uploading to pypi
     files = glob.glob(os.path.join(aegis_dir, 'dist', '*'))
     for filename in files:
         os.remove(filename)
     logging.info("Cleaned dist dir of old builds")
-    log_cmd("python3 setup.py sdist bdist_wheel")    # XXX TODO use pypa/build    https://github.com/pypa/build
-    log_cmd("python3 -m twine upload dist/*")
+    log_cmd("python3 -m build", aegis_dir)
+    log_cmd("python3 -m twine upload dist/*", aegis_dir)
 
 
 def schema(parser):
@@ -345,7 +346,10 @@ def build(parser):
         logging.error("Build Failed. Version: %s" % build_row['version'])
     else:
         logging.info("Build Success. Version: %s" % build_row['version'])
-        logging.info("Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version']))
+        next_step = "Next step:  sudo aegis deploy --env=%s --version=%s" % (aegis.config.get('env'), build_row['version'])
+        if args.hostname:
+            next_step += " --hostname=%s" % args.hostname
+        logging.info(next_step)
     sys.exit(exit_status)
 
 
@@ -430,6 +434,8 @@ def initialize():
         define('appname', default=None, help='name of python app', type=str)
     if not aegis.config.exists('domain'):
         define('domain', default=None, help='top level domain to host the app', type=str)
+    if not aegis.config.exists('env'):
+        define("env", default=None, help='[Required or set EPIPHYTE_ENV] Environment (md, prod)', type=str)
     #aegis.stdlib.logw(aegis.config.exists('env'), "AEGIS ENV")
     tornado.options.parse_command_line(sys.argv[1:])
     #aegis.stdlib.logw(aegis.config.exists('env'), "AEGIS ENV PARSED")

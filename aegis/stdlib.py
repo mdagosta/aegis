@@ -1211,7 +1211,6 @@ def usage():
                     try:
                         for usage_name, usage in accum.items():
                             aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
-                            accum.incr("test", 0.25)
                     except RuntimeError as ex:
                         logging.exception(ex)
                         logging.error("Skipping intermittent race condition for usage_name: %s   usage_cnt: %s   usage_ms: %s", usage_name, usage['usage_cnt'], usage['usage_ms'])

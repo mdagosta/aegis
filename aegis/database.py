@@ -675,7 +675,7 @@ class Row(dict):
         return dbconn.execute_rowcount(sql, *args)
 
     @classmethod
-    def set_row(cls, data, dbconn):
+    def set_row(cls, data, dbconn, debug=False):
         # INSERT or UPDATE
         data_row = cls.get_id(data[cls.id_column])
         if data_row:
@@ -684,8 +684,14 @@ class Row(dict):
             where = {cls.id_column: data_row[cls.id_column]}
             for key, value in data.items():
                 if key in data_row and data_row[key] != value:
+                    if debug:
+                        aegis.stdlib.logw(key, "KEY")
+                        aegis.stdlib.logw(data_row[key], "DATA_ROW[KEY]")
+                        aegis.stdlib.logw(value, "VALUE")
                     cols[key] = value
             if cols:
+                if debug:
+                    aegis.stdlib.logw(cols, "COLS")
                 return cls.update_columns(cols, where, dbconn=dbconn)
             else:
                 # 0 rows updated when no columns to update

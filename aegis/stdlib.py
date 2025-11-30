@@ -235,6 +235,15 @@ def dt_to_ts(dttm, keep_milliseconds=False):
     else:
         return calendar.timegm(dttm.utctimetuple())
 
+def pad_ms(timestr, padlen=6):
+    dttm, ms = timestr.split('.')
+    ms = ms.strip('Z')
+    if len(ms) != padlen:
+        ms = ms.ljust(padlen, '0')
+    timestr = "%s.%sZ" % (dttm, ms)
+    return timestr
+
+
 
 # Make it easier to use ansi escape sequences for terminal colors
 colors = {'black' : 30, 'red' : 31, 'green' : 32, 'yellow' : 33, 'blue' : 34,
@@ -1198,8 +1207,14 @@ def usage():
                     #logging.debug("Syncing Usage to DB")
                     accum = accumulator
                     accumulator = Accumulator()
-                    for usage_name, usage in accum.items():
-                        aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
+                    # Once in a while in tight loops we get a race condition here. Just log and ignore so we don't affect anything.
+                    try:
+                        for usage_name, usage in accum.items():
+                            aegis.model.Usage.incr_name(usage_name, usage['usage_cnt'], usage['usage_ms'], usage['usage_ms_min'], usage['usage_ms_max'])
+                            accum.incr("test", 0.25)
+                    except RuntimeError as ex:
+                        logging.exception(ex)
+                        logging.error("Skipping intermittent race condition for usage_name: %s   usage_cnt: %s   usage_ms: %s", usage_name, usage['usage_cnt'], usage['usage_ms'])
             # Return the result of the wrapped function call
             return result
         return aegis_stdlib_usage

@@ -215,6 +215,7 @@ class HydraHead(HydraThread):
                             continue
                         aegis.stdlib.timer_stop(self.timer_obj, 'hydra_queue_run')
                         # Worker accounting
+                        work_cnt = aegis.stdlib.validate_int(work_cnt)
                         logging.info(self.log_line(hydra_type, work_cnt, self.timer_msg()))
                         self.processed_cnt += work_cnt
                     except Exception as ex:
@@ -222,7 +223,8 @@ class HydraHead(HydraThread):
                         logging.exception(ex)
                         hydra_queue.incr_error_cnt(dbconn=dbconn)
                         hydra_queue.unclaim(dbconn=dbconn)
-                        self.exception_alert(ex)
+                        kwargs = {'work_cnt': work_cnt, 'hydra_type': hydra_type}
+                        self.exception_alert(ex, **kwargs)
                 # Iterate!
                 time.sleep(options.hydra_sleep)
         except Exception as ex:

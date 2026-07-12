@@ -2,7 +2,7 @@
 
 This code is your shield, your [Aegis](https://en.wikipedia.org/wiki/Aegis), to carry with you into battle on the brave new web.
 Part library, part tool, it was a binding glue to spin up projects quickly with some amount of uniformity.
-The purpose was to try thing outs, toward the discovery of product-market fit.
+The purpose was to try multiple paths with light overhead, toward a discovery of product-market fit.
 The tools still work, but have been superseded by the latest maturing open source combined with AI-assisted coding.
 
 

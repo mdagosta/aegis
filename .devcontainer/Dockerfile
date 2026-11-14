@@ -67,7 +67,8 @@ RUN cargo install --locked cargo-deny@0.20.2 cargo-audit@0.22.2 cargo-zigbuild@0
 # is on PATH.
 ARG ZIG_VERSION=0.17.0
 ARG ZIG_SHA256=9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8
-RUN curl --proto '=https' --tlsv1.2 -fsSLO https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-linux-${ZIG_VERSION}.tar.xz \
+RUN cd /tmp \
+    && curl --proto '=https' --tlsv1.2 -fsSLO https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-linux-${ZIG_VERSION}.tar.xz \
     && echo "${ZIG_SHA256}  zig-aarch64-linux-${ZIG_VERSION}.tar.xz" | sha256sum -c - \
     && mkdir -p /home/${USERNAME}/.local/bin \
     && tar -xJf zig-aarch64-linux-${ZIG_VERSION}.tar.xz -C /home/${USERNAME}/.local \

@@ -13,7 +13,7 @@ Python packages. The vault's Python client uses only the stdlib.
 
 | Piece | File | Notes |
 |---|---|---|
-| Image | `.devcontainer/Dockerfile` | Ubuntu 24.04, Rust (same version and targets as `rust-toolchain.toml`), cargo-deny, cargo-audit, cargo-zigbuild, python3, Claude Code, herdr; dev user, no sudo. zig (for `make build-release`) is still to add |
+| Image | `.devcontainer/Dockerfile` | Ubuntu 24.04, Rust (same version and targets as `rust-toolchain.toml`), cargo-deny, cargo-audit, cargo-zigbuild, zig 0.17.0 (for `make build-release`), python3, Claude Code, herdr; dev user, no sudo |
 | Service | `.devcontainer/compose.yaml` | Volumes: `repo`, `claude`, `cargo_registry`; read-only mounts of dotfiles and the SSH public key |
 | Start | `.devcontainer/entrypoint.sh` | Root: firewall, Claude policy from dotfiles, volume ownership, then drops to the dev user |
 | Firewall | `.devcontainer/firewall.sh`, `firewall-allowlist` | Mode from `AEGIS_FIREWALL_MODE` (compose default `open-https`); fails closed |

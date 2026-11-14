@@ -61,9 +61,19 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 RUN cargo install --locked cargo-deny@0.20.2 cargo-audit@0.22.2 cargo-zigbuild@0.24.0 \
     && rm -rf /home/${USERNAME}/.cargo/registry/cache /home/${USERNAME}/.cargo/registry/index \
         /home/${USERNAME}/.cargo/registry/src
-# Not yet installed: zig, which cargo-zigbuild needs as the C compiler and linker (SQLite is C). Add it as
-# a pinned download from ziglang.org with its SHA-256 checked in this file; the dev container can't
-# reach ziglang.org to look one up, so this needs doing from the Mac.
+# zig, which cargo-zigbuild needs as the C compiler and linker (SQLite is C). A pinned download from
+# ziglang.org (the aarch64 build, since the image is native arm64) with its SHA-256 checked here: a
+# release at least two weeks old, hash from https://ziglang.org/download/index.json. Under ~/.local, which
+# is on PATH.
+ARG ZIG_VERSION=0.17.0
+ARG ZIG_SHA256=9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8
+RUN curl --proto '=https' --tlsv1.2 -fsSLO https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-linux-${ZIG_VERSION}.tar.xz \
+    && echo "${ZIG_SHA256}  zig-aarch64-linux-${ZIG_VERSION}.tar.xz" | sha256sum -c - \
+    && mkdir -p /home/${USERNAME}/.local/bin \
+    && tar -xJf zig-aarch64-linux-${ZIG_VERSION}.tar.xz -C /home/${USERNAME}/.local \
+    && ln -s /home/${USERNAME}/.local/zig-aarch64-linux-${ZIG_VERSION}/zig /home/${USERNAME}/.local/bin/zig \
+    && rm zig-aarch64-linux-${ZIG_VERSION}.tar.xz \
+    && zig version
 RUN curl -fsSL https://claude.ai/install.sh | bash
 # herdr's server, so herdr on the Mac can attach to agents running here. --version fails the build if
 # the installer put it somewhere off PATH.

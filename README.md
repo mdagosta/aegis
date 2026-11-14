@@ -1,29 +1,10 @@
-# README #
+# aegis
 
-This README would normally document whatever steps are necessary to get your application up and running.
+A secrets vault, infrastructure manager, admin UI and deploy runner, in Rust. Built in that order; the
+vault comes first.
 
-### What is this repository for? ###
+- `docs/plan.md`: the design and the phases.
+- `docs/vault.md`: aegis-vault, the secrets daemon: API, storage, running it.
+- `docs/dev-container.md`: the dev container everything is built in.
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
-
-### How do I get set up? ###
-
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
-
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
+`make list` shows the targets; `make check` runs formatting, clippy and every test.

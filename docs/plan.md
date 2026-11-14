@@ -10,7 +10,8 @@ Four parts, built in this order:
 3. **aegis-web**: the admin UI, over SSH only.
 4. **aegis-runner**: allowlisted deploy and ops actions.
 
-Status: Phase 2 (vault MVP) in progress, Nov 2026.
+Status: Phase 2 (vault MVP) in progress, Nov 2026. The vault, its CLI and the Python client have a first
+pass; `docs/vault.md` is the operator's view (API, storage, running it).
 
 ## Repo layout
 
@@ -23,7 +24,10 @@ crates/aegis-runner/    later (Phase 7)
 clients/python/         aegis_vault.py, stdlib only; apps vendor a copy
 etc/aegis/              example policy.toml
 etc/systemd/            hardened units
+etc/sysusers.d/         users and groups for the units
+deny.toml               cargo-deny policy (make deny)
 docs/plan.md            this file
+docs/vault.md           aegis-vault: API, storage, running it
 ```
 
 ## Why
@@ -78,13 +82,13 @@ Three processes, three Unix users. Compromise of any one gives limited power:
 
 ## aegis-vault
 
-Small, few crates, `#![forbid(unsafe_code)]`. tokio + axum 0.8 over `UnixListener`, rusqlite, chacha20poly1305, zeroize.
+Small, few crates, `#![forbid(unsafe_code)]`. tokio + axum 0.8 over `UnixListener`, rusqlite, chacha20poly1305, zeroize. axum only carries bytes and peer credentials: each socket has one fallback handler, and the routes are a hand-written table of enums (`routes.rs`), so what each socket can do is one screen to review and test.
 
 **Sockets** (in `/run/aegis-vault/`, its own systemd `RuntimeDirectory`; each daemon gets its own directory, because two units sharing one `RuntimeDirectory` delete it out from under each other on stop):
 - `read.sock` - mode 0660, group `aegis-clients`. `GET /v1/scope/{name}` returns that scope as JSON if the caller's uid is allowed.
 - `admin.sock` - mode 0660, group `aegis-admin`. Set, delete, list metadata, list versions, rollback, audit, plus `store` and `generate` for aegis-infra. No route returns a value.
 
-File modes are the outer fence; the real check is the peer uid (`SO_PEERCRED`) against policy on every request, so a wrong group or mode can't open anything.
+File modes are the outer fence; the real check is the peer uid (`SO_PEERCRED`) against policy on every request, so a wrong group or mode can't open anything. A uid the policy doesn't know on a socket gets 403 for every request, malformed ones included, so it learns nothing about routes or names. The daemon gives each socket its group (`[sockets]` in the policy), so its user needs both groups (`SupplementaryGroups=` in the unit).
 
 **Policy** (`/etc/aegis/policy.toml`, root-owned, example in `etc/aegis/`). User names resolve to uids at startup; restart after changing users or policy.
 ```toml
@@ -100,6 +104,8 @@ allow_users = ["aegis-run"]
 ```
 Root is allowed on `admin.sock` because root can already decrypt the store; it is not given read access to any scope by default.
 
+Users and groups are read from `/etc/passwd` and `/etc/group`, not through `getpwnam`: no `unsafe`, and no NSS module (LDAP and the like) gets a say in who reads secrets. A policy that names an unknown user or group, has an unknown field, or is writable by group or others stops the daemon from starting. `aegis-vault check-policy` shows what a policy resolves to before a restart.
+
 **Names:** scope `[a-z0-9._-]+` segments joined by `/` (max 128), key `[A-Za-z0-9._-]+` (max 128). Values are UTF-8 text up to 64 KiB (PEM certs fit; binary goes in base64).
 
 **Admin API** (JSON over `admin.sock`):
@@ -113,19 +119,20 @@ Root is allowed on `admin.sock` because root can already decrypt the store; it i
 - `write_only` callers may only `PUT` (the plan's `store`) and `generate`, and only onto keys that don't exist yet or that they set last; everything else is 403.
 
 **Storage** (`/var/lib/aegis-vault/vault.db`, owned by `aegis-vault`, 0600):
-- `secret(scope, key, version, ciphertext, nonce, kek_id, created_at, created_by, is_current)`
+- `secret(scope, key, version, action, nonce, ciphertext, kek_id, fingerprint, rollback_of, created_at, created_by, created_by_uid)`. No `is_current`: the current version is the highest, since every change (set, generate, delete, rollback) adds a version. A tombstone is a row with no ciphertext.
 - XChaCha20-Poly1305, random 24-byte nonce per row, associated data is scope, key and version (length-prefixed, so no separator can be forged) so ciphertext copied to another row fails to decrypt.
 - Keys are derived from the master key with HKDF-SHA256: one for encryption, one for fingerprints. `kek_id` is a short id of the master key, so rotating means re-encrypting rows under a new one.
 - A `meta` canary row is encrypted at first start; a wrong master key refuses to start instead of writing rows nobody can read.
 - Old versions kept, so a bad edit is rolled back without anyone seeing a value.
 - Fingerprint per value: short HMAC (separate key) shown in the UI to compare values without revealing them.
-- Values in memory are `Zeroizing`. SQLite is synchronous: one connection behind a mutex, called through `spawn_blocking`.
+- Values in memory are `Zeroizing`, as far as the vault's own buffers go (hyper's and serde's internal buffers are out of reach). SQLite is synchronous: one connection behind a mutex, called through `spawn_blocking`.
+- Each audit row is written in the same transaction as the change it records, so a change that can't be audited doesn't happen. Fetches likewise: no audit row, no values.
 
 **Master key:** 32 random bytes as 64 hex characters. In prod, `systemd-creds encrypt` with the host key and `LoadCredentialEncrypted=aegis-master-key`; the daemon reads `$CREDENTIALS_DIRECTORY/aegis-master-key`. In dev (no systemd), `--master-key <file>` (must be 0600). `aegis-vault keygen --out <file>` makes one and refuses to overwrite. icarus has no TPM, so the key is protected by root-only `/var/lib/systemd/credential.secret`. Root on the box can decrypt; nothing else can, and the DB file alone (e.g. in a backup) is useless. Copy of the master key kept in 1Password.
 
-**Audit log:** every fetch and every write, as rows in `vault.db` and lines in the journal: time, uid, pid, `/proc/pid/cmdline` (Linux), socket, action, scope, key, outcome. Never a value. No notifications: the audit page and the journal are where you look.
+**Audit log:** every request (fetches, writes, and refused or malformed ones), as rows in `vault.db` and lines in the journal: time, uid, pid, `/proc/pid/cmdline` (Linux), socket, action, scope, key, version, outcome. Never a value. No notifications: the audit page and the journal are where you look. Rows are kept forever for now (see Open questions).
 
-**Hardening** (systemd unit, `etc/systemd/aegis-vault.service`): `User=aegis-vault`, `PrivateNetwork=yes`, `RestrictAddressFamilies=AF_UNIX`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ReadWritePaths=/var/lib/aegis-vault`, `NoNewPrivileges=yes`, `CapabilityBoundingSet=`, `MemoryDenyWriteExecute=yes`, `SystemCallFilter=@system-service`, `UMask=0077`, `LimitCORE=0`, `LoadCredentialEncrypted=` for the master key.
+**Hardening** (systemd unit, `etc/systemd/aegis-vault.service`, `Type=notify`: ready once both sockets exist): `User=aegis-vault`, `PrivateNetwork=yes`, `RestrictAddressFamilies=AF_UNIX`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ReadWritePaths=/var/lib/aegis-vault`, `NoNewPrivileges=yes`, `CapabilityBoundingSet=`, `MemoryDenyWriteExecute=yes`, `SystemCallFilter=@system-service`, `UMask=0077`, `LimitCORE=0`, `LoadCredentialEncrypted=` for the master key.
 
 ## Python client
 
@@ -310,9 +317,9 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
 
 - icarus is 1 CPU / 2 GB: too small to compile Rust comfortably. Build on orpheus (in the container), target `x86_64-unknown-linux-musl` for static binaries, ship to icarus.
 - `make build-release` builds (cargo-zigbuild); `make deploy` (run from the Mac host, since it needs SSH) copies binaries and restarts units.
-- `make dev-vault` runs a vault locally against `dev/` (gitignored: key, db, sockets, a policy naming your own user) for trying the CLI and Python client. Unit and socket tests run on macOS too (tokio's peer credentials work there); `/proc` cmdline in the audit is Linux-only and best effort.
+- `make vault-dev` (first planned as `dev-vault`; `dev-*` are the Mac-side container controls) runs a vault locally against `dev/` (gitignored: key, db, sockets, a policy naming your own user) for trying the CLI and Python client. Unit and socket tests run on macOS too (tokio's peer credentials work there); `/proc` cmdline in the audit is Linux-only and best effort.
 - aegis-runner does not deploy aegis. Self-deploys fail in confusing ways; keep that path manual.
-- Pinned toolchain (`rust-toolchain.toml`), committed `Cargo.lock`, `cargo-deny` and `cargo-audit` in `make`.
+- Pinned toolchain (`rust-toolchain.toml`), committed `Cargo.lock`, `cargo-deny` and `cargo-audit` in `make` (`make deny`, `make audit`; run them when `Cargo.lock` changes). Dependencies are exact versions, each at least two weeks old when chosen.
 - Runtime footprint should be a few MB per daemon, well within the box's memory.
 
 ## Tests that guard the promises
@@ -334,13 +341,14 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
 2. **Vault MVP in dev.** In this repo:
    - [x] Workspace, pinned toolchain, Makefile.
    - [x] Rust-only dev container, `aegis-dev` (`docs/dev-container.md`).
-   - [ ] Crypto: key derivation, seal/open with bound associated data, fingerprints, canary.
-   - [ ] Store: schema, versions, tombstones, rollback, audit rows.
-   - [ ] Policy: TOML, user names to uids, admin roles.
-   - [ ] Daemon: `read.sock` and `admin.sock` with peer-uid checks, master key from systemd credentials or a file.
-   - [ ] `aegis-vault-admin` CLI (value from stdin, never echoed) and `aegis-vault keygen`.
-   - [ ] Python client with tests.
-   - [ ] Example policy, systemd unit, `make dev-vault`, `make build-release`, `cargo-deny`/`cargo-audit` targets.
+   - [x] Crypto: key derivation, seal/open with bound associated data, fingerprints, canary.
+   - [x] Store: schema, versions, tombstones, rollback, audit rows.
+   - [x] Policy: TOML, user names to uids, admin roles.
+   - [x] Daemon: `read.sock` and `admin.sock` with peer-uid checks, master key from systemd credentials or a file.
+   - [x] `aegis-vault-admin` CLI (value from stdin, never echoed) and `aegis-vault keygen`.
+   - [x] Python client with tests.
+   - [x] Example policy, systemd unit, `make vault-dev`, `make build-release`, `cargo-deny`/`cargo-audit` targets.
+   - [ ] zig in the dev container image, so `make build-release` runs (needs a checksum looked up from the Mac); try the unit on a real systemd box.
    - [ ] epiphyte side (in epiphyte, not here): vendor the client, `secret_store.py` replaces the `secrets.py` symlink.
 3. **Vault on prod.** Users, units, `systemd-creds` master key. Load existing secrets with the CLI. Switch prod off `secrets.py`, then delete it.
 4. **aegis-infra, read-only.** `pull` and `plan` for Cloudflare and DigitalOcean, tokens via `op run`. Matches `etc/cloudflare/` output.
@@ -354,3 +362,5 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
 
 - Backups of `vault.db` and the aegis-web DB: where, and how often?
 - Should the CLI remain after the UI exists (break-glass access when aegis-web is down)? Leaning yes, root-only.
+- Audit retention: rows are kept forever, and a process in `aegis-clients` can add them as fast as it can connect. Cap by count or age, or archive with the backups?
+- Master key rotation: rows carry `kek_id`, but there's no re-encrypt command yet. Needed before the first rotation, not before Phase 3.

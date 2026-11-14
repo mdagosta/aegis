@@ -1,0 +1,48 @@
+# cargo-deny: `make deny`. Run when Cargo.lock changes.
+
+[graph]
+# The platforms we build for: the dev container (arm64), icarus (x86_64 musl), the Mac.
+targets = [
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-apple-darwin",
+]
+
+[advisories]
+# Vulnerabilities, unmaintained and unsound crates are all errors; yanked versions too.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Permissive licenses only: the ones in use. Add one only after reading it.
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+# Our own crates are UNLICENSED and unpublished.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# No TLS stacks or cloud SDKs in the vault: it talks to nothing but Unix sockets.
+deny = [
+    { crate = "openssl-sys" },
+    { crate = "native-tls" },
+    { crate = "aws-config" },
+    { crate = "aws-sdk-sts" },
+    { crate = "google-cloud-auth" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

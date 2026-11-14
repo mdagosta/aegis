@@ -1,0 +1,30 @@
+# aegis-vault policy: who may read which scope, and who may change secrets.
+# Installed as /etc/aegis/policy.toml, owned by root, mode 0644 (the vault refuses a policy that group or
+# others can write). User and group names are resolved to ids from /etc/passwd and /etc/group when the
+# vault starts: restart it after changing this file or the users. Check a change first with
+#   aegis-vault check-policy --policy /etc/aegis/policy.toml
+# Anything misspelled, or a user that doesn't exist, is an error and the vault won't start.
+
+# Group owners for the socket files: the outer fence. The real check is the caller's uid against the
+# lists below, on every request. The vault's own user must be in both groups (the unit's
+# SupplementaryGroups= does that).
+[sockets]
+read_group = "aegis-clients"
+admin_group = "aegis-admin"
+
+# admin.sock. No admin route ever returns a value.
+[admin]
+# Everything: set, delete, rollback, generate, list metadata, versions, audit.
+# aegis is aegis-web; root is the break-glass CLI (sudo aegis-vault-admin ...). Root can already decrypt
+# the store, so this gives it nothing new; it reads no scope unless a scope below names it.
+full = ["aegis", "root"]
+# Store and generate only, onto keys that don't exist yet or that they set last: aegis-infra delivering
+# secrets it just created.
+write_only = ["aegis-infra"]
+
+# read.sock: GET /v1/scope/<name> returns the scope's values to these users only.
+[scope."epiphyte/prod"]
+allow_users = ["www-data"]
+
+[scope."cloudflare/deploy"]
+allow_users = ["aegis-run"]

@@ -1,0 +1,75 @@
+# aegis-vault: the secrets daemon. See docs/plan.md, "aegis-vault", and docs/vault.md.
+#
+# Expects: /usr/local/bin/aegis-vault; users and groups from etc/sysusers.d/aegis-vault.conf;
+# /etc/aegis/policy.toml (root:root 0644); and the master key as an encrypted credential:
+#   aegis-vault keygen --out /root/aegis-master-key
+#   systemd-creds encrypt --name=aegis-master-key /root/aegis-master-key \
+#       /etc/credstore.encrypted/aegis-master-key
+#   (copy the key into 1Password, then: shred -u /root/aegis-master-key)
+#
+# Apps that fetch secrets at startup: After=aegis-vault.service and Wants=aegis-vault.service.
+
+[Unit]
+Description=aegis-vault secrets daemon
+After=local-fs.target
+
+[Service]
+# READY=1 is sent once both sockets exist.
+Type=notify
+ExecStart=/usr/local/bin/aegis-vault serve --policy /etc/aegis/policy.toml --db /var/lib/aegis-vault/vault.db --run-dir /run/aegis-vault
+User=aegis-vault
+Group=aegis-vault
+# So the daemon can give read.sock and admin.sock to these groups.
+SupplementaryGroups=aegis-clients aegis-admin
+# Decrypted by systemd into $CREDENTIALS_DIRECTORY/aegis-master-key, readable only by this service.
+LoadCredentialEncrypted=aegis-master-key:/etc/credstore.encrypted/aegis-master-key
+Restart=on-failure
+RestartSec=2s
+# Room for both sockets' connection caps (256 each) and the store.
+LimitNOFILE=2048
+
+# Each daemon gets its own RuntimeDirectory: two units sharing one delete it out from under each other.
+# 0755 so clients can reach the sockets inside; the sockets themselves are 0660.
+RuntimeDirectory=aegis-vault
+RuntimeDirectoryMode=0755
+StateDirectory=aegis-vault
+StateDirectoryMode=0700
+
+# Hardening. The vault only needs Unix sockets, its state directory, /etc (policy, passwd, group) and
+# /proc/<pid>/cmdline for the audit log.
+# Not PrivateUsers=: it would map other users' uids to nobody, and the peer uid is the credential.
+# Not ProtectProc=invisible: it would hide callers' command lines from the audit log.
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/aegis-vault
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+LimitCORE=0
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProcSubset=pid
+KeyringMode=private
+RemoveIPC=yes
+DevicePolicy=closed
+
+[Install]
+WantedBy=multi-user.target

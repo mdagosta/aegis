@@ -51,8 +51,19 @@ COPY entrypoint.sh /usr/local/bin/aegis-entrypoint
 RUN chmod 755 /usr/local/bin/aegis-entrypoint
 
 USER ${USERNAME}
+# The musl target is for icarus release builds; rust-toolchain.toml lists it too.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --profile minimal --default-toolchain ${RUST_VERSION} --component clippy,rustfmt
+        | sh -s -- -y --profile minimal --default-toolchain ${RUST_VERSION} --component clippy,rustfmt \
+            --target x86_64-unknown-linux-musl
+# Dependency checks (make deny, make audit) and release builds (make build-release). Exact versions, each
+# at least two weeks old when chosen; --locked builds each from its own lockfile. The registry is cleared
+# after, since it's a volume at run time.
+RUN cargo install --locked cargo-deny@0.20.2 cargo-audit@0.22.2 cargo-zigbuild@0.24.0 \
+    && rm -rf /home/${USERNAME}/.cargo/registry/cache /home/${USERNAME}/.cargo/registry/index \
+        /home/${USERNAME}/.cargo/registry/src
+# Not yet installed: zig, which cargo-zigbuild needs as the C compiler and linker (SQLite is C). Add it as
+# a pinned download from ziglang.org with its SHA-256 checked in this file; the dev container can't
+# reach ziglang.org to look one up, so this needs doing from the Mac.
 RUN curl -fsSL https://claude.ai/install.sh | bash
 # herdr's server, so herdr on the Mac can attach to agents running here. --version fails the build if
 # the installer put it somewhere off PATH.

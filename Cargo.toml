@@ -10,3 +10,20 @@ publish = false
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+# Exact versions, each at least two weeks old when chosen; Cargo.lock pins the rest. Add a dependency
+# only when std and a few lines of our own won't do.
+[workspace.dependencies]
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
+bytes = "=1.12.1"
+chacha20poly1305 = { version = "=0.11.0", default-features = false, features = ["alloc", "zeroize"] }
+getrandom = "=0.4.3"
+hkdf = "=0.13.0"
+hmac = { version = "=0.13.0", features = ["zeroize"] }
+rusqlite = { version = "=0.41.1", features = ["bundled"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+sha2 = { version = "=0.11.1", default-features = false, features = ["zeroize"] }
+tokio = { version = "=1.54.1", features = ["macros", "net", "rt", "signal", "sync", "time"] }
+toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde"] }
+zeroize = { version = "=1.9.1", features = ["serde"] }

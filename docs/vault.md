@@ -179,6 +179,8 @@ How it fits:
    ```
    Copy the key into 1Password, then `shred -u /root/aegis-master-key`.
 4. Unit: install `etc/systemd/aegis-vault.service`, then `systemctl enable --now aegis-vault`.
+   Between 4 and 5, run through `vault-unit-check.md` (the unit has only been read, not run, on a real
+   systemd box).
 5. Load secrets: `sudo aegis-vault-admin set epiphyte/prod DATABASE_URL`, typed or piped (`op read ... |`).
    A piped value loses one trailing newline.
 

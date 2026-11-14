@@ -1,4 +1,5 @@
-# Hosts the dev container may reach, HTTPS (443) only. firewall.sh resolves each to its IPv4 addresses
+# Used only in allowlist mode (AEGIS_FIREWALL_MODE=allowlist; the compose default is open-https, which
+# ignores this file). Hosts the dev container may reach, HTTPS (443) only. firewall.sh resolves each to its IPv4 addresses
 # at container start, and adds new ones every half hour; anything not listed is refused. The file is part
 # of the image, so an edit takes effect at the next `make dev-up` (a rebuild), not a restart. GitHub's
 # ranges come from api.github.com/meta, not this file (git, and cargo-deny's advisory database).

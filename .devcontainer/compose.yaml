@@ -14,6 +14,10 @@ services:
     # holds it, and no-new-privileges means nothing running as mdagosta can become root to take it down.
     cap_add:
       - NET_ADMIN
+    environment:
+      # Outbound policy (firewall.sh): open-https = any public HTTPS, never the Mac, LAN or Docker host;
+      # allowlist = only the hosts in firewall-allowlist. Override: AEGIS_FIREWALL_MODE=allowlist make dev-up
+      AEGIS_FIREWALL_MODE: ${AEGIS_FIREWALL_MODE:-open-https}
     security_opt:
       - no-new-privileges:true
     volumes:

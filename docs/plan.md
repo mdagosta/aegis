@@ -1,10 +1,30 @@
 # Aegis
 
-> Copied from epiphyte `plans/aegis.md` on 2026-11-13. The Rust code now lives here on `master` (the old Python version stays on `rough-draft`, untouched), so the "built in epiphyte first, `aegisd/`" decision is superseded: the workspace is at the repo root, crates in `crates/`. Sections on dev containers and dotfiles describe epiphyte's setup and are kept for context. Next up: Phase 2, vault MVP.
+> Started in epiphyte's `plans/aegis.md`; moved here 2026-11-13. "Dev containers (orpheus)" describes epiphyte's setup and is kept as the pattern aegis and other projects follow.
 
 Aegis becomes epiphyte's systems layer: a secrets vault, infrastructure management for DigitalOcean and Cloudflare, a private admin UI, and a deploy/ops runner, written in Rust. It replaces `secrets.py`, `.env.local`, `etc/cloudflare/`, and running deploy targets by hand on the prod box.
 
-Status: planning (Oct 2026). Nothing built yet.
+Four parts, built in this order:
+1. **aegis-vault**: the secrets daemon on each box (plus `aegis-vault-admin`, its CLI).
+2. **aegis-infra**: DigitalOcean and Cloudflare from the Mac; puts every secret it creates into a vault. Also delivers dotfiles (`aegis-infra dotfiles <host>`).
+3. **aegis-web**: the admin UI, over SSH only.
+4. **aegis-runner**: allowlisted deploy and ops actions.
+
+Status: Phase 2 (vault MVP) in progress, Nov 2026.
+
+## Repo layout
+
+```
+Cargo.toml              workspace; unsafe_code forbidden everywhere
+crates/aegis-vault/     lib + bins aegis-vault (daemon), aegis-vault-admin (CLI)
+crates/aegis-infra/     later (Phase 4)
+crates/aegis-web/       later (Phase 6)
+crates/aegis-runner/    later (Phase 7)
+clients/python/         aegis_vault.py, stdlib only; apps vendor a copy
+etc/aegis/              example policy.toml
+etc/systemd/            hardened units
+docs/plan.md            this file
+```
 
 ## Why
 
@@ -16,7 +36,7 @@ Goals, in priority order: secrets are never readable as files by humans or tools
 
 ## Decisions
 
-- **Built in epiphyte first, ported out later.** Other apps need the same separation, so this eventually moves to `main` of the `~/src/aegis` repo (the Python version only ever lived on a rough-draft branch). Until then the Rust code lives in `aegisd/` here. Keep it portable: no imports from epiphyte, all paths and names from config. The vendored Python lib in `aegis/` stays and gains the vault client, so "aegis" = Python client side, "aegisd" = the daemons.
+- **Its own repo from the start.** The Rust code lives on `master` of `~/src/aegis`; the old Python aegis stays on the `rough-draft` branch, untouched. Portable: nothing epiphyte-specific in the code, all paths, users and scopes from config. epiphyte's vendored Python lib (`epiphyte/aegis/`) is unrelated old code that keeps its name; it gains a copy of `clients/python/aegis_vault.py`.
 - **Unix sockets, no TCP.** The kernel reports the caller's uid on a Unix socket (`SO_PEERCRED`), so the OS user is the credential. No token file to steal, nothing for SSRF or browser DNS rebinding to reach.
 - **Encrypted SQLite, not Postgres.** The Postgres password is itself a secret, so the vault can't depend on Postgres. Separate store also means the vault works when Postgres is down.
 - **Write-only secrets UI.** Values can be set, replaced, rolled back, deleted. Never displayed. There is no reveal route anywhere in the admin API.
@@ -31,7 +51,7 @@ Goals, in priority order: secrets are never readable as files by humans or tools
 
 ```
   laptop browser -> http://localhost:7443
-      |  ssh -L 7443:/run/aegis/web.sock icarus
+      |  ssh -L 7443:/run/aegis-web/web.sock icarus
       v
   aegis-web   (user aegis)          UI, passkey login, job logs
       |  admin.sock: set / delete / rollback / list metadata
@@ -60,42 +80,63 @@ Three processes, three Unix users. Compromise of any one gives limited power:
 
 Small, few crates, `#![forbid(unsafe_code)]`. tokio + axum 0.8 over `UnixListener`, rusqlite, chacha20poly1305, zeroize.
 
-**Sockets** (in `/run/aegis/`, created by systemd `RuntimeDirectory`):
+**Sockets** (in `/run/aegis-vault/`, its own systemd `RuntimeDirectory`; each daemon gets its own directory, because two units sharing one `RuntimeDirectory` delete it out from under each other on stop):
 - `read.sock` - mode 0660, group `aegis-clients`. `GET /v1/scope/{name}` returns that scope as JSON if the caller's uid is allowed.
-- `admin.sock` - only the `aegis` and `aegis-infra` users connect. Set, delete, list metadata, list versions, rollback, plus `store` and `generate` for aegis-infra. No route returns a value.
+- `admin.sock` - mode 0660, group `aegis-admin`. Set, delete, list metadata, list versions, rollback, audit, plus `store` and `generate` for aegis-infra. No route returns a value.
 
-**Policy** (`/etc/aegis/policy.toml`, root-owned, in repo under `etc/aegis/`):
+File modes are the outer fence; the real check is the peer uid (`SO_PEERCRED`) against policy on every request, so a wrong group or mode can't open anything.
+
+**Policy** (`/etc/aegis/policy.toml`, root-owned, example in `etc/aegis/`). User names resolve to uids at startup; restart after changing users or policy.
 ```toml
+[admin]
+full = ["aegis", "root"]        # aegis-web, and the break-glass CLI via sudo
+write_only = ["aegis-infra"]    # store and generate only
+
 [scope."epiphyte/prod"]
 allow_users = ["www-data"]
 
 [scope."cloudflare/deploy"]
 allow_users = ["aegis-run"]
 ```
+Root is allowed on `admin.sock` because root can already decrypt the store; it is not given read access to any scope by default.
+
+**Names:** scope `[a-z0-9._-]+` segments joined by `/` (max 128), key `[A-Za-z0-9._-]+` (max 128). Values are UTF-8 text up to 64 KiB (PEM certs fit; binary goes in base64).
+
+**Admin API** (JSON over `admin.sock`):
+- `GET /v1/scopes` - every scope and key: current version, fingerprint, set at/by. Deleted keys show as deleted.
+- `GET /v1/scope/{scope}/key/{key}/versions` - version history, metadata only.
+- `PUT /v1/scope/{scope}/key/{key}` `{"value": ...}` - set (new version).
+- `DELETE /v1/scope/{scope}/key/{key}` - writes a tombstone version, so a delete can be rolled back like any other change.
+- `POST /v1/scope/{scope}/key/{key}/rollback` `{"version": n}` - writes a new version with version n's value (re-encrypted, since the version is part of the associated data).
+- `POST /v1/scope/{scope}/key/{key}/generate` `{"bytes": 32}` - random value, base64url, never returned.
+- `GET /v1/audit?limit=n` - recent audit rows.
+- `write_only` callers may only `PUT` (the plan's `store`) and `generate`, and only onto keys that don't exist yet or that they set last; everything else is 403.
 
 **Storage** (`/var/lib/aegis-vault/vault.db`, owned by `aegis-vault`, 0600):
 - `secret(scope, key, version, ciphertext, nonce, kek_id, created_at, created_by, is_current)`
-- XChaCha20-Poly1305, random 24-byte nonce per row, associated data `scope|key|version` so ciphertext copied to another row fails to decrypt.
-- `kek_id` allows rotating the master key by re-encrypting.
+- XChaCha20-Poly1305, random 24-byte nonce per row, associated data is scope, key and version (length-prefixed, so no separator can be forged) so ciphertext copied to another row fails to decrypt.
+- Keys are derived from the master key with HKDF-SHA256: one for encryption, one for fingerprints. `kek_id` is a short id of the master key, so rotating means re-encrypting rows under a new one.
+- A `meta` canary row is encrypted at first start; a wrong master key refuses to start instead of writing rows nobody can read.
 - Old versions kept, so a bad edit is rolled back without anyone seeing a value.
 - Fingerprint per value: short HMAC (separate key) shown in the UI to compare values without revealing them.
+- Values in memory are `Zeroizing`. SQLite is synchronous: one connection behind a mutex, called through `spawn_blocking`.
 
-**Master key:** `systemd-creds encrypt` with the host key. icarus has no TPM, so the key is protected by root-only `/var/lib/systemd/credential.secret`. Root on the box can decrypt; nothing else can, and the DB file alone (e.g. in a backup) is useless. Copy of the master key kept in 1Password.
+**Master key:** 32 random bytes as 64 hex characters. In prod, `systemd-creds encrypt` with the host key and `LoadCredentialEncrypted=aegis-master-key`; the daemon reads `$CREDENTIALS_DIRECTORY/aegis-master-key`. In dev (no systemd), `--master-key <file>` (must be 0600). `aegis-vault keygen --out <file>` makes one and refuses to overwrite. icarus has no TPM, so the key is protected by root-only `/var/lib/systemd/credential.secret`. Root on the box can decrypt; nothing else can, and the DB file alone (e.g. in a backup) is useless. Copy of the master key kept in 1Password.
 
-**Audit log:** every fetch and every write: time, uid, pid, `/proc/pid/cmdline`, scope, key. Writes and failed fetches also send a notification (postfix is already on the box).
+**Audit log:** every fetch and every write, as rows in `vault.db` and lines in the journal: time, uid, pid, `/proc/pid/cmdline` (Linux), socket, action, scope, key, outcome. Never a value. No notifications: the audit page and the journal are where you look.
 
-**Hardening** (systemd unit): `User=aegis-vault`, `PrivateNetwork=yes`, `ProtectSystem=strict`, `ReadWritePaths=/var/lib/aegis-vault`, `NoNewPrivileges=yes`, `MemoryDenyWriteExecute=yes`, `LoadCredentialEncrypted=` for the master key, no core dumps.
+**Hardening** (systemd unit, `etc/systemd/aegis-vault.service`): `User=aegis-vault`, `PrivateNetwork=yes`, `RestrictAddressFamilies=AF_UNIX`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ReadWritePaths=/var/lib/aegis-vault`, `NoNewPrivileges=yes`, `CapabilityBoundingSet=`, `MemoryDenyWriteExecute=yes`, `SystemCallFilter=@system-service`, `UMask=0077`, `LimitCORE=0`, `LoadCredentialEncrypted=` for the master key.
 
 ## Python client
 
-- `aegis/vault.py`: fetch a scope over `read.sock` with the stdlib (`http.client` on a Unix socket, no new dependency).
+- `clients/python/aegis_vault.py` here, copied into each app (epiphyte vendors it into `epiphyte/aegis/vault.py`): fetch a scope over `read.sock` with the stdlib (`http.client` on a Unix socket, no new dependency).
 - Replace the `epiphyte/secrets.py` symlink with a module of a different name (e.g. `epiphyte/secret_store.py`) that fetches at startup and exposes the same `hostnames` and `apply_hostname()`. Callers in `web.py`, `epiphyte.py`, `config.py`, `frob.py`, `codebug/notecards.py` change only their import.
 - Renaming also fixes a latent bug: `import secrets` currently shadows Python's stdlib `secrets` module for the whole process.
 - Fetch once at startup, keep in memory, never write to disk. Vault down at startup = fail fast, supervisor retries.
 
 ## aegis-web
 
-- Listens on `/run/aegis/web.sock` only. Access: `ssh -L 7443:/run/aegis/web.sock icarus`, then `http://localhost:7443`.
+- Listens on `/run/aegis-web/web.sock` only. Access: `ssh -L 7443:/run/aegis-web/web.sock icarus`, then `http://localhost:7443`.
 - Auth layer 1: your SSH key. Auth layer 2: passkey login (WebAuthn). `http://localhost` counts as a secure context, so passkeys work without TLS. Keep the local port fixed so the origin is stable. The passkey matters because other processes on the laptop (including dev containers) can reach a forwarded localhost port.
 - Own sessions and credentials, stored in its own SQLite. Not tied to epiphyte member login.
 - Pages:
@@ -155,7 +196,7 @@ Every machine I work on gets the same home and the same Claude policy: the Mac, 
 
 **Two layers:**
 1. **The installer lives in `~/src/dotfiles`**, next to the files it installs: one script for macOS and Linux, wrapped by the dotfiles Makefile (`make install`, `make install-claude-policy`). It links the home files and, when asked with sudo, installs the policy. The Mac, the dev containers (`post-create.sh` for home, the entrypoint for policy) and servers all call it, replacing today's three separate copies of that logic. Useful before any Rust exists.
-2. **Delivery is aegis's:** `aegis dotfiles <host>` pushes the dotfiles repo to the host over SSH (git, `updateInstead`, the same bridge as the dev containers) and runs the installer there. aegis-infra's cloud-init runs it at a new droplet's first boot, next to installing aegis-vault. Runs from the Mac host only, like the rest of aegis-infra.
+2. **Delivery is aegis's:** `aegis-infra dotfiles <host>` pushes the dotfiles repo to the host over SSH (git, `updateInstead`, the same bridge as the dev containers) and runs the installer there. aegis-infra's cloud-init runs it at a new droplet's first boot, next to installing aegis-vault. Runs from the Mac host only, like the rest of aegis-infra.
 
 **Rules:**
 - Nothing secret in dotfiles. Machine-specific or secret-bearing shell settings stay in a real `~/.bashrc_<hostname>` outside the repo (as `~/.bashrc_orpheus` does); the dotfiles' git history is readable wherever it's installed.
@@ -226,7 +267,7 @@ Already true: no private SSH keys or agent forwarding inside, no Docker socket, 
 |---|---|
 | working repo, builds, tests, dev DB, dev secrets, Claude, herdr agents | trusted checkout, `.devcontainer/`, git push to GitHub |
 | | SSH keys, 1Password, browser |
-| | SSH to icarus: aegis-web tunnel, prod deploys, `make deploy-aegisd` |
+| | SSH to icarus: aegis-web tunnel, prod deploys, aegis `make deploy` |
 | | extension release signing (`key.pem`) |
 
 - No prod credentials in the container, ever: no SSH key to icarus, no Cloudflare token, no prod DB access. The prod Postgres is a shared managed cluster, so dev must not hold credentials to it at all.
@@ -268,7 +309,8 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
 ## Build and deploy of aegis itself
 
 - icarus is 1 CPU / 2 GB: too small to compile Rust comfortably. Build on orpheus (in the container), target `x86_64-unknown-linux-musl` for static binaries, ship to icarus.
-- `make build-aegisd` builds; `make deploy-aegisd` (run from the Mac host, since it needs SSH) copies binaries and restarts units.
+- `make build-release` builds (cargo-zigbuild); `make deploy` (run from the Mac host, since it needs SSH) copies binaries and restarts units.
+- `make dev-vault` runs a vault locally against `dev/` (gitignored: key, db, sockets, a policy naming your own user) for trying the CLI and Python client. Unit and socket tests run on macOS too (tokio's peer credentials work there); `/proc` cmdline in the audit is Linux-only and best effort.
 - aegis-runner does not deploy aegis. Self-deploys fail in confusing ways; keep that path manual.
 - Pinned toolchain (`rust-toolchain.toml`), committed `Cargo.lock`, `cargo-deny` and `cargo-audit` in `make`.
 - Runtime footprint should be a few MB per daemon, well within the box's memory.
@@ -278,24 +320,37 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
 - Wrong uid on `read.sock` is refused; allowed uid gets only its scopes.
 - `admin.sock` has no route that returns a value (route table test).
 - Ciphertext moved to another row fails to decrypt.
+- A wrong master key refuses to start.
+- Delete then rollback restores the value; rollback re-encrypts under the new version.
+- `write_only` admin callers get 403 on everything but store and generate.
+- Bad scope or key names are refused before touching the store.
 - Runner rejects unknown actions and out-of-enum parameters.
 - aegis-web rejects requests without a valid session.
 - aegis-infra `apply` never deletes without `--delete`, never touches unowned resources, and never writes a secret anywhere but a vault (no stdout, logs or files).
 
 ## Phases
 
-1. **Dev container.** See "Dev containers" steps. After this, no dev work on icarus.
-2. **Vault MVP in dev.** `aegisd/` workspace, aegis-vault with read socket, policy, encrypted store, audit log. A small CLI (`aegis-vault-admin`, via sudo) for set/list/rollback until the UI exists. Python client and `secret_store.py`. Tests above.
+1. **Dev container** (epiphyte). See "Dev containers" steps. After this, no dev work on icarus.
+2. **Vault MVP in dev.** In this repo:
+   - [x] Workspace, pinned toolchain, Makefile.
+   - [x] Rust-only dev container, `aegis-dev` (`docs/dev-container.md`).
+   - [ ] Crypto: key derivation, seal/open with bound associated data, fingerprints, canary.
+   - [ ] Store: schema, versions, tombstones, rollback, audit rows.
+   - [ ] Policy: TOML, user names to uids, admin roles.
+   - [ ] Daemon: `read.sock` and `admin.sock` with peer-uid checks, master key from systemd credentials or a file.
+   - [ ] `aegis-vault-admin` CLI (value from stdin, never echoed) and `aegis-vault keygen`.
+   - [ ] Python client with tests.
+   - [ ] Example policy, systemd unit, `make dev-vault`, `make build-release`, `cargo-deny`/`cargo-audit` targets.
+   - [ ] epiphyte side (in epiphyte, not here): vendor the client, `secret_store.py` replaces the `secrets.py` symlink.
 3. **Vault on prod.** Users, units, `systemd-creds` master key. Load existing secrets with the CLI. Switch prod off `secrets.py`, then delete it.
 4. **aegis-infra, read-only.** `pull` and `plan` for Cloudflare and DigitalOcean, tokens via `op run`. Matches `etc/cloudflare/` output.
 5. **aegis-infra apply.** Reissue the origin certificates into the vault and remove the tracked keys from git; rotate DB passwords and API tokens through the APIs into the vault (the old values have been read into AI sessions). Retire `etc/cloudflare/`.
 6. **aegis-web.** SSH-tunnel access, passkey login, secrets pages, audit page.
 7. **aegis-runner.** Wraps Make targets, narrow sudoers, jobs page. Deploys get short-lived Cloudflare tokens from infra. Retire `.env.local`.
 8. **New boxes from nothing.** Droplet + cloud-init + vault + secrets + deploy, so a new app or a rebuilt icarus is one `apply`. Uniform deploys across sites, planned as its own step when the next app is added.
-9. **Port out.** Move `aegisd/` to `main` of the `~/src/aegis` repo once a second project needs it.
+9. **Second project.** Another app adopts the vault: its own scopes in policy, the vendored Python client, the vault sidecar in its dev container.
 
 ## Open questions
 
-- Notifications: email only, or OurQuest push once it exists?
 - Backups of `vault.db` and the aegis-web DB: where, and how often?
 - Should the CLI remain after the UI exists (break-glass access when aegis-web is down)? Leaning yes, root-only.

@@ -1,0 +1,35 @@
+# Aegis dev environment on orpheus. Start with `make dev-up` from the Mac host; see docs/dev-container.md.
+# One service, no published ports. Nothing here holds or can reach prod credentials.
+name: aegis
+
+services:
+  app:
+    build:
+      context: .
+    # Comes back up when OrbStack starts, unless stopped on purpose (`make dev-down`).
+    restart: unless-stopped
+    hostname: aegis-dev
+    init: true
+    # NET_ADMIN lets the entrypoint (root, at start) put up the outbound firewall (firewall.sh). Only root
+    # holds it, and no-new-privileges means nothing running as mdagosta can become root to take it down.
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      # The working repo lives here, not on the Mac: git push/fetch over `ssh aegis-dev` is the only bridge
+      # (`dev.sh push`). target/ and dev/ (a dev vault) are plain gitignored folders inside it.
+      - repo:/home/mdagosta/src/aegis
+      # Claude Code's login and settings, and cargo's download cache (so a rebuild doesn't refetch crates).
+      - claude:/home/mdagosta/.claude
+      - cargo_registry:/home/mdagosta/.cargo/registry
+      # Public half of orpheus's key, for SSH from herdr on the Mac (sshd/aegis.conf).
+      - ${HOME}/.ssh/id_orpheus.pub:/run/host-ssh/authorized_key.pub:ro
+      # The Mac's dotfiles repo. Read-only: a writable .bashrc would let anything in here run commands on
+      # the Mac at its next shell. post-create.sh links them into $HOME.
+      - ${HOME}/src/dotfiles:/run/host-dotfiles:ro
+
+volumes:
+  repo:
+  claude:
+  cargo_registry:

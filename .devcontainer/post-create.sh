@@ -46,6 +46,12 @@ if [ -d /run/host-dotfiles ]; then
             "$settings_file" > "$settings_file.new" && mv "$settings_file.new" "$settings_file"
         echo "linked $claude_directory/statusline.sh"
     fi
+    # herdr-status: link the Mac's script onto PATH.
+    if [ -f /run/host-dotfiles/claude/herdr-status ]; then
+        mkdir -p "$HOME/.local/bin"
+        ln -sfn /run/host-dotfiles/claude/herdr-status "$HOME/.local/bin/herdr-status"
+        echo "linked herdr-status"
+    fi
 fi
 
 echo "=== Rust ==="

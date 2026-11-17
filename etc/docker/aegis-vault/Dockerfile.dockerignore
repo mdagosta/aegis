@@ -1,0 +1,6 @@
+# Only what the image needs: never dev/ (a dev vault's master key and store), target/ or .git.
+*
+!Cargo.toml
+!Cargo.lock
+!crates/
+!etc/docker/aegis-vault/

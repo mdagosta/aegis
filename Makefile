@@ -41,6 +41,17 @@ build-release: ## Static x86_64 musl release binaries (cargo-zigbuild) in target
 	cargo zigbuild --locked --release --target $(RELEASE_TARGET) $(addprefix --bin ,$(RELEASE_BINS))
 	@cd target/$(RELEASE_TARGET)/release && ls -l $(RELEASE_BINS) && sha256sum $(RELEASE_BINS)
 
+# The vault as a sidecar image for other projects' dev containers (docs/vault.md, "In a dev container").
+# On the Mac host, where docker is. Builds this checkout's working tree; the image is labelled with its
+# commit, and "-dirty" when the vault's files have uncommitted changes.
+.PHONY: vault-image
+vault-image: ## On the Mac: build the aegis-vault:dev sidecar image (etc/docker/aegis-vault)
+	@[ ! -f /.dockerenv ] || { echo "vault-image runs on the Mac host, not in a container"; exit 1; }
+	@revision="$$(git rev-parse --short=12 HEAD)"; \
+	[ -z "$$(git status --porcelain -- Cargo.toml Cargo.lock crates etc/docker/aegis-vault)" ] || revision="$$revision-dirty"; \
+	docker build -f etc/docker/aegis-vault/Dockerfile --label org.opencontainers.image.revision=$$revision \
+		-t aegis-vault:dev . && echo "built aegis-vault:dev at $$revision"
+
 # A vault for trying the CLI and the Python client, inside the dev container (dev-* targets are the
 # container controls, run on the Mac). Everything is in dev/ (gitignored): master key, store, sockets, and
 # a policy that makes you admin and reader of dev/example.

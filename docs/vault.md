@@ -11,6 +11,7 @@ The secrets daemon: how it works, its API, and how to run it. The why is in `pla
 | Python client | `clients/python/aegis_vault.py` | `fetch_scope(scope)` over `read.sock`, stdlib only |
 | Policy | `etc/aegis/policy.toml` | example; installed at `/etc/aegis/policy.toml` |
 | Unit, users | `etc/systemd/aegis-vault.service`, `etc/sysusers.d/aegis-vault.conf` | hardened unit, `Type=notify` |
+| Sidecar image | `etc/docker/aegis-vault/` | `make vault-image` on the Mac: the vault beside another project's dev container |
 
 Library modules, in the order a request meets them: `server` (sockets, peer uid, handlers), `routes` (the
 route tables as enums), `names` (scope, key and value rules), `policy`, `store` (SQLite, versions, audit),
@@ -109,6 +110,60 @@ echo value | make vault-admin ARGS="set dev/example OTHER"
 make vault-admin ARGS="scopes"
 make vault-fetch                               # the Python client; prints key names only
 ```
+
+### In a dev container (a sidecar)
+
+For another project's dev container (epiphyte-dev, snowballin-dev, ...): the vault runs in its own
+container beside `app`, with no network, and `app` reaches its sockets through a shared volume.
+
+1. Build the image on the Mac, in this repo: `make vault-image` (`etc/docker/aegis-vault/`). It's
+   `aegis-vault:dev` on the Mac's docker; rebuild it to pick up vault changes.
+2. Copy `etc/docker/aegis-vault/policy.dev.toml` into the project, under `~/src` (Colima shares only the
+   home folder with containers), and name the project's scope.
+3. Add to the project's compose file:
+
+```yaml
+services:
+  vault:
+    image: aegis-vault:dev
+    pull_policy: never
+    restart: unless-stopped
+    network_mode: none
+    # Root at start only, to install the policy and hand the volumes to aegis-vault; then it drops.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./vault-policy.toml:/config/policy.toml:ro
+      - vault_run:/run/aegis-vault         # the sockets
+      - vault_state:/var/lib/aegis-vault   # store and master key: never mounted in app
+  app:
+    depends_on: [vault]
+    group_add: ["991", "992"]   # aegis-clients (read.sock), aegis-admin (admin.sock): numbers, not names
+    volumes:
+      - vault_run:/run/aegis-vault:ro   # read-only: app can connect, but can't put its own socket there
+volumes:
+  vault_run:
+  vault_state:
+```
+
+4. In app's Dockerfile, the admin CLI: `COPY --from=aegis-vault:dev /usr/local/bin/aegis-vault-admin
+   /usr/local/bin/` (a static binary). Copy `clients/python/aegis_vault.py` into the project. Both
+   default to the sockets in `/run/aegis-vault`, so nothing needs configuring.
+5. Fill the scope from app: `aegis-vault-admin generate myproject/dev COOKIE_SECRET`, or
+   `... set myproject/dev KEY` with the value on stdin. Fetch with `fetch_scope("myproject/dev")`.
+
+How it fits:
+
+- The caller is known by uid alone; its pid is in another container, so the audit rows show `pid 0` and
+  no command line. Policy names resolve in the image's `/etc/passwd`, which has `mdagosta` at 1000
+  (`CLIENT_USER` and `CLIENT_UID` build arguments, if a project ever needs another).
+- The master key is made on first start and kept with the store in `vault_state`. Dev only: delete that
+  volume and the dev secrets go with it.
+- **What this doesn't separate:** whoever runs as the reader's uid in app can fetch the scope. If the app
+  server and Claude both run as `mdagosta`, Claude can read the dev secrets through the socket; the vault
+  keeps them out of files, not out of reach. Running the server under its own uid (and naming only that
+  uid in the scope) is what separates them, as on prod.
 
 ### Prod (Phase 3)
 

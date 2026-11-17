@@ -1,0 +1,16 @@
+# A dev container's vault policy: copy it into the project (e.g. .devcontainer/vault-policy.toml), rename
+# the scope, and mount it at /config/policy.toml in the vault sidecar. See docs/vault.md, "In a dev
+# container". The sidecar copies it to a root-owned file at start: restart the sidecar after editing.
+
+# Socket groups: aegis-clients is gid 991 and aegis-admin gid 992 in the image. The app container joins
+# them by number with compose's group_add; without the group it can't open the socket at all.
+[sockets]
+read_group = "aegis-clients"
+admin_group = "aegis-admin"
+
+# mdagosta (uid 1000) is the dev containers' user, and the image's CLIENT_USER.
+[admin]
+full = ["mdagosta"]
+
+[scope."myproject/dev"]
+allow_users = ["mdagosta"]

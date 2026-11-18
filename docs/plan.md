@@ -44,7 +44,7 @@ Goals, in priority order: secrets are never readable as files by humans or tools
 - **Unix sockets, no TCP.** The kernel reports the caller's uid on a Unix socket (`SO_PEERCRED`), so the OS user is the credential. No token file to steal, nothing for SSRF or browser DNS rebinding to reach.
 - **Encrypted SQLite, not Postgres.** The Postgres password is itself a secret, so the vault can't depend on Postgres. Separate store also means the vault works when Postgres is down.
 - **Write-only secrets UI.** Values can be set, replaced, rolled back, deleted. Never displayed. There is no reveal route anywhere in the admin API.
-- **Admin UI reached only over SSH.** No public hostname, no nginx vhost, no Cloudflare entry. `aegis-web` listens on a Unix socket; `ssh -L` forwards a laptop port to it.
+- **Admin UI reached only over SSH.** No public hostname, no Caddy site, no Cloudflare entry. `aegis-web` listens on a Unix socket; `ssh -L` forwards a laptop port to it.
 - **Server-rendered UI.** Rust templates (askama), Tailwind built against `webapp/lib/tokens.css` so it matches the design system, a little JS (htmx or plain) for live job logs. No npm packages shipped to the browser, so the admin plane stays out of the npm supply chain.
 - **Unattended boot.** The vault starts on its own after reboot, master key via `systemd-creds`.
 - **Dev moves to a container on orpheus.** One container setup per project. icarus becomes prod only.
@@ -155,12 +155,40 @@ Users and groups are read from `/etc/passwd` and `/etc/group`, not through `getp
 
 ## aegis-runner
 
-- Executes a fixed allowlist of actions with typed parameters, e.g. `deploy(app, env)`, `revert(app, env)`, `cloudflare(plan|apply)`, `nginx(diff|apply)`. No free-form arguments or shell strings from the web.
+- Executes a fixed allowlist of actions with typed parameters, e.g. `deploy(app, env)`, `revert(app, env)`, `cloudflare(plan|apply)`, `caddy(diff|apply)`. No free-form arguments or shell strings from the web.
 - One job at a time per target (lock). Logs persisted and streamed. Prod actions need a two-step confirm.
 - Narrow sudoers for exactly what deploys need (`supervisorctl restart <program>`, `-u www-data` for release dirs), replacing the broad sudo deploys use today.
 - Gets the `cloudflare/deploy` scope from the vault, which retires `.env.local` on icarus.
 - Stage 1: actions call existing Make targets by name. The Makefile keeps working by hand.
-- Stage 2: one declarative list of sites (hostnames, processes, ports, secrets scope) that generates supervisor, nginx and Cloudflare config, so every site deploys the same way. Design it as its own planned step when the next app arrives, not ad hoc.
+- Stage 2: one declarative list of sites (hostnames, processes, ports, secrets scope) that generates supervisor, Caddy and Cloudflare config, so every site deploys the same way. Design it as its own planned step when the next app arrives, not ad hoc.
+
+## Serving: Caddy behind Cloudflare
+
+Caddy replaces nginx on prod, and frontends move off Cloudflare Pages onto the box. Pages swaps deploys atomically, but only for its half: the API deploys separately, so frontend and backend are briefly out of step, and the production hostname serves only the latest build, so a tab open across a deploy asks for code-split chunks that are gone. Serving both from one box puts the whole deploy in one place. Cloudflare's proxy stays in front for the CDN and to absorb abuse. We don't need Pages' per-branch previews.
+
+- **Releases.** Each build goes into `releases/<sha>/`, and `current` is a symlink swapped in one step. Hashed assets from the last few releases stay servable, so old tabs keep finding their chunks. Order: backend first (backward-compatible), then the frontend swap. Hashed assets are cached `immutable`, so the edge serves them too.
+- **TLS to the origin.** Cloudflare origin certificate on each site (`tls <cert> <key>`, no ACME), SSL mode Full (strict). The key lives in the vault (Phases, step 5).
+- **Authenticated Origin Pulls, required.** Per-hostname, with our own client CA, not Cloudflare's shared certificate (any Cloudflare customer can point a zone at our IP and present that one). Caddy's `client_auth` trusts only our CA, so anything not coming through our Cloudflare zone fails the TLS handshake. Normal crawlers follow DNS and so go through the CDN anyway. aegis-infra makes the CA and client certificate, uploads the client certificate to Cloudflare, and the CA key goes to the vault.
+  - Enable at Cloudflare first, then require in Caddy; the reverse is an outage. Rotation: upload the new client certificate, Caddy trusts both CAs, then drop the old one. Long validity, and the expiry goes on a checklist.
+  - Costs: no direct `curl` or outside uptime checks against the origin (test through Cloudflare); no DNS-only hostnames on the same listener.
+- **Caddy admin API** off (`admin off`), or on a Unix socket only. Config changes go through `caddy(diff|apply)` and `caddy reload`, which doesn't drop connections.
+- `trusted_proxies` set to Cloudflare's ranges, so logs show real client IPs.
+- **TODO, think on it as we go:** firewall 80/443 to Cloudflare's IP ranges (DigitalOcean cloud firewall, from aegis-infra). Authenticated Origin Pulls already refuses other clients; a firewall would also hide the box from scanners, at the cost of keeping the range list current.
+
+## Assets
+
+Images, video, fonts, SVGs and other media live in R2; JS and CSS are build output the box serves (see "Serving"). The bucket has collected old versions and duplicates over time, and nothing records which files each app actually uses. Approach: content-addressed files in R2, with a manifest per app in git as the record of what's expected. This is the useful part of Git LFS without an LFS server, quotas, or file downloads on every clone.
+
+- **One `site-assets` bucket** for every app on the stack, a prefix per app. Only `aegis-infra assets` writes to it. Sites linking to each other publicly is fine.
+- **Keys are the content hash:** `<app>/<sha256>.<ext>`. Duplicates can't happen; a new version is a new key, and a replaced one becomes an orphan.
+- **Manifest in each app's repo** (`assets.toml`): name -> sha256, size, type. Git holds the history of what's expected, and changes are reviewed as diffs. The app resolves names to URLs from it at build time.
+- **Commands** (part of aegis-infra, so from the Mac with an R2 token from 1Password; the token is scoped to `site-assets`):
+  - `assets add <file> <name>` - hash, upload if new, update the manifest.
+  - `assets plan` - every app's manifest against the bucket: missing (referenced but not in the bucket, so broken), orphaned (in the bucket but in no manifest), changed.
+  - `assets apply` - upload what's missing. Deleting orphans needs `apply --delete`, as elsewhere.
+- **No web UI for now.** Git and the CLI are where it's managed. A Claude skill that runs `assets plan` and explains the result, or an aegis-web page, comes later if it turns out to be missed. The skill would only drive the command; the token is never in a Claude session.
+- **First, a one-off cleanup of today's bucket:** list it; group duplicates by ETag (the MD5 for single-part uploads) and hash the rest; show which keys each app's code and database reference. Pick one copy per group, write the manifests, copy the kept files to their hash keys, point the apps at the new URLs, and delete old keys once nothing references them.
+- **Later, user uploads:** one bucket per app, made when that app first takes uploads. The internet-facing app holds that bucket's write token (in its vault scope), so a break-in on one site doesn't reach another's uploads. Its expected list comes from the app's database, so that diff runs on the box, as an aegis-runner action.
 
 ## aegis-infra
 
@@ -184,10 +212,10 @@ Infrastructure as code for the little we run on DigitalOcean and Cloudflare, in 
 
 **Scope** (grows only when needed):
 - DigitalOcean: droplets with cloud-init (a new box installs aegis-vault and its users on first boot), firewalls, VPC, reserved IPs, SSH keys, managed Postgres databases, users and trusted sources.
-- Cloudflare: DNS, Pages projects and domains, origin certificates, scoped API tokens, later Access/Tunnels if wanted. Ports `etc/cloudflare/` (its `test_cloudflare.py` is the spec); the Python tool stays until parity.
+- Cloudflare: DNS, Pages projects and domains (until frontends move to the box), origin certificates, per-hostname Authenticated Origin Pulls certificates, R2 buckets and bucket-scoped tokens, scoped API tokens, later Access/Tunnels if wanted. Ports `etc/cloudflare/` (its `test_cloudflare.py` is the spec); the Python tool stays until parity.
 
 **Secrets born in the vault:**
-- When apply creates a database user, the password DigitalOcean returns goes into the target box's vault. Same for an origin certificate's private key, or a short-lived scoped Cloudflare token for one deploy.
+- When apply creates a database user, the password DigitalOcean returns goes into the target box's vault. Same for an origin certificate's private key, the Authenticated Origin Pulls CA key, or a short-lived scoped Cloudflare token for one deploy.
 - Delivery: SSH as a dedicated `aegis-infra` user on the box, whose key has a forced command (`aegis-vault-admin --stdio`) that only speaks the admin protocol. That key can do nothing else.
 - The vault's admin socket accepts `aegis-infra` for two write-only operations: `store` (a value the caller just received) and `generate` (vault makes a random value and never returns it).
 
@@ -353,14 +381,16 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
    - [ ] Try the unit on a real systemd box (`docs/vault-unit-check.md`).
    - [ ] epiphyte side (in epiphyte, not here): vendor the client, `secret_store.py` replaces the `secrets.py` symlink.
 3. **Vault on prod.** Users, units, `systemd-creds` master key. Load existing secrets with the CLI. Switch prod off `secrets.py`, then delete it.
-4. **aegis-infra, read-only.** `pull` and `plan` for Cloudflare and DigitalOcean, tokens via `op run`. Matches `etc/cloudflare/` output.
-5. **aegis-infra apply.** Reissue the origin certificates into the vault and remove the tracked keys from git; rotate DB passwords and API tokens through the APIs into the vault (the old values have been read into AI sessions). Retire `etc/cloudflare/`.
+4. **aegis-infra, read-only.** `pull` and `plan` for Cloudflare and DigitalOcean, tokens via `op run`. Matches `etc/cloudflare/` output. Inventory of the R2 bucket (see "Assets").
+5. **aegis-infra apply.** Reissue the origin certificates into the vault and remove the tracked keys from git; make the Authenticated Origin Pulls CA and client certificate; `site-assets` bucket, manifests and the cleanup (see "Assets"); rotate DB passwords and API tokens through the APIs into the vault (the old values have been read into AI sessions). Retire `etc/cloudflare/`.
 6. **aegis-web.** SSH-tunnel access, passkey login, secrets pages, audit page.
-7. **aegis-runner.** Wraps Make targets, narrow sudoers, jobs page. Deploys get short-lived Cloudflare tokens from infra. Retire `.env.local`.
+7. **aegis-runner.** Wraps Make targets, narrow sudoers, jobs page. Caddy replaces nginx on icarus, frontends move off Pages into release directories, Authenticated Origin Pulls enforced (see "Serving"). Deploys get short-lived Cloudflare tokens from infra. Retire `.env.local`.
 8. **New boxes from nothing.** Droplet + cloud-init + vault + secrets + deploy, so a new app or a rebuilt icarus is one `apply`. Uniform deploys across sites, planned as its own step when the next app is added.
 9. **Second project.** Another app adopts the vault: its own scopes in policy, the vendored Python client, the vault sidecar in its dev container.
 
 ## Open questions
+
+- Adding an asset while working in a dev container: the container has no R2 token, so `assets add` runs on the Mac. Is that fine, or does the container hash and stage the file for the Mac to upload?
 
 - Backups of `vault.db` and the aegis-web DB: where, and how often?
 - Should the CLI remain after the UI exists (break-glass access when aegis-web is down)? Leaning yes, root-only.

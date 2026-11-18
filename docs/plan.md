@@ -348,8 +348,9 @@ Open: managed Postgres major version (container uses 16); confirm Google sign-in
    - [x] `aegis-vault-admin` CLI (value from stdin, never echoed) and `aegis-vault keygen`.
    - [x] Python client with tests.
    - [x] Example policy, systemd unit, `make vault-dev`, `make build-release`, `cargo-deny`/`cargo-audit` targets.
-   - [ ] zig in the dev container image, so `make build-release` runs (needs a checksum looked up from the Mac); try the unit on a real systemd box.
+   - [x] zig in the dev container image, so `make build-release` runs.
    - [x] Sidecar image for other projects' dev containers: `make vault-image`, `etc/docker/aegis-vault/`, `docs/vault.md` "In a dev container".
+   - [ ] Try the unit on a real systemd box (`docs/vault-unit-check.md`).
    - [ ] epiphyte side (in epiphyte, not here): vendor the client, `secret_store.py` replaces the `secrets.py` symlink.
 3. **Vault on prod.** Users, units, `systemd-creds` master key. Load existing secrets with the CLI. Switch prod off `secrets.py`, then delete it.
 4. **aegis-infra, read-only.** `pull` and `plan` for Cloudflare and DigitalOcean, tokens via `op run`. Matches `etc/cloudflare/` output.
